@@ -1,7 +1,8 @@
 /* Pleacă la timp – shared forecaster (browser + scheduled job). Depends on engine.js (E). */
 (function (root) {
 'use strict';
-const LV = { g: ['Zi liniștită', '🟢'], y: ['Aglomerat', '🟡'], r: ['Ambuteiaj anunțat', '🔴'] };
+const LV = { g: ['Drum liniștit', '🟢'], y: ['Aglomerat', '🟡'], r: ['Ambuteiaj anunțat', '🔴'] };
+const KIND_TXT = { banda: 'o bandă închisă', lucrari: 'lucrări', accident: 'un accident', coada: 'o coadă' };
 const slotColor = s => s.idle < 10 ? '#4caf6e' : s.idle < 25 ? '#f0a83a' : '#d9534f';
 const parseT = s => { const [h, m] = (s || '00:00').split(':').map(Number); return h * 60 + m; };
 const fmt = m => { m = Math.round(m); const d = ((m % 1440) + 1440) % 1440; return String(Math.floor(d / 60)).padStart(2, '0') + ':' + String(d % 60).padStart(2, '0'); };
@@ -59,12 +60,16 @@ function createForecaster(o) {
     let jam = null;
     if (cur.worst && cur.worst.loss > 3) { const nm = cur.worst.name, segs = cur.path.filter(x => NET.edges[x].name === nm); let a = null, b = null; for (let t = Math.max(240, usual - 120); t <= Math.min(1380, usual + 150); t += 5) { let loss = 0; for (const x of segs) { const e = NET.edges[x]; loss += M.segState(x, date, t, ctx).med - e.len / e.v0 * 60; } if (loss > Math.max(4, 0.5 * cur.worst.loss)) { if (a === null) a = t; b = t; } } if (a !== null) jam = { name: nm, a, b }; }
     const causes = [];
-    for (const p of cur.path) for (const r of M.activeRestr(p, E.dayIndex(date) * 1440 + usual + 20).list) causes.push((r.source === 'raportată' && r.note && r.note.startsWith('Raport') ? 'un raport de la alți participanți: ' : '') + (r.note && !r.note.startsWith('Raport') ? r.note : 'o bandă închisă pe ' + NET.edges[r.segId].name));
-    const wx = weatherFor(date); if (wx !== 'senin') causes.push('vremea (' + E.WEATHER[wx].label.toLowerCase() + ')');
+    for (const p of cur.path) for (const r of M.activeRestr(p, E.dayIndex(date) * 1440 + usual + 20).list) {
+      const m = /^Raport participant: (\w+)/.exec(r.note || ''), road = NET.edges[r.segId] && NET.edges[r.segId].name;
+      causes.push(m ? `${KIND_TXT[m[1]] || 'o problemă'}${road ? ' pe ' + road : ''} (semnalare de la participanți)` : (r.note || ('o bandă închisă' + (road ? ' pe ' + road : ''))));
+    }
+    const wx = weatherFor(date); if (wx !== 'senin') causes.push('vremea: ' + E.WEATHER[wx].label.toLowerCase());
     const res = { date, slots, cur, typ, early, calm, lateBy, extra, level, jam, causes: [...new Set(causes)], ta, usual, deadline, near };
     return (CACHE[key] = res);
   }
-  const LV = { g: ['Zi liniștită', '🟢'], y: ['Aglomerat', '🟡'], r: ['Ambuteiaj anunțat', '🔴'] };
+  const LV = { g: ['Drum liniștit', '🟢'], y: ['Aglomerat', '🟡'], r: ['Ambuteiaj anunțat', '🔴'] };
+const KIND_TXT = { banda: 'o bandă închisă', lucrari: 'lucrări', accident: 'un accident', coada: 'o coadă' };
   const slotColor = s => s.idle < 10 ? '#4caf6e' : s.idle < 25 ? '#f0a83a' : '#d9534f';
 
   /* ---------- Ecranul „Avertizări” ---------- */
@@ -75,10 +80,10 @@ function decision(f, h) {
   if (!f) return null;
   const leave = f.level === 'g' ? f.usual : (f.early ? f.early.t0 : f.slots[0].t0);
   const where = f.jam ? ` Coloana se formează pe ${f.jam.name}, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}.` : '';
-  const unusual = f.extra >= 8 ? ` Neobișnuit: +${Math.round(f.extra)} min față de o zi obișnuită.` : '';
+  const unusual = f.extra >= 8 ? ` Neobișnuit: cu ${Math.round(f.extra)} min mai mult decât de obicei.` : '';
   return {
     leave, level: f.level,
-    morning: { title: `${h.name}: pleacă la ${fmt(leave)}`, body: f.level === 'g' ? 'Drum liniștit, poți pleca la ora obișnuită.' : `${LV[f.level][0]} pe drumul tău.${where}${unusual}` },
+    morning: { title: `${h.name}: pleacă la ${fmt(leave)}`, body: f.level === 'g' ? 'Drum liniștit, poți pleca la ora obișnuită.' : `${f.level === 'r' ? 'Ambuteiaj' : 'Aglomerație'} pe drumul tău.${where}${unusual}` },
     evening: { title: `Mâine: ${LV[f.level][0].toLowerCase()} · ${h.name.toLowerCase()}`, body: `Pleacă la ${fmt(leave)} în loc de ${h.usual}.${where}${unusual}` }
   };
 }

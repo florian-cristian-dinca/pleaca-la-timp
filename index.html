@@ -263,7 +263,7 @@ async function pullPack() {
     if (!error && data && data[0] && (!S.pack || S.pack.version !== data[0].pack.version || S.pack.exportedAt !== data[0].pack.exportedAt)) { S.pack = data[0].pack; save(); rebuild(); const cur = document.querySelector('.screen.on'); if (cur) show(cur.id.slice(2)); }
   } catch (e) { }
 }
-function renderSync() { const el = $('syncState'); if (!el) return; const n = (S.outbox || []).length; el.textContent = n ? `⏳ ${n} înregistrări așteaptă internet` : '✓ Sincronizat'; }
+function renderSync() { const el = $('syncState'); if (!el) return; const n = (S.outbox || []).length; el.textContent = n ? `⏳ ${n} ${n === 1 ? 'modificare așteaptă' : 'modificări așteaptă'} conexiunea la internet` : '✓ Totul este trimis'; }
 addEventListener('online', flush);
 
 /* ---------- Notificări push ---------- */
@@ -343,21 +343,29 @@ function nextOccurrences() {
   return out.slice(0, 3);
 }
 const chance = s => s && s.pOn != null ? ` · <b style="display:inline;color:${s.pOn >= 0.95 ? 'var(--g)' : s.pOn >= 0.8 ? 'var(--y)' : 'var(--r)'}">${s.cal ? '' : '~'}${Math.round(s.pOn * 100)}% șanse la timp</b>` : '';
+function alertText(date, at, level) {
+  const today = date === todayStr(), now = nowMin();
+  if (today && at < now) return 'Ora avertizării de azi a trecut.';
+  const day = today ? 'azi' : date === dayStr(1) ? 'mâine' : WD[wday(date)];
+  let t = `Te anunțăm ${day} la <b>${fmt(at)}</b>`;
+  if (S.evening && !today && level !== 'g') { const prev = E.dateFromIndex(E.dayIndex(date) - 1), eve = prev === todayStr() ? (parseT(S.eveningAt) > now ? 'diseară' : null) : WD[wday(prev)] + ' seara'; if (eve) t += ` și ${eve}, la <b>${S.eveningAt}</b>`; }
+  return t + '.';
+}
 function card(h, date, idx) {
   const f = forecast(h, date); if (!f) return `<div class="card">Nu găsesc un drum între ${esc(pname(h.o))} și ${esc(pname(h.d))}.</div>`;
   const today = date === todayStr(), now = nowMin(), lv = LV[f.level];
   let msg, why = '';
   if (f.level === 'g') msg = `Poți pleca liniștit la ora obișnuită, <b>${fmt(f.usual)}</b>. Stai pe loc cel mult câteva minute.`;
-  else msg = `Dacă pleci la <b>${fmt(f.usual)}</b>, ca de obicei, stai aproximativ <b>${mins(f.cur.idle)}</b> pe loc${f.lateBy > 0 ? ` și riști să întârzii până la <b>${mins(f.lateBy)}</b>` : ''}.`;
+  else msg = `Dacă pleci la <b>${fmt(f.usual)}</b>, ca de obicei, stai aproximativ <b>${mins(f.cur.idle)}</b> pe loc${f.lateBy > 0 ? ` și riști o întârziere de până la <b>${mins(f.lateBy)}</b>` : ''}.`;
   if (f.jam) why += `Coloana se formează pe <b>${esc(f.jam.name)}</b>, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}. `;
-  if (f.extra >= 8) why += `Este <b>neobișnuit</b>: cu ${mins(f.extra)} mai mult decât într-o ${WD[wday(date)]} obișnuită${f.causes.length ? ', din cauza: ' + f.causes.map(esc).join('; ') : ''}.`;
-  else if (f.level !== 'g') why += `Este aglomerația obișnuită pentru ${WD[wday(date)]} la această oră.`;
+  if (f.extra >= 8) why += `Este <b>neobișnuit</b>: cu ${mins(f.extra)} mai mult decât într-o zi obișnuită de ${WD[wday(date)]}.${f.causes.length ? (f.causes.length > 1 ? ' Cauze: ' : ' Cauza: ') + f.causes.map(esc).join('; ') + '.' : ''}`;
+  else if (f.level !== 'g') why += `Este aglomerația obișnuită pentru o zi de ${WD[wday(date)]}, la această oră.`;
   const opts = [];
   const gain = f.early ? f.cur.idle - f.early.idle : 0;
-  if (f.early && f.early.t0 < f.usual - 4 && (gain >= 5 || f.lateBy > 0)) opts.push({ best: true, t: f.early.t0, b: gain >= 5 ? 'Pleacă mai devreme' : 'Pleacă puțin mai devreme', s: (gain >= 5 ? `stai doar ~${mins(f.early.idle)} pe loc (cu ${mins(gain)} mai puțin)` : 'ajungi la timp cu mai multă siguranță') + ` · ajungi în jur de ${fmt(f.early.t0 + f.early.med)}` + chance(f.early) });
-  opts.push({ best: !opts.length && f.level === 'g', t: f.usual, b: 'La ora obișnuită', s: `stai ~${mins(f.cur.idle)} pe loc · ajungi în jur de ${fmt(f.usual + f.cur.med)}` + chance(f.cur) });
-  if (f.calm && f.level !== 'g' && f.cur.idle - f.calm.idle >= 5) opts.push({ best: false, t: f.calm.t0, b: 'Mai târziu, dacă poți', s: `stai doar ~${mins(f.calm.idle)} pe loc · ajungi în jur de ${fmt(f.calm.t0 + f.calm.med)}${f.calm.t0 + f.calm.med > f.ta ? ' (după ora-țintă)' : ''}` + chance(f.calm) });
-  if (!f.early && f.level === 'r') opts.unshift({ best: true, t: f.slots[0].t0, b: 'Pleacă cât mai devreme', s: 'nicio oră din intervalul analizat nu garantează sosirea la timp' });
+  if (f.early && f.early.t0 < f.usual - 4 && (gain >= 5 || f.lateBy > 0)) opts.push({ best: true, t: f.early.t0, b: gain >= 5 ? 'Pleacă mai devreme' : 'Pleacă puțin mai devreme', s: (gain >= 5 ? `stai doar ~${mins(f.early.idle)} pe loc (cu ${mins(gain)} mai puțin)` : 'mai multă siguranță că ajungi la timp') + ` · sosire în jur de ${fmt(f.early.t0 + f.early.med)}` + chance(f.early) });
+  opts.push({ best: !opts.length && f.level === 'g', t: f.usual, b: 'La ora obișnuită', s: `stai ~${mins(f.cur.idle)} pe loc · sosire în jur de ${fmt(f.usual + f.cur.med)}` + chance(f.cur) });
+  if (f.calm && f.level !== 'g' && f.cur.idle - f.calm.idle >= 5) opts.push({ best: false, t: f.calm.t0, b: 'Mai târziu, dacă poți', s: `stai doar ~${mins(f.calm.idle)} pe loc · sosire în jur de ${fmt(f.calm.t0 + f.calm.med)}${f.calm.t0 + f.calm.med > f.ta ? ', după ora la care trebuie să ajungi' : ''}` + (f.calm.t0 + f.calm.med > f.ta ? '' : chance(f.calm)) });
+  if (!f.early && f.level === 'r') opts.unshift({ best: true, t: f.slots[0].t0, b: 'Pleacă cât mai devreme', s: 'Nicio oră de plecare din ultimele 2,5 ore nu garantează sosirea la timp.' });
   const leaveAt = opts.find(o => o.best) ? opts.find(o => o.best).t : f.usual;
   const alertAt = leaveAt - S.lead;
   const ticks = []; for (let t = Math.ceil(f.slots[0].t0 / 30) * 30; t <= f.slots[f.slots.length - 1].t0; t += 60) ticks.push(fmt(t));
@@ -367,12 +375,12 @@ function card(h, date, idx) {
     <div class="msg">${msg}</div>
     ${why ? `<div class="why">${why}</div>` : ''}
     <div class="opts">${opts.map(o => `<div class="opt ${o.best ? 'best' : ''}"><div class="t">${fmt(o.t)}</div><div><b>${o.best ? '✓ ' : ''}${o.b}</b><span>${o.s}</span></div></div>`).join('')}</div>
-    <div class="alertline">🔔 <span>${today && alertAt < now ? 'Ora de alertă a trecut.' : `Te anunțăm ${today ? 'azi' : 'în ' + dayLabel(date).split(',')[0]} la <b>${fmt(alertAt)}</b>${S.evening && !today ? ` și cu o seară înainte, la <b>${S.eveningAt}</b>` : ''}.`}</span></div>
+    <div class="alertline">🔔 <span>${alertText(date, alertAt, f.level)}</span></div>
     <details class="rdet" data-rd="${idx}"><summary>Vezi drumul și rutele alternative</summary><canvas class="rmap" id="rmap-${idx}"></canvas><div id="rlist-${idx}"></div></details>
     <details><summary>Vezi toate orele de plecare</summary>
       <div class="band"><div class="bar">${f.slots.map((s, i) => `<div data-i="${i}" style="background:${slotColor(s)}" title="${fmt(s.t0)}"></div>`).join('')}</div>
       <div class="ticks">${ticks.map(t => `<span>${t}</span>`).join('')}</div>
-      <div class="info" id="info-${idx}">Atinge o oră ca să vezi cât stai pe loc.</div>
+      <div class="info" id="info-${idx}">Atinge o oră ca să vezi cât ai sta pe loc.</div>
       <p class="muted" style="margin:8px 0 0">„Șanse la timp” = din 100 de dimineți asemănătoare, în câte ajungi până la ora-țintă (minus 5 minute pentru parcare). Semnul ~ arată că estimarea nu e încă verificată pe drumuri reale.</p>
       <div class="legend"><span><i style="background:#4caf6e"></i>sub 10 min pe loc</span><span><i style="background:#f0a83a"></i>10–25 min</span><span><i style="background:#d9534f"></i>peste 25 min</span></div></div>
     </details>
@@ -384,7 +392,7 @@ function bindCards(list) {
     c.querySelectorAll('.bar div').forEach(b => b.onclick = () => {
       c.querySelectorAll('.bar div').forEach(x => x.classList.remove('sel')); b.classList.add('sel');
       const s = f.slots[+b.dataset.i], late = s.t0 + s.q > f.deadline;
-      $('info-' + c.dataset.card).innerHTML = `Plecare <b>${fmt(s.t0)}</b> → ~${mins(s.idle)} pe loc, ajungi în jur de <b>${fmt(s.t0 + s.med)}</b>${s.pOn != null ? ` · ${s.cal ? '' : '~'}${Math.round(s.pOn * 100)}% șanse la timp` : (late ? ' · risc de întârziere' : ' · la timp')}`;
+      $('info-' + c.dataset.card).innerHTML = `Plecare la <b>${fmt(s.t0)}</b> → ~${mins(s.idle)} pe loc, sosire în jur de <b>${fmt(s.t0 + s.med)}</b>${s.pOn != null ? ` · ${s.cal ? '' : '~'}${Math.round(s.pOn * 100)}% șanse la timp` : (late ? ' · risc de întârziere' : ' · la timp')}`;
     });
   });
 }
@@ -402,11 +410,11 @@ function renderHome() {
   bindPickers($('s-home'));
   $('aGo').onclick = () => {
     const ta = $('aTa').value, date = dayStr(+$('aDay').value), adhoc = { id: 'adhoc', name: 'Drum ocazional', o: $('aO').value, d: $('aD').value, ta, usual: fmt(parseT(ta) - 60), days: [] };
-    if (!adhoc.o || !adhoc.d) { toast('Alege locul de plecare și destinația din listă'); return; }
-    if (adhoc.o === adhoc.d) { toast('Alege două locuri diferite'); return; }
+    if (!adhoc.o || !adhoc.d) { toast('Alege locul de plecare și destinația din lista de sugestii.'); return; }
+    if (adhoc.o === adhoc.d) { toast('Alege două locuri diferite.'); return; }
     const f = forecast(adhoc, date); if (!f) { $('aOut').innerHTML = '<p class="muted">Nu găsesc un drum.</p>'; return; }
     const best = f.early || f.slots[0];
-    $('aOut').innerHTML = `<div class="opt best" style="margin-top:12px"><div class="t">${fmt(best.t0)}</div><div><b>✓ Pleacă până la această oră</b><span>stai ~${mins(best.idle)} pe loc · ajungi în jur de ${fmt(best.t0 + best.med)}</span></div></div>${f.jam ? `<p class="why">Coloana se formează pe <b>${esc(f.jam.name)}</b>, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}.</p>` : ''}`;
+    $('aOut').innerHTML = `<div class="opt best" style="margin-top:12px"><div class="t">${fmt(best.t0)}</div><div><b>✓ Pleacă cel târziu la această oră</b><span>stai ~${mins(best.idle)} pe loc · sosire în jur de ${fmt(best.t0 + best.med)}</span></div></div>${f.jam ? `<p class="why">Coloana se formează pe <b>${esc(f.jam.name)}</b>, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}.</p>` : ''}`;
   };
 }
 
@@ -423,7 +431,7 @@ function renderWeek() {
     }
     h += `</div>`;
   }
-  $('s-week').innerHTML = (h || '<div class="card muted">Adaugă un drum obișnuit în Setări.</div>') + '<p class="muted" style="text-align:center">Prognoza pentru zilele următoare se actualizează când coordonatorul trimite date noi sau când apar restricții raportate.</p>';
+  $('s-week').innerHTML = (h || '<div class="card muted">Adaugă un drum obișnuit în Setări.</div>') + '<p class="muted" style="text-align:center">Prognoza se actualizează automat, de câteva ori pe oră, pe măsură ce participanții trimit drumuri și semnalări.</p>';
 }
 
 /* ---------- Am plecat / am ajuns (colectarea datelor, cât mai simplu) ---------- */
@@ -437,7 +445,7 @@ function renderTrip() {
     renderSync(); return;
   }
   const el = Math.round(nowMin() - L.dep);
-  $('s-trip').innerHTML = `<div class="card"><div class="kicker">Pe drum · ${esc(L.name)}</div><div class="big" style="margin-top:8px">${mins(el)}</div><p class="muted">de la plecare (${fmt(L.dep)}). Spor la drum!</p>
+  $('s-trip').innerHTML = `<div class="card"><div class="kicker">Pe drum · ${esc(L.name)}</div><div class="big" style="margin-top:8px">${mins(el)}</div><p class="muted">de când ai plecat (la ${fmt(L.dep)}). Drum bun!</p>
     <div class="rep">${[['🐢', 'Coadă', 'coada'], ['💥', 'Accident', 'accident'], ['🚧', 'Bandă închisă', 'banda'], ['👷', 'Lucrări', 'lucrari']].map(([e, t, k]) => `<button class="repb" data-r="${k}"><span class="e">${e}</span>${t}</button>`).join('')}</div>
     <p class="muted">Raportează doar dacă ești pasager sau oprit în siguranță. Raportul ajunge la ceilalți participanți prin actualizarea următoare.</p>
     <button class="btn go" id="bArr">Am ajuns</button><button class="btn ghost" id="bCan">Anulează</button></div>`;
@@ -446,7 +454,7 @@ function renderTrip() {
 }
 function depart(h) {
   const date = todayStr(), dep = nowMin(), ctx = E.ctxFor(date, weatherFor(date), false), s = slotEval(M, pathsFor(h.o, h.d, date, dep, ctx), date, dep, ctx, true);
-  if (!s) { toast('Nu găsesc un drum'); return; }
+  if (!s) { toast('Nu găsesc un drum între aceste locuri.'); return; }
   const f = forecast(h, date), rec = f && (f.early ? f.early.t0 : f.usual);
   S.live = { id: S.pid + '-' + Date.now(), name: h.name, orig: h.o, dest: h.d, path: s.path, date, dep, weather: weatherFor(date),
     pred: { madeAt: new Date().toISOString(), median: s.med, q: s.q, tau: 0.95, deadline: parseT(h.ta) - 5, ta: parseT(h.ta), recT0: rec, version: LR() ? LR().version : 'a-priori', followed: rec != null && dep <= rec + 2 } };
@@ -457,13 +465,13 @@ function reportNow(kind) {
   let eid = L.path[0]; for (const p of w.parts) if (p.t <= t) eid = p.eid; // segmentul estimat pe care se află acum
   const e = NET.edges[eid], closes = kind !== 'coada';
   S.reports.push({ id: 'rep-' + S.pid + '-' + Date.now(), kind, segId: eid, closedLanes: closes && e.lanes > 1 ? 1 : 0, startDate: L.date, startMin: t, endDate: L.date, endMin: Math.min(t + (kind === 'accident' ? 90 : 240), 1439), source: 'raportată', note: 'Raport participant: ' + kind + ' pe ' + e.name });
-  save(); enqueue('report', S.reports[S.reports.length - 1]); rebuild(); toast('Mulțumim! Am notat: ' + (e.name || 'drumul tău'));
+  save(); enqueue('report', S.reports[S.reports.length - 1]); rebuild(); toast('Mulțumim! Am notat semnalarea' + (e.name ? ' pe ' + e.name : '') + '.');
 }
 function arrive() {
   const L = S.live, arr = nowMin(); let dur = arr - L.dep; if (dur <= 0) dur += 1440;
   const onTime = L.dep + dur <= L.pred.deadline;
   S.trips.push({ id: L.id, date: L.date, dep: L.dep, dur, orig: L.orig, dest: L.dest, path: L.path, weather: L.weather, vacation: false, source: 'participant', participant: S.pid, pred: L.pred, onTime });
-  S.live = null; save(); enqueue('trip', S.trips[S.trips.length - 1]); renderTrip(); toast(onTime ? 'Ai ajuns la timp! 🎉' : 'Ai ajuns. Mulțumim!');
+  S.live = null; save(); enqueue('trip', S.trips[S.trips.length - 1]); renderTrip(); toast(onTime ? 'Ai ajuns la timp! 🎉' : 'Ai ajuns. Mulțumim, aplicația învață din acest drum.');
 }
 function histHTML() {
   const tr = [...S.trips].reverse().slice(0, 15), f = S.trips.filter(t => t.pred && t.pred.followed), ok = f.filter(t => t.onTime).length;
@@ -499,9 +507,9 @@ function renderSet() {
   $('bSave').onclick = () => {
     document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; const o = $('ho' + c.dataset.hf).value, d = $('hd' + c.dataset.hf).value; if (o) h.o = o; if (d) h.d = d; h.ta = c.querySelector('[data-k=ta]').value; h.usual = c.querySelector('[data-k=usual]').value; h.days = [...c.querySelectorAll('[data-d].on')].map(b => +b.dataset.d); });
     S.lead = +($('leadSeg').querySelector('.on') || { dataset: { v: 30 } }).dataset.v; S.evening = $('evOn').checked; S.eveningAt = $('evAt').value || '21:00';
-    save(); enqueue('participant'); enqueue('habits'); rebuild(); toast('Salvat'); show('home');
+    save(); enqueue('participant'); enqueue('habits'); rebuild(); toast('Am salvat.'); show('home');
   };
-  let arm = 0; $('bWipe').onclick = async () => { if (Date.now() - arm > 3000) { arm = Date.now(); toast('Apasă din nou pentru a confirma'); return; } try { const s = await session(); if (s) { await s.c.rpc('delete_my_data'); await s.c.auth.signOut(); } } catch (e) { } S = fresh(); save(); rebuild(); toast('Toate datele tale au fost șterse, inclusiv de pe server.'); welcome(); };
+  let arm = 0; $('bWipe').onclick = async () => { if (Date.now() - arm > 3000) { arm = Date.now(); toast('Apasă din nou pentru a confirma ștergerea.'); return; } try { const s = await session(); if (s) { await s.c.rpc('delete_my_data'); await s.c.auth.signOut(); } } catch (e) { } S = fresh(); save(); rebuild(); toast('Toate datele tale au fost șterse, inclusiv de pe server.'); welcome(); };
 }
 
 /* ---------- Bun venit ---------- */
