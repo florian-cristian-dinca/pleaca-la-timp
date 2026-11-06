@@ -19,7 +19,7 @@ const out = []; const ok = (n, c, d) => out.push(`${c ? 'PASS' : 'FAIL'}  ${n}${
   if (srv) {
     const b = createClient(url, srv, { auth: { persistSession: false } });
     for (const t of ['participants', 'habits', 'trips', 'segment_observations', 'reports', 'push_subscriptions', 'model_packs', 'sent_alerts']) {
-      const r = await b.from(t).select('*', { count: 'exact', head: true }); ok('table ' + t, !r.error, r.error && r.error.message);
+      const r = await b.from(t).select('*', { count: 'exact', head: true }); ok('table ' + t, !r.error, r.error && (r.error.code + ' ' + (r.error.message || r.status)));
     }
   }
 })().catch(e => ok('unexpected', false, e.message)).finally(() => { console.log(out.join('\n')); if (out.some(l => l.startsWith('FAIL'))) process.exit(1); });

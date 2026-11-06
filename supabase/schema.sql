@@ -125,3 +125,7 @@ grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on participants, habits, trips, segment_observations, reports, push_subscriptions to authenticated;
 grant select on model_packs to authenticated;
 -- sent_alerts: no client access (service role only)
+-- The scheduled job uses the service role: it bypasses RLS but still needs table privileges
+grant usage on schema public to service_role;
+grant all on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role, authenticated;
