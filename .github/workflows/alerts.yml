@@ -1,0 +1,22 @@
+# Forecasts + push alerts – every 10 minutes, 05:00–22:50 Bucharest time (winter). Free on public repos.
+name: alerts
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/10 3-20 * * *'
+concurrency: { group: alerts, cancel-in-progress: false }
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm, cache-dependency-path: jobs/package-lock.json }
+      - run: npm ci --prefix jobs --silent
+      - run: node jobs/run.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
