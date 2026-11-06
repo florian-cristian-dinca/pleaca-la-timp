@@ -77,6 +77,10 @@ textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:10px
 .rmap{width:100%;height:300px;border-radius:14px;background:#eef1f4;display:block;margin-top:8px}
 .ropt{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--soft);cursor:pointer}.ropt:last-child{border:none}
 .ropt i{width:14px;height:14px;border-radius:4px;flex:none;margin-top:4px}.ropt b{display:block}.ropt span{font-size:13.5px;color:var(--mute)}.ropt.sel b{text-decoration:underline}
+.mapwrap{position:relative}#liveMap{width:100%;height:58vh;min-height:320px;border-radius:20px;background:#eef1f4;display:block;touch-action:none}
+.mapbtns{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:8px}.mapbtns button{width:42px;height:42px;border-radius:12px;border:none;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);font:800 20px "Nunito Sans";cursor:pointer;color:var(--ink)}
+.mlegend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--mute);margin-top:8px}.mlegend i{display:inline-block;width:14px;height:5px;border-radius:3px;margin-right:4px;vertical-align:middle}
+.alist .item{align-items:flex-start}
 #toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:800;opacity:0;transition:opacity .25s;pointer-events:none;z-index:30;max-width:90%;text-align:center}
 </style>
 </head>
@@ -86,12 +90,14 @@ textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:10px
   <div class="banner" id="banner"></div>
   <div class="install" id="install"></div>
   <div class="screen on" id="s-home"></div>
+  <div class="screen" id="s-map"></div>
   <div class="screen" id="s-week"></div>
   <div class="screen" id="s-trip"></div>
   <div class="screen" id="s-set"></div>
 </div>
 <nav class="tabs"><div>
   <button data-s="home" class="on"><span class="e">🔔</span>Avertizări</button>
+  <button data-s="map"><span class="e">🗺️</span>Hartă</button>
   <button data-s="week"><span class="e">📅</span>Săptămâna</button>
   <button data-s="trip"><span class="e">🚗</span>Am plecat</button>
   <button data-s="set"><span class="e">⚙️</span>Setări</button>
@@ -180,9 +186,9 @@ function placesList() {
   PLACES = { net: NET, list }; return list;
 }
 const placeName = (node, fallback) => { const p = placesList().find(x => x.node === node); return fallback || (p ? p.name : pname(node)); };
-function picker(id, value, label, ph) {
+function picker(id, value, label, ph, noGeo) {
   const v = value || {}; const node = typeof v === 'string' ? v : v.node, name = typeof v === 'string' ? '' : v.name;
-  return `<div class="field"><small>${label}</small><div class="pk"><input type="hidden" id="${id}" value="${esc(node || '')}"><div class="pkrow"><input class="pkq" placeholder="${esc(ph || 'Scrie numele localității sau al cartierului')}" value="${node ? esc(placeName(node, name)) : ''}" autocomplete="off" enterkeyhint="search"><button type="button" class="pkgeo" title="Folosește locația mea">📍</button></div><div class="pkl"></div></div></div>`;
+  return `<div class="field"><small>${label}</small><div class="pk"><input type="hidden" id="${id}" value="${esc(node || '')}"><div class="pkrow"><input class="pkq" placeholder="${esc(ph || 'Scrie numele localității sau al cartierului')}" value="${node ? esc(placeName(node, name)) : ''}" autocomplete="off" enterkeyhint="search">${noGeo ? '' : '<button type="button" class="pkgeo" title="Folosește locația mea">📍</button>'}</div><div class="pkl"></div></div></div>`;
 }
 function bindPickers(root) {
   (root || document).querySelectorAll('.pk').forEach(el => {
@@ -201,7 +207,7 @@ function bindPickers(root) {
     q.onfocus = () => { q.select(); };
     q.onkeydown = e => { if (e.key === 'Enter') { const b = list.querySelector('button'); if (b) { e.preventDefault(); b.dispatchEvent(new Event('mousedown')); } } };
     q.onblur = () => setTimeout(() => { list.innerHTML = ''; if (!hid.value && hid.dataset.name) q.value = hid.dataset.name; }, 150);
-    el.querySelector('.pkgeo').onclick = () => {
+    const geoBtn = el.querySelector('.pkgeo'); if (geoBtn) geoBtn.onclick = () => {
       if (!navigator.geolocation) { toast('Telefonul nu oferă locația.'); return; }
       toast('Caut locul cel mai apropiat…');
       navigator.geolocation.getCurrentPosition(pos => {
@@ -332,10 +338,113 @@ function bindRoutes(list) {
     if (!d.open) return; const { h, date } = list[+d.dataset.rd], f = forecast(h, date), dd = PLT.decision(f, h); if (!dd) return;
     const t0 = dd.leave, ctx = E.ctxFor(date, weatherFor(date), false), opts = routeOptions(h, date, t0), cv = $('rmap-' + d.dataset.rd), box = $('rlist-' + d.dataset.rd);
     let sel = 0;
-    const paint = () => { drawRoutes(cv, opts, sel, date, ctx); box.innerHTML = `<p class="muted" style="margin:8px 0 2px">La plecarea de la ${fmt(t0)}:</p>` + opts.map((o, i) => `<div class="ropt ${i === sel ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === 0 ? 'Cea mai rapidă' : 'Alternativa ' + i} · ${mins(o.med)}${i ? ' (+' + (Math.round(o.med) - Math.round(opts[0].med)) + ' min)' : ''}</b><span>${o.km.toFixed(0)} km · ~${mins(o.idle)} pe loc${o.via.length ? ' · prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('') + '<p class="muted">Pe traseul ales: roșu = coloană, portocaliu = aglomerat. Atinge o rută ca să o vezi pe hartă.</p>';
+    const paint = () => { drawRoutes(cv, opts, sel, date, ctx); box.innerHTML = stBox(routeStatus(opts[sel].path, date, t0)) + `<p class="muted" style="margin:8px 0 2px">La plecarea de la ${fmt(t0)}:</p>` + opts.map((o, i) => `<div class="ropt ${i === sel ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === 0 ? 'Cea mai rapidă' : 'Alternativa ' + i} · ${mins(o.med)}${i ? ' (+' + (Math.round(o.med) - Math.round(opts[0].med)) + ' min)' : ''}</b><span>${o.km.toFixed(0)} km · ~${mins(o.idle)} pe loc${o.via.length ? ' · prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('') + '<p class="muted">Pe traseul ales: roșu = coloană, portocaliu = aglomerat. Atinge o rută ca să o vezi pe hartă.</p>';
       box.querySelectorAll('.ropt').forEach(r => r.onclick = () => { sel = +r.dataset.i; paint(); }); };
     paint();
   }));
+}
+
+
+/* ---------- Starea drumului ales: trafic obișnuit sau ambuteiaj, cu cauza și locul ---------- */
+const CAUSE_GEN = { banda: 'unei benzi închise', accident: 'unui accident', lucrari: 'unor lucrări', coada: 'unei cozi semnalate', restr: 'unei restricții de circulație' };
+const CAUSE_ICON = { banda: '🚧', accident: '💥', lucrari: '👷', coada: '🐢', restr: '⛔' };
+function restrKind(r) { const m = /^Raport participant: (\w+)/.exec(r.note || ''); return m ? m[1] : /band/i.test(r.note || '') ? 'banda' : 'restr'; }
+function routeStatus(path, date, t0) {
+  const ctx = E.ctxFor(date, weatherFor(date), false), w = M.walk(path, date, t0, ctx), w0 = M0.walk(path, date, t0, E.ctxFor(date, 'senin', false));
+  const abs = E.dayIndex(date) * 1440, found = [];
+  for (const p of w.parts) for (const r of M.activeRestr(p.eid, abs + p.t).list) if (!found.some(x => x.r.id === r.id)) found.push({ r, eid: p.eid });
+  const byName = {}; for (const p of w.parts) { const e = NET.edges[p.eid]; if (!e.name) continue; byName[e.name] = (byName[e.name] || 0) + Math.max(0, p.med - e.len / e.v0 * 60); }
+  const worst = Object.entries(byName).sort((a, b) => b[1] - a[1])[0];
+  const free = path.reduce((s, e) => s + NET.edges[e].len / NET.edges[e].v0 * 60, 0), idle = Math.max(0, w.total - free), extra = w.total - w0.total;
+  if (found.length) {
+    const f0 = found[0], kind = restrKind(f0.r), road = NET.edges[f0.eid].name || (worst ? worst[0] : 'drumul tău'), byP = /^Raport participant/.test(f0.r.note || '');
+    const lvl = extra >= 10 || idle >= 25 ? 'r' : 'y';
+    return { level: lvl, icon: CAUSE_ICON[kind] || '⚠️', text: `${lvl === 'r' ? 'Ambuteiaj' : 'Aglomerație'} pe ${road}, din cauza ${CAUSE_GEN[kind] || CAUSE_GEN.restr}${byP ? ' (semnalare de la participanți)' : ''}${extra >= 3 ? `: cu ~${mins(extra)} mai mult decât de obicei` : ''}.`, extra, idle };
+  }
+  if (idle >= 10 && worst) return { level: idle >= 25 ? 'r' : 'y', icon: '🚗', text: `Trafic aglomerat, dar obișnuit pentru ora asta, mai ales pe ${worst[0]} (~${mins(idle)} pe loc). Nu sunt probleme semnalate.`, extra, idle };
+  return { level: 'g', icon: '✅', text: 'Trafic obișnuit, fără probleme semnalate pe drumul ales.', extra, idle };
+}
+const stBox = st => `<div class="alertline" style="background:${st.level === 'r' ? 'var(--rbg)' : st.level === 'y' ? 'var(--ybg)' : 'var(--gbg)'}"><span style="font-size:20px">${st.icon}</span><span>${esc(st.text)}</span></div>`;
+
+
+/* ---------- Fila „Hartă”: poziția ta, traficul acum, blocajele semnalate, șansele pentru următorul drum ---------- */
+const MV = { lat: null, lon: null, km: 7, follow: true, geo: null, me: null, drag: null };
+function mapMe() { const L = S.live; if (L && L.gps && L.gps.lat && Date.now() - L.gps.at < 60000) return { lat: L.gps.lat, lon: L.gps.lon }; return MV.me; }
+function startMapGeo() { if (!navigator.geolocation || MV.geo != null) return; MV.geo = navigator.geolocation.watchPosition(pos => { MV.me = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy, at: Date.now() }; if (MV.follow) { MV.lat = MV.me.lat; MV.lon = MV.me.lon; } LMT = 0; drawLiveMap(); if (!MV.hadFix && $('mapPanel')) { MV.hadFix = true; $('mapPanel').innerHTML = mapPanel(); } }, () => { }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }); }
+function stopMapGeo() { if (MV.geo != null) { navigator.geolocation.clearWatch(MV.geo); MV.geo = null; } }
+let LMT = 0;
+function drawLiveMap() {
+  const cv = $('liveMap'); if (!cv) return; const r = cv.getBoundingClientRect(); if (!r.width) return;
+  const nowT = Date.now(); if (nowT - LMT < 250) return; LMT = nowT;
+  const dpr = devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr;
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  if (MV.lat == null) { const me = mapMe(), h = S.home && NET.nodes[S.home]; const c = me || h || { lat: 44.4355, lon: 26.1025 }; MV.lat = c.lat; MV.lon = c.lon; }
+  const kx = Math.cos(MV.lat * Math.PI / 180), sc = W / (MV.km / 111.32 / kx), X = lon => W / 2 + (lon - MV.lon) * sc, Y = lat => H / 2 - (lat - MV.lat) * sc * (110.57 / 111.32) / kx * kx / kx;
+  const Yf = lat => H / 2 - (lat - MV.lat) * (W / (MV.km / 110.57));
+  g.fillStyle = '#eef1f4'; g.fillRect(0, 0, W, H); g.lineCap = 'round';
+  const date = todayStr(), t = nowMin(), ctx = E.ctxFor(date, weatherFor(date), false), minor = MV.km > 14;
+  const latR = MV.km / 110.57 * (H / W) * 0.6 + 0.01, lonR = MV.km / 111.32 / kx * 0.6 + 0.01, abs = E.dayIndex(date) * 1440 + t;
+  const marks = [];
+  for (const [eid, e] of Object.entries(NET.edges)) {
+    const a = NET.nodes[e.from], b = NET.nodes[e.to];
+    if (Math.abs(a.lat - MV.lat) > latR || Math.abs(a.lon - MV.lon) > lonR) continue;
+    const major = ['A', 'C', 'N', 'M'].includes(e.cls); if (minor && !major) continue;
+    let col = '#ffffff', wd = major ? 3 : 1.6;
+    if (major || MV.km <= 6) { const st = M.segState(eid, date, t, ctx), slow = st.med / (e.len / e.v0 * 60); if (slow > 2) { col = '#dc2626'; wd += 1.5; } else if (slow > 1.45) { col = '#f59e0b'; wd += 1; } else if (major) col = '#9ec5a8'; }
+    g.strokeStyle = col; g.lineWidth = wd * dpr; g.beginPath(); g.moveTo(X(a.lon), Yf(a.lat)); g.lineTo(X(b.lon), Yf(b.lat)); g.stroke();
+    const ar = M.activeRestr(eid, abs); if (ar.list.length) marks.push({ x: (X(a.lon) + X(b.lon)) / 2, y: (Yf(a.lat) + Yf(b.lat)) / 2, r: ar.list[0], eid });
+  }
+  if (S.live) { g.strokeStyle = '#0b1f4d'; g.lineWidth = 6 * dpr; g.globalAlpha = .55; g.beginPath(); S.live.path.forEach((eid, j) => { const e = NET.edges[eid], a = NET.nodes[e.from], b = NET.nodes[e.to]; if (!j) g.moveTo(X(a.lon), Yf(a.lat)); g.lineTo(X(b.lon), Yf(b.lat)); }); g.stroke(); g.globalAlpha = 1; }
+  g.font = `${18 * dpr}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const seen = new Set(); for (const m of marks) { if (seen.has(m.r.id)) continue; seen.add(m.r.id); g.fillStyle = '#fff'; g.beginPath(); g.arc(m.x, m.y, 15 * dpr, 0, 7); g.fill(); g.fillText(CAUSE_ICON[restrKind(m.r)] || '⚠️', m.x, m.y + 1); }
+  // nume de localități
+  g.font = `700 ${11 * dpr}px "Nunito Sans"`; g.fillStyle = 'rgba(27,31,36,.6)';
+  for (const p of placesList()) { if (!['city', 'town', 'village', 'suburb'].includes(p.kind)) continue; const n = NET.nodes[p.node], x = X(n.lon), y = Yf(n.lat); if (x > 20 && x < W - 20 && y > 20 && y < H - 20) g.fillText(p.name, x, y - 12 * dpr); }
+  const me = mapMe();
+  if (me) { const x = X(me.lon), y = Yf(me.lat); g.fillStyle = 'rgba(29,78,216,.18)'; g.beginPath(); g.arc(x, y, 24 * dpr, 0, 7); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 16 * dpr, 0, 7); g.fill(); g.strokeStyle = '#1d4ed8'; g.lineWidth = 2.5 * dpr; g.stroke(); g.font = `${17 * dpr}px sans-serif`; g.fillText(S.live ? '🚗' : '📍', x, y + 1); }
+  g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.font = `600 ${10 * dpr}px "Nunito Sans"`; g.fillStyle = 'rgba(27,31,36,.5)'; g.fillText('© OpenStreetMap contributors · trafic estimat ' + fmt(t), 8 * dpr, H - 8 * dpr);
+  MAPMARKS = marks;
+}
+let MAPMARKS = [];
+function mapPanel() {
+  const out = [], date = todayStr(), now = nowMin();
+  // drumul următor, calculat din locul în care ești acum (dacă avem poziția GPS)
+  const me = mapMe(); let next = nextOccurrences()[0], from = null;
+  if (me) {
+    let bn = null, bd = 1e9; for (const [id, n] of Object.entries(NET.nodes)) { const d = E.haversine(me, n); if (d < bd) { bd = d; bn = id; } }
+    if (bn && bd < 3) { from = bn; const cand = nextOccurrences().filter(x => x.date === date && parseT(x.h.ta) > now + 5); // drumul obișnuit care NU are destinația chiar aici
+      const pick = cand.find(x => E.haversine(me, NET.nodes[x.h.d]) > 2); if (pick) next = pick; }
+  }
+  if (next) {
+    const h = next.h, ta = parseT(h.ta), o = from || h.o;
+    if (next.date === date && ta > now + 5 && o !== h.d) {
+      const ctx = E.ctxFor(date, weatherFor(date), false), s = slotEval(M, from ? M.alternatives(o, h.d, date, now, ctx, 3).map(a => a.path) : pathsFor(h.o, h.d, date, now, ctx), date, now, ctx, true);
+      if (s) { let k = 0; for (const x of s.samp || []) if (now + x <= ta - 5) k++; const pr = s.samp && s.samp.length ? Math.min(0.99, k / s.samp.length) : null;
+        const st = routeStatus(s.path, date, now);
+        out.push(`<div class="card"><div class="kicker">Dacă pleci acum${from ? ' de aici' : ''} · ${esc(h.name)} (${esc(placeName(h.d))})</div><div class="msg">Ajungi în jur de ${fmt(now + s.med)}${pr != null ? ` · <span style="color:${pr >= 0.95 ? 'var(--g)' : pr >= 0.8 ? 'var(--y)' : 'var(--r)'}">${s.cal ? '' : '~'}${Math.round(pr * 100)}% șanse</span> să ajungi până la ${h.ta}` : ''}</div>${stBox(st)}</div>`); }
+    } else { const f = forecast(h, next.date), dd = PLT.decision(f, h); if (dd) out.push(`<div class="card"><div class="kicker">Următorul drum · ${esc(h.name)} · ${dayLabel(next.date)}</div><div class="msg">Pleacă la ${fmt(dd.leave)}${f.early && f.early.pOn != null ? ` · ${f.early.cal ? '' : '~'}${Math.round(f.early.pOn * 100)}% șanse să ajungi până la ${h.ta}` : ''}</div></div>`); }
+  }
+  // blocaje semnalate acum în zonă
+  const uniq = {}; for (const m of MAPMARKS) uniq[m.r.id] = m;
+  const list = Object.values(uniq);
+  out.push(`<div class="card alist"><div class="kicker">Blocaje semnalate pe hartă</div>${list.length ? list.map(m => `<div class="item"><div><b>${CAUSE_ICON[restrKind(m.r)] || '⚠️'} ${esc(({ banda: 'Bandă închisă', accident: 'Accident', lucrari: 'Lucrări', coada: 'Coadă', restr: 'Restricție de circulație' })[restrKind(m.r)])}${NET.edges[m.eid].name ? ' pe ' + esc(NET.edges[m.eid].name) : ''}</b><small>${/^Raport participant/.test(m.r.note || '') ? 'semnalare de la participanți' : esc(m.r.note || '')}${m.r.endDate ? ' · până la ' + fmt(m.r.endMin) : ''}</small></div></div>`).join('') : '<p class="muted">Nicio problemă semnalată în zona afișată.</p>'}</div>`);
+  return out.join('');
+}
+function renderMap() {
+  $('s-map').innerHTML = `<div class="mapwrap"><canvas id="liveMap"></canvas><div class="mapbtns"><button id="mZin" aria-label="Mărește">+</button><button id="mZout" aria-label="Micșorează">−</button><button id="mMe" aria-label="Unde sunt">📍</button></div></div>
+    <div class="mlegend"><span><i style="background:#9ec5a8"></i>liber</span><span><i style="background:#f59e0b"></i>aglomerat</span><span><i style="background:#dc2626"></i>coloană</span><span>🚧 💥 👷 semnalări</span></div>
+    <div id="mapPanel" style="margin-top:12px"></div>`;
+  const cv = $('liveMap');
+  $('mZin').onclick = () => { MV.km = Math.max(1.5, MV.km / 1.6); drawLiveMap(); }; $('mZout').onclick = () => { MV.km = Math.min(60, MV.km * 1.6); drawLiveMap(); };
+  $('mMe').onclick = () => { MV.follow = true; const me = mapMe(); if (me) { MV.lat = me.lat; MV.lon = me.lon; drawLiveMap(); } else toast('Aștept poziția GPS…'); startMapGeo(); };
+  const pts = new Map();
+  cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); MV.follow = false; MV.d0 = null; };
+  cv.onpointermove = e => { if (!pts.has(e.pointerId)) return; const prev = pts.get(e.pointerId), r = cv.getBoundingClientRect(); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) { const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (MV.d0) MV.km = Math.max(1.5, Math.min(60, MV.km * MV.d0 / d)); MV.d0 = d; drawLiveMap(); return; }
+    const kmPerPx = MV.km / r.width, kx = Math.cos(MV.lat * Math.PI / 180); MV.lon -= (e.clientX - prev.x) * kmPerPx / 111.32 / kx; MV.lat += (e.clientY - prev.y) * kmPerPx / 110.57; drawLiveMap(); };
+  cv.onpointerup = cv.onpointercancel = e => { pts.delete(e.pointerId); MV.d0 = null; $('mapPanel').innerHTML = mapPanel(); };
+  cv.onwheel = e => { e.preventDefault(); MV.km = Math.max(1.5, Math.min(60, MV.km * (e.deltaY > 0 ? 1.25 : 0.8))); drawLiveMap(); };
+  LMT = 0; drawLiveMap(); $('mapPanel').innerHTML = mapPanel(); startMapGeo();
 }
 
 /* ---------- Ecranul „Avertizări” ---------- */
@@ -407,7 +516,7 @@ function renderHome() {
   let h = pushCard() + list.map((x, i) => { try { return card(x.h, x.date, i); } catch (e) { console.error(e); return `<div class="card"><b>${esc(x.h.name)}</b><p class="muted">Nu am putut calcula prognoza pentru acest drum. Verifică locurile în Setări.</p></div>`; } }).join('');
   h += `<div class="card"><div class="kicker">Un drum ocazional</div>
     <div style="margin-top:8px">${picker('aO', S.home, 'De unde')}</div>
-    ${picker('aD', S.work, 'Unde', 'Localitate, cartier, universitate, gară…')}
+    ${picker('aD', null, 'Unde vrei să ajungi?', 'Localitate, cartier, universitate, gară…', true)}
     <div class="row" style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="aTa" value="10:00"></div><div class="field" style="flex:1"><small>Ziua</small><select id="aDay"><option value="0">Azi</option><option value="1">Mâine</option><option value="2">Poimâine</option></select></div></div>
     <button class="btn ghost" id="aGo">Verifică</button><div id="aOut"></div></div>
     <p class="muted" style="text-align:center">Îți spunem <b>când</b> să pleci și pe ce drum, ca să nu stai în coloană.</p>`;
@@ -503,6 +612,7 @@ function drawTrip() {
   const st = routeStats(L.path), rem = Math.max(0, st.total - s);
   const info = $('tripInfo'); if (info) info.innerHTML = `${gpsOk ? '📡 Poziție GPS' : (L.gpsDenied ? '⚠️ Fără acces la locație · poziție estimată' : '⏳ Caut semnalul GPS · poziție estimată')} · mai ai ~${rem.toFixed(1).replace('.', ',')} km${L.offRoute ? ' · ești în afara traseelor propuse' : ''}`;
   const el = $('tripEl'); if (el) el.textContent = mins(nowMin() - L.dep);
+  const sb = $('tripStatus'); if (sb) { let k = 0; const B = routeStats(L.path).B; while (k < B.length - 1 && B[k] < s) k++; const rest = L.path.slice(k); if (rest.length) sb.innerHTML = stBox(routeStatus(rest, L.date, nowMin())); }
 }
 function renderTrip() {
   const L = S.live;
@@ -518,7 +628,7 @@ function renderTrip() {
   const opts = (L.alts || [L.path]).map(path => { const w = M.walk(path, L.date, L.dep, ctx), byName = {}; for (const e of path) { const x = NET.edges[e]; if (x.name) byName[x.name] = (byName[x.name] || 0) + x.len; } return { path, med: w.total, km: E.pathLen(NET, path), via: Object.entries(byName).sort((a, b) => b[1] - a[1]).slice(0, 2).map(x => x[0]) }; });
   $('s-trip').innerHTML = `<div class="card"><div class="kicker">Pe drum · ${esc(L.name)}</div>
     <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px"><div class="big" id="tripEl">${mins(nowMin() - L.dep)}</div><span class="muted">de când ai plecat (la ${fmt(L.dep)})</span></div>
-    <canvas class="rmap" id="tripMap" style="height:340px"></canvas><p class="muted" id="tripInfo" style="margin:6px 0 0"></p>
+    <canvas class="rmap" id="tripMap" style="height:340px"></canvas><p class="muted" id="tripInfo" style="margin:6px 0 0"></p><div id="tripStatus"></div>
     <div style="margin-top:6px">${opts.map((o, i) => `<div class="ropt ${i === (L.sel || 0) ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === (L.sel || 0) ? '✓ ' : ''}${i === 0 ? 'Ruta recomandată' : 'Alternativa ' + i} · ~${mins(o.med)}</b><span>${o.km.toFixed(0)} km${o.via.length ? ' · prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('')}</div>
     <p class="muted">Atinge ruta pe care mergi. Dacă o schimbi pe drum, aplicația o recunoaște singură după GPS.</p>
     <div class="rep">${[['🐢', 'Coadă', 'coada'], ['💥', 'Accident', 'accident'], ['🚧', 'Bandă închisă', 'banda'], ['👷', 'Lucrări', 'lucrari']].map(([e, t, k]) => `<button class="repb" data-r="${k}"><span class="e">${e}</span>${t}</button>`).join('')}</div>
@@ -572,7 +682,7 @@ function bindSend() {
 function habitForm(h, i) {
   return `<div class="card" data-hf="${i}"><div class="kicker">${esc(h.name)}</div>
     <div style="margin-top:8px">${picker('ho' + i, h.o, 'De unde')}</div>
-    ${picker('hd' + i, h.d, 'Unde', 'Localitate, cartier, universitate, gară…')}
+    ${picker('hd' + i, h.d, 'Unde', 'Localitate, cartier, universitate, gară…', true)}
     <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" data-k="ta" value="${h.ta}"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" data-k="usual" value="${h.usual}"></div></div>
     <div class="days">${[1, 2, 3, 4, 5, 6, 0].map(d => `<button data-d="${d}" class="${h.days.includes(d) ? 'on' : ''}">${WD[d].slice(0, 2)}</button>`).join('')}</div></div>`;
 }
@@ -602,7 +712,7 @@ function welcome() {
   $('welcomeBody').innerHTML = `<h2 style="margin:0 0 6px;font-size:24px;font-weight:900">Află de ambuteiaj înainte să fii în el.</h2>
   <p>Te anunță <b>din timp</b>, de obicei cu o seară înainte, când urmează un ambuteiaj pe drumul tău. Îți spune la ce oră să pleci și pe ce drum, ca să stai cât mai puțin pe loc și să ajungi la timp.</p>
   ${picker('wH', null, 'Unde locuiești?', 'Scrie localitatea sau cartierul, ex. Corbeanca')}
-  ${picker('wW', null, 'Unde mergi de obicei?', 'Localitate, cartier, universitate, gară…')}
+  ${picker('wW', null, 'Unde mergi de obicei?', 'Localitate, cartier, universitate, gară…', true)}
   <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="wTa" value="09:00"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" id="wU" value="08:00"></div></div>
   <label class="chk"><input type="checkbox" id="wC"><span>Sunt de acord ca localitățile, orele și drumurile mele, fără numele meu, să fie prelucrate de PRO SMART WORK S.R.L. în acest pilot, pentru calculul și îmbunătățirea avertizărilor. Cât timp sunt pe drum, cu aplicația deschisă, poziția GPS este folosită doar pentru a calcula cât durează fiecare porțiune de drum; traseul GPS nu se păstrează. Pot retrage acordul oricând, ștergând datele din Setări.</span></label>
   <button class="btn go" id="wGo" disabled>Încep</button>`;
@@ -633,7 +743,8 @@ function banner(t) { const b = $('banner'); b.textContent = t; b.classList.add('
 function show(s) {
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.s === s));
   document.querySelectorAll('.screen').forEach(x => x.classList.toggle('on', x.id === 's-' + s));
-  if (s === 'home') renderHome(); if (s === 'week') renderWeek(); if (s === 'trip') renderTrip(); if (s === 'set') renderSet();
+  if (s !== 'map') stopMapGeo();
+  if (s === 'home') renderHome(); if (s === 'map') renderMap(); if (s === 'week') renderWeek(); if (s === 'trip') renderTrip(); if (s === 'set') renderSet();
   scrollTo(0, 0);
 }
 document.querySelector('.tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.s); };
@@ -662,7 +773,7 @@ if (isIOS && !standalone) setTimeout(showInstall, 1500);
   rebuild();
   if (!S.consent) welcome(); else show(S.live ? 'trip' : 'home');
   flush(); pullPack(); setInterval(pullPack, 15 * 60000);
-  checkAlerts(); setInterval(checkAlerts, 30000); setInterval(() => { if (S.live && $('s-trip').classList.contains('on')) drawTrip(); }, 5000);
+  checkAlerts(); setInterval(checkAlerts, 30000); setInterval(() => { if (S.live && $('s-trip').classList.contains('on')) drawTrip(); if ($('s-map').classList.contains('on')) { LMT = 0; drawLiveMap(); } }, 5000); setInterval(() => { if ($('s-map').classList.contains('on')) $('mapPanel').innerHTML = mapPanel(); }, 60000);
 })();
 </script>
 </body>
