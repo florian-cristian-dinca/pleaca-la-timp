@@ -1,0 +1,19 @@
+# Manual maintenance: list participants (counts only) or delete test participants by id prefix.
+name: cleanup
+on:
+  workflow_dispatch:
+    inputs:
+      delete_ids: { description: 'Comma-separated id prefixes to delete (empty = list only)', required: false, default: '' }
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm, cache-dependency-path: jobs/package-lock.json }
+      - run: npm ci --prefix jobs --silent
+      - run: node jobs/cleanup.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DELETE_IDS: ${{ inputs.delete_ids }}
