@@ -91,8 +91,8 @@ function decision(f, h) {
   const unusual = f.extra >= 8 ? ` Neobișnuit: cu ${Math.round(f.extra)} min mai mult decât de obicei.` : '';
   return {
     leave, level: f.level,
-    morning: { title: `${h.name}: pleacă la ${fmt(leave)}`, body: f.level === 'g' ? 'Drum liniștit, poți pleca la ora obișnuită.' : `${f.level === 'r' ? 'Ambuteiaj' : 'Aglomerație'} pe drumul tău.${where}${unusual}` },
-    evening: { title: `Mâine: ${LV[f.level][0].toLowerCase()} · ${h.name.toLowerCase()}`, body: `Pleacă la ${fmt(leave)} în loc de ${h.usual}.${where}${unusual}` }
+    morning: { title: `${h.name}: plecați la ${fmt(leave)}`, body: f.level === 'g' ? 'Drum liniștit, puteți pleca la ora obișnuită.' : `${f.level === 'r' ? 'Ambuteiaj' : 'Aglomerație'} pe drumul dumneavoastră.${where}${unusual}` },
+    evening: { title: `Mâine: ${LV[f.level][0].toLowerCase()} · ${h.name.toLowerCase()}`, body: `Plecați la ${fmt(leave)} în loc de ${h.usual}.${where}${unusual}` }
   };
 }
 
@@ -111,8 +111,8 @@ function urgent(f, h, live) {
   let cause = '';
   if (restr) cause = ` Cauza: ${f.causes[0]}.`;
   else if (lv.road) cause = ` Viteza pe ${lv.road} a scăzut cu aproximativ ${Math.round((lv.drop || 0) * 100)}%.`;
-  const text = `Dacă pleci la ora stabilită, ${fmt(usual)}, ajungi cu aproximativ ${minTxt(late)} întârziere! Pleacă la ${fmt(leave)}.${cause}`;
-  return { late, leave, text, title: `⚠️ Ambuteiaj grav pe drumul tău (${h.name.toLowerCase()})` };
+  const text = `Dacă plecați la ora stabilită, ${fmt(usual)}, ajungeți cu aproximativ ${minTxt(late)} întârziere! Plecați la ${fmt(leave)}.${cause}`;
+  return { late, leave, text, title: `⚠️ Ambuteiaj grav pe drumul dumneavoastră (${h.name.toLowerCase()})` };
 }
 const api = { createForecaster, decision, urgent, minTxt, LV, slotColor, fmt, parseT };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.PLT = api;

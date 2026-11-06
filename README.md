@@ -1,6 +1,6 @@
 # Pleacă la timp
 
-Traffic-jam early warning for commuters in Bucharest + Ilfov (UNSTPB research pilot, ProSmart).
+Traffic-jam early warning for commuters in Bucharest + Ilfov (research pilot, PRO SMART WORK S.R.L.).
 The app does **not** show a route: it warns ahead of time (the evening before and before departure) when a jam
 is expected on the user's usual trip and recommends the departure time that minimises time stuck in traffic
 while arriving on time.

@@ -112,7 +112,7 @@ textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:10px
     document.head.appendChild(st);
     var o = document.createElement('div'); o.id = 'updov';
     o.style.cssText = 'position:fixed;inset:0;z-index:200;background:rgba(242,239,233,.96);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;font:800 18px system-ui,sans-serif;color:#1b1f24';
-    o.innerHTML = '<div style="width:56px;height:56px;border:6px solid #d6e2f5;border-top-color:#1d4ed8;border-radius:50%;animation:pltspin .9s linear infinite"></div><div>Se actualizează aplicația…</div><div style="font:600 14px system-ui,sans-serif;color:#6b7177">Durează câteva secunde. Datele tale rămân.</div>';
+    o.innerHTML = '<div style="width:56px;height:56px;border:6px solid #d6e2f5;border-top-color:#1d4ed8;border-radius:50%;animation:pltspin .9s linear infinite"></div><div>Se actualizează aplicația…</div><div style="font:600 14px system-ui,sans-serif;color:#6b7177">Durează câteva secunde. Datele dumneavoastră rămân.</div>';
     (document.body || document.documentElement).appendChild(o);
   }
   function repair() {
@@ -198,7 +198,7 @@ function placesList() {
 const placeName = (node, fallback) => { const p = placesList().find(x => x.node === node); return fallback || (p ? p.name : pname(node)); };
 function picker(id, value, label, ph, noGeo) {
   const v = value || {}; const node = typeof v === 'string' ? v : v.node, name = typeof v === 'string' ? '' : v.name;
-  return `<div class="field"><small>${label}</small><div class="pk"><input type="hidden" id="${id}" value="${esc(node || '')}"><div class="pkrow"><input class="pkq" placeholder="${esc(ph || 'Scrie numele localității sau al cartierului')}" value="${node ? esc(placeName(node, name)) : ''}" autocomplete="off" enterkeyhint="search">${noGeo ? '' : '<button type="button" class="pkgeo" title="Folosește locația mea">📍</button>'}</div><div class="pkl"></div></div></div>`;
+  return `<div class="field"><small>${label}</small><div class="pk"><input type="hidden" id="${id}" value="${esc(node || '')}"><div class="pkrow"><input class="pkq" placeholder="${esc(ph || 'Scrieți numele localității sau al cartierului')}" value="${node ? esc(placeName(node, name)) : ''}" autocomplete="off" enterkeyhint="search">${noGeo ? '' : '<button type="button" class="pkgeo" title="Folosiți locația mea">📍</button>'}</div><div class="pkl"></div></div></div>`;
 }
 function bindPickers(root) {
   (root || document).querySelectorAll('.pk').forEach(el => {
@@ -210,7 +210,7 @@ function bindPickers(root) {
       const words = t.split(' ');
       const res = placesList().filter(p => words.every(w => p.n.includes(w)))
         .sort((a, b) => (b.n.startsWith(t) - a.n.startsWith(t)) || (KRANK[a.kind] - KRANK[b.kind]) || a.name.length - b.name.length).slice(0, 8);
-      list.innerHTML = res.length ? res.map((p, i) => `<button type="button" data-i="${i}"><b>${esc(p.name)}</b><span>${KIND[p.kind] || 'loc'} · ${p.zone}</span></button>`).join('') : '<div class="pke">Nu găsesc acest loc. Încearcă localitatea sau cartierul.</div>';
+      list.innerHTML = res.length ? res.map((p, i) => `<button type="button" data-i="${i}"><b>${esc(p.name)}</b><span>${KIND[p.kind] || 'loc'} · ${p.zone}</span></button>`).join('') : '<div class="pke">Nu găsesc acest loc. Încercați localitatea sau cartierul.</div>';
       list.querySelectorAll('button').forEach(b => b.onmousedown = e => { e.preventDefault(); pick(res[+b.dataset.i]); });
     };
     q.oninput = () => { if (hid.value) { hid.value = ''; hid.dispatchEvent(new Event('change')); } render(); };
@@ -223,7 +223,7 @@ function bindPickers(root) {
       navigator.geolocation.getCurrentPosition(pos => {
         const la = pos.coords.latitude, lo = pos.coords.longitude; let best = null, bd = 1e9;
         for (const p of placesList()) { if (p.kind === 'poi') continue; const n = NET.nodes[p.node], d = E.haversine({ lat: la, lon: lo }, n); if (d < bd) { bd = d; best = p; } }
-        if (!best || bd > 25) { toast('Ești în afara zonei pilotului (București + Ilfov).'); return; }
+        if (!best || bd > 25) { toast('Sunteți în afara zonei pilotului (București + Ilfov).'); return; }
         pick(best); toast('Am ales: ' + best.name);
       }, () => toast('Nu am primit acces la locație.'), { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 });
     };
@@ -288,17 +288,17 @@ const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in win
 const b64 = s => { const p = '='.repeat((4 - s.length % 4) % 4), r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
 async function enablePush() {
   try {
-    if (await Notification.requestPermission() !== 'granted') { toast('Fără permisiune nu te putem anunța. Poți schimba asta din setările telefonului.'); return; }
+    if (await Notification.requestPermission() !== 'granted') { toast('Fără permisiune nu vă putem anunța. Puteți schimba asta din setările telefonului.'); return; }
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(PLT_CONFIG.vapidPublicKey) });
-    const j = sub.toJSON(); enqueue('push', { endpoint: j.endpoint, keys: j.keys }); S.pushOn = true; save(); toast('Gata! Te anunțăm din timp. 🔔'); renderHome();
+    const j = sub.toJSON(); enqueue('push', { endpoint: j.endpoint, keys: j.keys }); S.pushOn = true; save(); toast('Gata! Vă anunțăm din timp. 🔔'); renderHome();
   } catch (e) { toast('Nu am putut activa notificările pe acest dispozitiv.'); }
 }
 function pushCard() {
   if (S.pushOn && typeof Notification !== 'undefined' && Notification.permission === 'granted') return '';
-  if (isIOS && !standalone) return '<div class="card"><div class="msg">🔔 Ca să te anunțăm, adaugă aplicația pe ecranul principal</div><p class="muted">Partajează → Adaugă pe ecranul principal, apoi deschide aplicația de pe iconița nouă.</p></div>';
+  if (isIOS && !standalone) return '<div class="card"><div class="msg">🔔 Ca să vă putem anunța, adăugați aplicația pe ecranul principal</div><p class="muted">Partajează → Adaugă pe ecranul principal, apoi deschideți aplicația de pe iconița nouă.</p></div>';
   if (!pushSupported()) return '<div class="card"><p class="muted">Acest browser nu poate primi notificări. Avertizările apar când deschizi aplicația.</p></div>';
-  return '<div class="card"><div class="msg">🔔 Pornește avertizările</div><p class="muted">Așa afli de ambuteiaj cu o seară înainte și înainte de plecare, chiar dacă aplicația e închisă.</p><button class="btn go" id="bPush">Pornește avertizările</button></div>';
+  return '<div class="card"><div class="msg">🔔 Porniți avertizările</div><p class="muted">Așa aflați de ambuteiaj cu o seară înainte și înainte de plecare, chiar dacă aplicația e închisă.</p><button class="btn go" id="bPush">Porniți avertizările</button></div>';
 }
 
 
@@ -348,7 +348,7 @@ function bindRoutes(list) {
     if (!d.open) return; const { h, date } = list[+d.dataset.rd], f = forecast(h, date), dd = PLT.decision(f, h); if (!dd) return;
     const t0 = dd.leave, ctx = E.ctxFor(date, weatherFor(date), false), opts = routeOptions(h, date, t0), cv = $('rmap-' + d.dataset.rd), box = $('rlist-' + d.dataset.rd);
     let sel = 0;
-    const paint = () => { drawRoutes(cv, opts, sel, date, ctx); box.innerHTML = stBox(routeStatus(opts[sel].path, date, t0)) + `<p class="muted" style="margin:8px 0 2px">La plecarea de la ${fmt(t0)}:</p>` + opts.map((o, i) => `<div class="ropt ${i === sel ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === 0 ? 'Cea mai rapidă' : 'Alternativa ' + i} · ${mins(o.med)}${i ? ' (+' + (Math.round(o.med) - Math.round(opts[0].med)) + ' min)' : ''}</b><span>${o.km.toFixed(0)} km · ~${mins(o.idle)} pe loc${o.via.length ? ' · prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('') + '<p class="muted">Pe traseul ales: roșu = coloană, portocaliu = aglomerat. Atinge o rută ca să o vezi pe hartă.</p>';
+    const paint = () => { drawRoutes(cv, opts, sel, date, ctx); box.innerHTML = stBox(routeStatus(opts[sel].path, date, t0)) + `<p class="muted" style="margin:8px 0 2px">La plecarea de la ${fmt(t0)}:</p>` + opts.map((o, i) => `<div class="ropt ${i === sel ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === 0 ? 'Cea mai rapidă' : 'Alternativa ' + i} · ${mins(o.med)}${i ? ' (+' + (Math.round(o.med) - Math.round(opts[0].med)) + ' min)' : ''}</b><span>${o.km.toFixed(0)} km · ~${mins(o.idle)} pe loc${o.via.length ? ' · prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('') + '<p class="muted">Pe traseul ales: roșu = coloană, portocaliu = aglomerat. Atingeți o rută ca să o vedeți pe hartă.</p>';
       box.querySelectorAll('.ropt').forEach(r => r.onclick = () => { sel = +r.dataset.i; paint(); }); };
     paint();
   }));
@@ -367,7 +367,7 @@ function routeStatus(path, date, t0) {
   const worst = Object.entries(byName).sort((a, b) => b[1] - a[1])[0];
   const free = path.reduce((s, e) => s + NET.edges[e].len / NET.edges[e].v0 * 60, 0), idle = Math.max(0, w.total - free), extra = w.total - w0.total;
   if (found.length) {
-    const f0 = found[0], kind = restrKind(f0.r), road = NET.edges[f0.eid].name || (worst ? worst[0] : 'drumul tău'), byP = /^Raport participant/.test(f0.r.note || '');
+    const f0 = found[0], kind = restrKind(f0.r), road = NET.edges[f0.eid].name || (worst ? worst[0] : 'drumul dumneavoastră'), byP = /^Raport participant/.test(f0.r.note || '');
     const lvl = extra >= 10 || idle >= 25 ? 'r' : 'y';
     return { level: lvl, icon: CAUSE_ICON[kind] || '⚠️', text: `${lvl === 'r' ? 'Ambuteiaj' : 'Aglomerație'} pe ${road}, din cauza ${CAUSE_GEN[kind] || CAUSE_GEN.restr}${byP ? ' (semnalare de la participanți)' : ''}${extra >= 3 ? `: cu ~${mins(extra)} mai mult decât de obicei` : ''}.`, extra, idle };
   }
@@ -418,7 +418,7 @@ function drawLiveMap() {
 let MAPMARKS = [];
 function mapPanel() {
   const out = [], date = todayStr(), now = nowMin();
-  // drumul următor, calculat din locul în care ești acum (dacă avem poziția GPS)
+  // drumul următor, calculat din locul în care sunteți acum (dacă avem poziția GPS)
   const me = mapMe(); let next = nextOccurrences()[0], from = null;
   if (me) {
     let bn = null, bd = 1e9; for (const [id, n] of Object.entries(NET.nodes)) { const d = E.haversine(me, n); if (d < bd) { bd = d; bn = id; } }
@@ -431,8 +431,8 @@ function mapPanel() {
       const ctx = E.ctxFor(date, weatherFor(date), false), s = slotEval(M, from ? M.alternatives(o, h.d, date, now, ctx, 3).map(a => a.path) : pathsFor(h.o, h.d, date, now, ctx), date, now, ctx, true);
       if (s) { let k = 0; for (const x of s.samp || []) if (now + x <= ta) k++; const pr = s.samp && s.samp.length ? k / s.samp.length : null;
         const st = routeStatus(s.path, date, now);
-        out.push(`<div class="card"><div class="kicker">Dacă pleci acum${from ? ' de aici' : ''} · ${esc(h.name)} (${esc(placeName(h.d))})</div><div class="msg">Ajungi în jur de ${fmt(now + s.med)}${pr != null ? ` · <span style="color:${pr >= 0.95 ? 'var(--g)' : pr >= 0.8 ? 'var(--y)' : 'var(--r)'}">${pctTxt(pr, s.cal)} șanse</span> să ajungi până la ${h.ta}` : ''}</div>${stBox(st)}</div>`); }
-    } else { const f = forecast(h, next.date), dd = PLT.decision(f, h); if (dd) out.push(`<div class="card"><div class="kicker">Următorul drum · ${esc(h.name)} · ${dayLabel(next.date)}</div><div class="msg">Pleacă la ${fmt(dd.leave)}${f.early && f.early.pOn != null ? ` · ${pctTxt(f.early.pOn, f.early.cal)} șanse să ajungi până la ${h.ta}` : ''}</div></div>`); }
+        out.push(`<div class="card"><div class="kicker">Dacă plecați acum${from ? ' de aici' : ''} · ${esc(h.name)} (${esc(placeName(h.d))})</div><div class="msg">Ajungeți în jur de ${fmt(now + s.med)}${pr != null ? ` · <span style="color:${pr >= 0.95 ? 'var(--g)' : pr >= 0.8 ? 'var(--y)' : 'var(--r)'}">${pctTxt(pr, s.cal)} șanse</span> să ajungeți până la ${h.ta}` : ''}</div>${stBox(st)}</div>`); }
+    } else { const f = forecast(h, next.date), dd = PLT.decision(f, h); if (dd) out.push(`<div class="card"><div class="kicker">Următorul drum · ${esc(h.name)} · ${dayLabel(next.date)}</div><div class="msg">Plecați la ${fmt(dd.leave)}${f.early && f.early.pOn != null ? ` · ${pctTxt(f.early.pOn, f.early.cal)} șanse să ajungeți până la ${h.ta}` : ''}</div></div>`); }
   }
   // blocaje semnalate acum în zonă
   const uniq = {}; for (const m of MAPMARKS) uniq[m.r.id] = m;
@@ -487,13 +487,13 @@ function nextOccurrences() {
   return out.slice(0, 3);
 }
 const pctTxt = (pr, cal) => (pr >= 0.995 ? 'peste 99%' : pr < 0.005 ? 'sub 1%' : (cal ? '' : '~') + Math.round(pr * 100) + '%');
-const chance = s => s && s.pOn != null ? ` · <b style="display:inline;color:${s.pOn >= 0.95 ? 'var(--g)' : s.pOn >= 0.8 ? 'var(--y)' : 'var(--r)'}">${pctTxt(s.pOn, s.cal)} șanse să ajungi până la ${fmt(f_ta)}</b>` : '';
+const chance = s => s && s.pOn != null ? ` · <b style="display:inline;color:${s.pOn >= 0.95 ? 'var(--g)' : s.pOn >= 0.8 ? 'var(--y)' : 'var(--r)'}">${pctTxt(s.pOn, s.cal)} șanse să ajungeți până la ${fmt(f_ta)}</b>` : '';
 let f_ta = 0;
 function alertText(date, at, level) {
   const today = date === todayStr(), now = nowMin();
   if (today && at < now) return 'Ora avertizării de azi a trecut.';
   const day = today ? 'azi' : date === dayStr(1) ? 'mâine' : WD[wday(date)];
-  let t = `Te anunțăm ${day} la <b>${fmt(at)}</b>`;
+  let t = `Vă anunțăm ${day} la <b>${fmt(at)}</b>`;
   if (S.evening && !today && level !== 'g') { const prev = E.dateFromIndex(E.dayIndex(date) - 1), eve = prev === todayStr() ? (parseT(S.eveningAt) > now ? 'diseară' : null) : WD[wday(prev)] + ' seara'; if (eve) t += ` și ${eve}, la <b>${S.eveningAt}</b>`; }
   return t + '.';
 }
@@ -501,17 +501,17 @@ function card(h, date, idx) {
   const f = forecast(h, date); if (f) f_ta = f.ta; if (!f) return `<div class="card">Nu găsesc un drum între ${esc(pname(h.o))} și ${esc(pname(h.d))}.</div>`;
   const today = date === todayStr(), now = nowMin(), lv = LV[f.level];
   let msg, why = '';
-  if (f.level === 'g') msg = `Poți pleca liniștit la ora obișnuită, <b>${fmt(f.usual)}</b>. Stai pe loc cel mult câteva minute.`;
-  else msg = `Dacă pleci la <b>${fmt(f.usual)}</b>, ca de obicei, stai aproximativ <b>${mins(f.cur.idle)}</b> pe loc${f.lateBy > 0 ? ` și riști o întârziere de până la <b>${mins(f.lateBy)}</b>` : ''}.`;
+  if (f.level === 'g') msg = `Puteți pleca liniștit la ora obișnuită, <b>${fmt(f.usual)}</b>. Stați pe loc cel mult câteva minute.`;
+  else msg = `Dacă plecați la <b>${fmt(f.usual)}</b>, ca de obicei, stați aproximativ <b>${mins(f.cur.idle)}</b> pe loc${f.lateBy > 0 ? ` și riscați o întârziere de până la <b>${mins(f.lateBy)}</b>` : ''}.`;
   if (f.jam) why += `Coloana se formează pe <b>${esc(f.jam.name)}</b>, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}. `;
   if (f.extra >= 8) why += `Este <b>neobișnuit</b>: cu ${mins(f.extra)} mai mult decât într-o zi obișnuită de ${WD[wday(date)]}.${f.causes.length ? (f.causes.length > 1 ? ' Cauze: ' : ' Cauza: ') + f.causes.map(esc).join('; ') + '.' : ''}`;
   else if (f.level !== 'g') why += `Este aglomerația obișnuită pentru o zi de ${WD[wday(date)]}, la această oră.`;
   const opts = [];
   const gain = f.early ? f.cur.idle - f.early.idle : 0;
-  if (f.early && f.early.t0 < f.usual - 4 && (gain >= 5 || f.lateBy > 0)) opts.push({ best: true, t: f.early.t0, b: gain >= 5 ? 'Pleacă mai devreme' : 'Pleacă puțin mai devreme', s: (gain >= 5 ? `stai doar ~${mins(f.early.idle)} pe loc (cu ${mins(gain)} mai puțin)` : 'mai multă siguranță că ajungi la timp') + ` · sosire în jur de ${fmt(f.early.t0 + f.early.med)}` + chance(f.early) });
-  opts.push({ best: !opts.length && f.level === 'g', t: f.usual, b: 'La ora obișnuită', s: `stai ~${mins(f.cur.idle)} pe loc · sosire în jur de ${fmt(f.usual + f.cur.med)}` + chance(f.cur) });
-  if (f.calm && f.level !== 'g' && f.cur.idle - f.calm.idle >= 5) opts.push({ best: false, t: f.calm.t0, b: 'Mai târziu, dacă poți', s: `stai doar ~${mins(f.calm.idle)} pe loc · sosire în jur de ${fmt(f.calm.t0 + f.calm.med)}${f.calm.t0 + f.calm.med > f.ta ? ', după ora la care trebuie să ajungi' : ''}` + (f.calm.t0 + f.calm.med > f.ta ? '' : chance(f.calm)) });
-  if (!f.early && f.level === 'r') opts.unshift({ best: true, t: f.slots[0].t0, b: 'Pleacă cât mai devreme', s: 'Nicio oră de plecare din ultimele 2,5 ore nu garantează sosirea la timp.' });
+  if (f.early && f.early.t0 < f.usual - 4 && (gain >= 5 || f.lateBy > 0)) opts.push({ best: true, t: f.early.t0, b: gain >= 5 ? 'Plecați mai devreme' : 'Plecați puțin mai devreme', s: (gain >= 5 ? `stați doar ~${mins(f.early.idle)} pe loc (cu ${mins(gain)} mai puțin)` : 'mai multă siguranță că ajungeți la timp') + ` · sosire în jur de ${fmt(f.early.t0 + f.early.med)}` + chance(f.early) });
+  opts.push({ best: !opts.length && f.level === 'g', t: f.usual, b: 'La ora obișnuită', s: `stați ~${mins(f.cur.idle)} pe loc · sosire în jur de ${fmt(f.usual + f.cur.med)}` + chance(f.cur) });
+  if (f.calm && f.level !== 'g' && f.cur.idle - f.calm.idle >= 5) opts.push({ best: false, t: f.calm.t0, b: 'Mai târziu, dacă puteți', s: `stați doar ~${mins(f.calm.idle)} pe loc · sosire în jur de ${fmt(f.calm.t0 + f.calm.med)}${f.calm.t0 + f.calm.med > f.ta ? ', după ora la care trebuie să ajungeți' : ''}` + (f.calm.t0 + f.calm.med > f.ta ? '' : chance(f.calm)) });
+  if (!f.early && f.level === 'r') opts.unshift({ best: true, t: f.slots[0].t0, b: 'Plecați cât mai devreme', s: 'Nicio oră de plecare din ultimele 2,5 ore nu garantează sosirea la timp.' });
   const leaveAt = opts.find(o => o.best) ? opts.find(o => o.best).t : f.usual;
   const alertAt = leaveAt - S.lead;
   const ticks = []; for (let t = Math.ceil(f.slots[0].t0 / 30) * 30; t <= f.slots[f.slots.length - 1].t0; t += 60) ticks.push(fmt(t));
@@ -522,12 +522,12 @@ function card(h, date, idx) {
     ${why ? `<div class="why">${why}</div>` : ''}
     <div class="opts">${opts.map(o => `<div class="opt ${o.best ? 'best' : ''}"><div class="t">${fmt(o.t)}</div><div><b>${o.best ? '✓ ' : ''}${o.b}</b><span>${o.s}</span></div></div>`).join('')}</div>
     <div class="alertline">🔔 <span>${alertText(date, alertAt, f.level)}</span></div>
-    <details class="rdet" data-rd="${idx}"><summary>Vezi drumul și rutele alternative</summary><canvas class="rmap" id="rmap-${idx}"></canvas><div id="rlist-${idx}"></div></details>
-    <details><summary>Vezi toate orele de plecare</summary>
+    <details class="rdet" data-rd="${idx}"><summary>Vedeți drumul și rutele alternative</summary><canvas class="rmap" id="rmap-${idx}"></canvas><div id="rlist-${idx}"></div></details>
+    <details><summary>Vedeți toate orele de plecare</summary>
       <div class="band"><div class="bar">${f.slots.map((s, i) => `<div data-i="${i}" style="background:${slotColor(s)}" title="${fmt(s.t0)}"></div>`).join('')}</div>
       <div class="ticks">${ticks.map(t => `<span>${t}</span>`).join('')}</div>
-      <div class="info" id="info-${idx}">Atinge o oră ca să vezi cât ai sta pe loc.</div>
-      <p class="muted" style="margin:8px 0 0">„Șanse” = din 100 de zile asemănătoare, în câte ajungi până la ora pe care ai ales-o. Ora de sosire afișată este cea mai probabilă; în unele zile drumul durează mai mult, de aceea șansele pot fi sub 100% chiar dacă ora probabilă este înaintea orei alese. Semnul ~ arată că estimarea nu e încă verificată pe drumuri reale.</p>
+      <div class="info" id="info-${idx}">Atingeți o oră ca să vedeți cât ați sta pe loc.</div>
+      <p class="muted" style="margin:8px 0 0">„Șanse” = din 100 de zile asemănătoare, în câte ajungeți până la ora pe care ați ales-o. Ora de sosire afișată este cea mai probabilă; în unele zile drumul durează mai mult, de aceea șansele pot fi sub 100% chiar dacă ora probabilă este înaintea orei alese. Semnul ~ arată că estimarea nu e încă verificată pe drumuri reale.</p>
       <div class="legend"><span><i style="background:#4caf6e"></i>sub 10 min pe loc</span><span><i style="background:#f0a83a"></i>10–25 min</span><span><i style="background:#d9534f"></i>peste 25 min</span></div></div>
     </details>
   </div>`;
@@ -538,29 +538,29 @@ function bindCards(list) {
     c.querySelectorAll('.bar div').forEach(b => b.onclick = () => {
       c.querySelectorAll('.bar div').forEach(x => x.classList.remove('sel')); b.classList.add('sel');
       const s = f.slots[+b.dataset.i], late = s.t0 + s.q > f.deadline;
-      $('info-' + c.dataset.card).innerHTML = `Plecare la <b>${fmt(s.t0)}</b> → ~${mins(s.idle)} pe loc, sosire în jur de <b>${fmt(s.t0 + s.med)}</b>${s.pOn != null ? ` · ${pctTxt(s.pOn, s.cal)} șanse să ajungi până la ${fmt(f.ta)}` : (late ? ' · risc de întârziere' : ' · la timp')}`;
+      $('info-' + c.dataset.card).innerHTML = `Plecare la <b>${fmt(s.t0)}</b> → ~${mins(s.idle)} pe loc, sosire în jur de <b>${fmt(s.t0 + s.med)}</b>${s.pOn != null ? ` · ${pctTxt(s.pOn, s.cal)} șanse să ajungeți până la ${fmt(f.ta)}` : (late ? ' · risc de întârziere' : ' · la timp')}`;
     });
   });
 }
 function renderHome() {
-  if (!S.habits.length) { $('s-home').innerHTML = `<div class="card"><div class="msg">Spune-ne ce drumuri faci de obicei.</div><button class="btn dark" onclick="show('set')">Adaugă drumurile mele</button></div>`; return; }
+  if (!S.habits.length) { $('s-home').innerHTML = `<div class="card"><div class="msg">Spuneți-ne ce drumuri faceți de obicei.</div><button class="btn dark" onclick="show('set')">Adăugați drumurile mele</button></div>`; return; }
   const list = nextOccurrences();
-  let h = pushCard() + list.map((x, i) => { try { return card(x.h, x.date, i); } catch (e) { console.error(e); return `<div class="card"><b>${esc(x.h.name)}</b><p class="muted">Nu am putut calcula prognoza pentru acest drum. Verifică locurile în Setări.</p></div>`; } }).join('');
+  let h = pushCard() + list.map((x, i) => { try { return card(x.h, x.date, i); } catch (e) { console.error(e); return `<div class="card"><b>${esc(x.h.name)}</b><p class="muted">Nu am putut calcula prognoza pentru acest drum. Verificați locurile în Setări.</p></div>`; } }).join('');
   h += `<div class="card"><div class="kicker">Un drum ocazional</div>
     <div style="margin-top:8px">${picker('aO', S.home, 'De unde')}</div>
-    ${picker('aD', null, 'Unde vrei să ajungi?', 'Localitate, cartier, universitate, gară…', true)}
+    ${picker('aD', null, 'Unde doriți să ajungeți?', 'Localitate, cartier, universitate, gară…', true)}
     <div class="row" style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="aTa" value="10:00"></div><div class="field" style="flex:1"><small>Ziua</small><select id="aDay"><option value="0">Azi</option><option value="1">Mâine</option><option value="2">Poimâine</option></select></div></div>
-    <button class="btn ghost" id="aGo">Verifică</button><div id="aOut"></div></div>
-    <p class="muted" style="text-align:center">Îți spunem <b>când</b> să pleci și pe ce drum, ca să nu stai în coloană.</p>`;
+    <button class="btn ghost" id="aGo">Verificați</button><div id="aOut"></div></div>
+    <p class="muted" style="text-align:center">Vă spunem <b>când</b> să plecați și pe ce drum, ca să nu stați în coloană.</p>`;
   $('s-home').innerHTML = h; bindCards(list); bindRoutes(list); if ($('bPush')) $('bPush').onclick = enablePush;
   bindPickers($('s-home'));
   $('aGo').onclick = () => {
     const ta = $('aTa').value, date = dayStr(+$('aDay').value), adhoc = { id: 'adhoc', name: 'Drum ocazional', o: $('aO').value, d: $('aD').value, ta, usual: fmt(parseT(ta) - 60), days: [] };
-    if (!adhoc.o || !adhoc.d) { toast('Alege locul de plecare și destinația din lista de sugestii.'); return; }
-    if (adhoc.o === adhoc.d) { toast('Alege două locuri diferite.'); return; }
+    if (!adhoc.o || !adhoc.d) { toast('Alegeți locul de plecare și destinația din lista de sugestii.'); return; }
+    if (adhoc.o === adhoc.d) { toast('Alegeți două locuri diferite.'); return; }
     const f = forecast(adhoc, date); if (!f) { $('aOut').innerHTML = '<p class="muted">Nu găsesc un drum.</p>'; return; }
     const best = f.early || f.slots[0];
-    $('aOut').innerHTML = `<div class="opt best" style="margin-top:12px"><div class="t">${fmt(best.t0)}</div><div><b>✓ Pleacă cel târziu la această oră</b><span>stai ~${mins(best.idle)} pe loc · sosire în jur de ${fmt(best.t0 + best.med)}</span></div></div>${f.jam ? `<p class="why">Coloana se formează pe <b>${esc(f.jam.name)}</b>, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}.</p>` : ''}`;
+    $('aOut').innerHTML = `<div class="opt best" style="margin-top:12px"><div class="t">${fmt(best.t0)}</div><div><b>✓ Plecați cel târziu la această oră</b><span>stați ~${mins(best.idle)} pe loc · sosire în jur de ${fmt(best.t0 + best.med)}</span></div></div>${f.jam ? `<p class="why">Coloana se formează pe <b>${esc(f.jam.name)}</b>, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}.</p>` : ''}`;
   };
 }
 
@@ -577,7 +577,7 @@ function renderWeek() {
     }
     h += `</div>`;
   }
-  $('s-week').innerHTML = (h || '<div class="card muted">Adaugă un drum obișnuit în Setări.</div>') + '<p class="muted" style="text-align:center">Prognoza se actualizează automat, de câteva ori pe oră, pe măsură ce participanții trimit drumuri și semnalări.</p>';
+  $('s-week').innerHTML = (h || '<div class="card muted">Adăugați un drum obișnuit în Setări.</div>') + '<p class="muted" style="text-align:center">Prognoza se actualizează automat, de câteva ori pe oră, pe măsură ce participanții trimit drumuri și semnalări.</p>';
 }
 
 /* ---------- Am plecat / am ajuns (colectarea datelor, cât mai simplu) ---------- */
@@ -615,7 +615,7 @@ function onFix(pos) {
   let pr = project(L.path, c.latitude, c.longitude);
   if (pr.d > 0.25) { // în afara traseului ales: poate a ales altă rută dintre alternative
     let alt = null; (L.alts || []).forEach((pth, i) => { if (i === L.sel) return; const q = project(pth, c.latitude, c.longitude); if (q.d < 0.15 && (!alt || q.d < alt.q.d)) alt = { i, q }; });
-    if (alt && ++L.gps.off >= 2) { L.sel = alt.i; L.path = L.alts[alt.i]; L.cross = {}; L.sMax = alt.q.s; L.gps.off = 0; toast('Am observat că mergi pe altă rută. Am schimbat-o.'); save(); renderTrip(); return; }
+    if (alt && ++L.gps.off >= 2) { L.sel = alt.i; L.path = L.alts[alt.i]; L.cross = {}; L.sMax = alt.q.s; L.gps.off = 0; toast('Am observat că mergeți pe altă rută. Am schimbat-o.'); save(); renderTrip(); return; }
     if (!alt && ++L.gps.off >= 4) L.offRoute = true;
   } else L.gps.off = 0;
   if (pr.d <= 0.25) {
@@ -642,7 +642,7 @@ function drawTrip() {
   const s = gpsOk && L.sMax != null ? L.sMax : estimatedS(L), car = posAt(L.path, s);
   drawRoutes(cv, opts, L.sel || 0, L.date, E.ctxFor(L.date, L.weather, false), { car, est: !gpsOk });
   const st = routeStats(L.path), rem = Math.max(0, st.total - s);
-  const info = $('tripInfo'); if (info) info.innerHTML = `${gpsOk ? '📡 Poziție GPS' : (L.gpsDenied ? '⚠️ Fără acces la locație · poziție estimată' : '⏳ Caut semnalul GPS · poziție estimată')} · mai ai ~${rem.toFixed(1).replace('.', ',')} km${L.offRoute ? ' · ești în afara traseelor propuse' : ''}`;
+  const info = $('tripInfo'); if (info) info.innerHTML = `${gpsOk ? '📡 Poziție GPS' : (L.gpsDenied ? '⚠️ Fără acces la locație · poziție estimată' : '⏳ Caut semnalul GPS · poziție estimată')} · mai aveți ~${rem.toFixed(1).replace('.', ',')} km${L.offRoute ? ' · sunteți în afara traseelor propuse' : ''}`;
   const el = $('tripEl'); if (el) el.textContent = mins(nowMin() - L.dep);
   const sb = $('tripStatus'); if (sb) { let k = 0; const B = routeStats(L.path).B; while (k < B.length - 1 && B[k] < s) k++; const rest = L.path.slice(k); if (rest.length) sb.innerHTML = stBox(routeStatus(rest, L.date, nowMin())); }
 }
@@ -650,7 +650,7 @@ function renderTrip() {
   const L = S.live;
   if (!L) {
     stopGeo();
-    $('s-trip').innerHTML = `<div class="card"><div class="msg">Pleci acum?</div><p class="muted">Alege drumul, apoi pune telefonul în suport. Aplicația urmărește singură traseul și înregistrează cât durează fiecare porțiune. Așa avertizările devin mai precise pentru toți.</p>
+    $('s-trip').innerHTML = `<div class="card"><div class="msg">Plecați acum?</div><p class="muted">Alegeți drumul, apoi puneți telefonul în suport. Aplicația urmărește singură traseul și înregistrează cât durează fiecare porțiune. Așa avertizările devin mai precise pentru toți.</p>
       ${S.habits.map((h, i) => `<button class="btn dark" data-h="${i}">Am plecat · ${esc(h.name)}</button>`).join('')}</div>
       <div class="card"><div class="kicker">Drumurile mele</div>${histHTML()}</div>`;
     $('s-trip').querySelectorAll('[data-h]').forEach(b => b.onclick = () => depart(S.habits[+b.dataset.h]));
@@ -659,12 +659,12 @@ function renderTrip() {
   const ctx = E.ctxFor(L.date, L.weather, false);
   const opts = (L.alts || [L.path]).map(path => { const w = M.walk(path, L.date, L.dep, ctx), byName = {}; for (const e of path) { const x = NET.edges[e]; if (x.name) byName[x.name] = (byName[x.name] || 0) + x.len; } return { path, med: w.total, km: E.pathLen(NET, path), via: Object.entries(byName).sort((a, b) => b[1] - a[1]).slice(0, 2).map(x => x[0]) }; });
   $('s-trip').innerHTML = `<div class="card"><div class="kicker">Pe drum · ${esc(L.name)}</div>
-    <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px"><div class="big" id="tripEl">${mins(nowMin() - L.dep)}</div><span class="muted">de când ai plecat (la ${fmt(L.dep)})</span></div>
+    <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px"><div class="big" id="tripEl">${mins(nowMin() - L.dep)}</div><span class="muted">de când ați plecat (la ${fmt(L.dep)})</span></div>
     <canvas class="rmap" id="tripMap" style="height:340px"></canvas><p class="muted" id="tripInfo" style="margin:6px 0 0"></p><div id="tripStatus"></div>
     <div style="margin-top:6px">${opts.map((o, i) => `<div class="ropt ${i === (L.sel || 0) ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === (L.sel || 0) ? '✓ ' : ''}${i === 0 ? 'Ruta recomandată' : 'Alternativa ' + i} · ~${mins(o.med)}</b><span>${o.km.toFixed(0)} km${o.via.length ? ' · prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('')}</div>
-    <p class="muted">Atinge ruta pe care mergi. Dacă o schimbi pe drum, aplicația o recunoaște singură după GPS.</p>
+    <p class="muted">Atingeți ruta pe care mergeți. Dacă o schimbați pe drum, aplicația o recunoaște singură după GPS.</p>
     <div class="rep">${[['🐢', 'Coadă', 'coada'], ['💥', 'Accident', 'accident'], ['🚧', 'Bandă închisă', 'banda'], ['👷', 'Lucrări', 'lucrari']].map(([e, t, k]) => `<button class="repb" data-r="${k}"><span class="e">${e}</span>${t}</button>`).join('')}</div>
-    <p class="muted">Nu folosi telefonul în timp ce conduci. Semnalările se fac doar de către pasager sau când ești oprit în siguranță.</p>
+    <p class="muted">Nu folosiți telefonul în timp ce conduceți. Semnalările se fac doar de către pasager sau când sunteți oprit în siguranță.</p>
     <button class="btn go" id="bArr">Am ajuns</button><button class="btn ghost" id="bCan">Anulează drumul</button></div>`;
   $('s-trip').querySelectorAll('.ropt').forEach(r => r.onclick = () => { const i = +r.dataset.i; if (i === (L.sel || 0)) return; L.sel = i; L.path = L.alts[i]; L.cross = {}; L.sMax = null; save(); renderTrip(); });
   $('s-trip').querySelectorAll('[data-r]').forEach(b => b.onclick = () => reportNow(b.dataset.r));
@@ -697,17 +697,17 @@ function arrive(auto) {
   S.trips.push({ id: L.id, date: L.date, dep: L.dep, dur, orig: L.orig, dest: L.dest, path: L.path, weather: L.weather, vacation: false, source: 'participant', participant: S.pid, pred: Object.assign({}, L.pred, { offRoute: !!L.offRoute, gps: !!(L.gps && L.gps.fixes), segments: obs.length }), onTime });
   S.segObs = (S.segObs || []).concat(obs);
   S.live = null; save(); enqueue('trip', S.trips[S.trips.length - 1]); if (obs.length) enqueue('segobs', obs);
-  renderTrip(); toast((auto ? 'Am detectat sosirea. ' : '') + (onTime ? 'Ai ajuns la timp! 🎉' : 'Ai ajuns. Mulțumim, aplicația învață din acest drum.'));
+  renderTrip(); toast((auto ? 'Am detectat sosirea. ' : '') + (onTime ? 'Ați ajuns la timp! 🎉' : 'Ați ajuns. Vă mulțumim, aplicația învață din acest drum.'));
 }
 function histHTML() {
   const tr = [...S.trips].reverse().slice(0, 15), f = S.trips.filter(t => t.pred && t.pred.followed), ok = f.filter(t => t.onTime).length;
-  return `${f.length ? `<div class="msg">${ok} din ${f.length} la timp</div><p class="muted">când ai plecat la ora recomandată</p>` : '<p class="muted">Încă niciun drum înregistrat.</p>'}
+  return `${f.length ? `<div class="msg">${ok} din ${f.length} la timp</div><p class="muted">când ați plecat la ora recomandată</p>` : '<p class="muted">Încă niciun drum înregistrat.</p>'}
   ${tr.map(t => `<div class="item"><div><b>${esc(pname(t.orig))} → ${esc(pname(t.dest))}</b><small>${t.date} · ${fmt(t.dep)} · ${mins(t.dur)}</small></div><span class="tag ${!t.pred ? 'na' : t.onTime ? 'ok' : 'no'}">${!t.pred ? '—' : t.onTime ? 'La timp' : 'Întârziere'}</span></div>`).join('')}
   <p class="muted" id="syncState" style="margin-top:10px"></p><p class="muted">Drumurile se trimit automat, anonim (cod ${S.pid}), ca avertizările să devină mai precise pentru toți.</p>`;
 }
 function bindSend() {
   if (!$('bSend')) return;
-  $('bSend').onclick = async () => { const txt = JSON.stringify({ format: 'mpred-pilot', version: E.VERSION, participant: S.pid, exportedAt: new Date().toISOString(), trips: S.trips, segObs: S.segObs, restrictions: S.reports.filter(r => r.closedLanes) }); const ta = $('sendTxt'); ta.style.display = 'block'; ta.value = txt; try { await navigator.clipboard.writeText(txt); toast('Copiat! Lipește-l într-un mesaj către coordonator.'); } catch (e) { ta.select(); toast('Selectează textul și copiază-l.'); } };
+  $('bSend').onclick = async () => { const txt = JSON.stringify({ format: 'mpred-pilot', version: E.VERSION, participant: S.pid, exportedAt: new Date().toISOString(), trips: S.trips, segObs: S.segObs, restrictions: S.reports.filter(r => r.closedLanes) }); const ta = $('sendTxt'); ta.style.display = 'block'; ta.value = txt; try { await navigator.clipboard.writeText(txt); toast('Copiat! Lipiți-l într-un mesaj către coordonator.'); } catch (e) { ta.select(); toast('Selectați textul și copiați-l.'); } };
 }
 
 /* ---------- Setări ---------- */
@@ -720,35 +720,35 @@ function habitForm(h, i) {
 }
 function renderSet() {
   $('s-set').innerHTML = `${S.habits.map(habitForm).join('')}
-    <div class="card"><div class="kicker">Când să te anunțăm</div>
-      <p class="muted" style="margin:8px 0 4px">Cu cât timp înainte de ora la care trebuie să pleci</p>
+    <div class="card"><div class="kicker">Când să vă anunțăm</div>
+      <p class="muted" style="margin:8px 0 4px">Cu cât timp înainte de ora la care trebuie să plecați</p>
       <div class="seg" id="leadSeg">${[15, 30, 45, 60].map(v => `<button data-v="${v}" class="${S.lead === v ? 'on' : ''}">${v} min</button>`).join('')}</div>
       <label class="chk"><input type="checkbox" id="evOn" ${S.evening ? 'checked' : ''}><span>Și cu o seară înainte, dacă a doua zi e aglomerat, la ora <input type="time" id="evAt" value="${S.eveningAt}" style="border:none;font:800 15px 'Nunito Sans'"></span></label>
-      <label class="chk"><input type="checkbox" id="vOn" ${S.voice === false ? '' : 'checked'}><span><b>Anunț vocal</b> pentru ambuteiajele grave (când întârzierea e sigură și are o cauză clară). Telefonul citește mesajul când atingi notificarea sau dacă aplicația e deschisă.</span></label>
-      <button class="btn ghost" id="bVoice">🔊 Ascultă un exemplu</button>
-      <button class="btn dark" id="bSave">Salvează</button></div>
-    <div class="card"><div class="kicker">Datele mele</div><p class="muted">Codul tău de participant: <b>${S.pid}</b>. Drumurile se trimit anonim, doar cu acest cod, pentru îmbunătățirea avertizărilor. Butonul de mai jos le șterge definitiv, de pe telefon și de pe server.</p><button class="btn red" id="bWipe">Șterge toate datele</button></div>
-    <div class="card"><div class="kicker">Probleme?</div><p class="muted">Dacă aplicația arată ciudat sau nu se actualizează, apasă aici. Datele tale rămân.</p><button class="btn ghost" onclick="window.__pltRepair()">Actualizează aplicația</button></div>`;
+      <label class="chk"><input type="checkbox" id="vOn" ${S.voice === false ? '' : 'checked'}><span><b>Anunț vocal</b> pentru ambuteiajele grave (când întârzierea e sigură și are o cauză clară). Telefonul citește mesajul când atingeți notificarea sau dacă aplicația e deschisă.</span></label>
+      <button class="btn ghost" id="bVoice">🔊 Ascultați un exemplu</button>
+      <button class="btn dark" id="bSave">Salvați</button></div>
+    <div class="card"><div class="kicker">Datele mele</div><p class="muted">Codul dumneavoastră de participant: <b>${S.pid}</b>. Drumurile se trimit anonim, doar cu acest cod, pentru îmbunătățirea avertizărilor. Butonul de mai jos le șterge definitiv, de pe telefon și de pe server.</p><button class="btn red" id="bWipe">Ștergeți toate datele</button></div>
+    <div class="card"><div class="kicker">Probleme?</div><p class="muted">Dacă aplicația arată ciudat sau nu se actualizează, apăsați aici. Datele dumneavoastră rămân.</p><button class="btn ghost" onclick="window.__pltRepair()">Actualizează aplicația</button></div>`;
   document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; c.querySelectorAll('[data-d]').forEach(b => b.onclick = () => b.classList.toggle('on')); });
   bindPickers($('s-set'));
   $('leadSeg').querySelectorAll('button').forEach(b => b.onclick = () => { $('leadSeg').querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); });
-  $('bVoice').onclick = () => { const was = S.voice; S.voice = true; speak('Dacă pleci la ora stabilită, șapte și patruzeci și cinci, ajungi cu aproximativ zece minute întârziere! Pleacă la șapte și douăzeci și cinci. Cauza: o bandă închisă pe Șoseaua București-Ploiești.'); S.voice = was; if (!('speechSynthesis' in window)) toast('Telefonul nu are funcția de citire cu voce.'); };
+  $('bVoice').onclick = () => { const was = S.voice; S.voice = true; speak('Dacă plecați la ora stabilită, șapte și patruzeci și cinci, ajungeți cu aproximativ zece minute întârziere! Plecați la șapte și douăzeci și cinci. Cauza: o bandă închisă pe Șoseaua București-Ploiești.'); S.voice = was; if (!('speechSynthesis' in window)) toast('Telefonul nu are funcția de citire cu voce.'); };
   $('bSave').onclick = () => {
     document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; const o = $('ho' + c.dataset.hf).value, d = $('hd' + c.dataset.hf).value; if (o) h.o = o; if (d) h.d = d; h.ta = c.querySelector('[data-k=ta]').value; h.usual = c.querySelector('[data-k=usual]').value; h.days = [...c.querySelectorAll('[data-d].on')].map(b => +b.dataset.d); });
     S.voice = $('vOn').checked;
     S.lead = +($('leadSeg').querySelector('.on') || { dataset: { v: 30 } }).dataset.v; S.evening = $('evOn').checked; S.eveningAt = $('evAt').value || '21:00';
     save(); enqueue('participant'); enqueue('habits'); rebuild(); toast('Am salvat.'); show('home');
   };
-  let arm = 0; $('bWipe').onclick = async () => { if (Date.now() - arm > 3000) { arm = Date.now(); toast('Apasă din nou pentru a confirma ștergerea.'); return; } try { const s = await session(); if (s) { await s.c.rpc('delete_my_data'); await s.c.auth.signOut(); } } catch (e) { } S = fresh(); save(); rebuild(); toast('Toate datele tale au fost șterse, inclusiv de pe server.'); welcome(); };
+  let arm = 0; $('bWipe').onclick = async () => { if (Date.now() - arm > 3000) { arm = Date.now(); toast('Apăsați din nou pentru a confirma ștergerea.'); return; } try { const s = await session(); if (s) { await s.c.rpc('delete_my_data'); await s.c.auth.signOut(); } } catch (e) { } S = fresh(); save(); rebuild(); toast('Toate datele dumneavoastră au fost șterse, inclusiv de pe server.'); welcome(); };
 }
 
 /* ---------- Bun venit ---------- */
 function welcome() {
   const o = placeOptions();
-  $('welcomeBody').innerHTML = `<h2 style="margin:0 0 6px;font-size:24px;font-weight:900">Află de ambuteiaj înainte să fii în el.</h2>
-  <p>Te anunță <b>din timp</b>, de obicei cu o seară înainte, când urmează un ambuteiaj pe drumul tău. Îți spune la ce oră să pleci și pe ce drum, ca să stai cât mai puțin pe loc și să ajungi la timp.</p>
-  ${picker('wH', null, 'Unde locuiești?', 'Scrie localitatea sau cartierul, ex. Corbeanca')}
-  ${picker('wW', null, 'Unde mergi de obicei?', 'Localitate, cartier, universitate, gară…', true)}
+  $('welcomeBody').innerHTML = `<h2 style="margin:0 0 6px;font-size:24px;font-weight:900">Aflați de ambuteiaj înainte să fiți în el.</h2>
+  <p>Vă anunță <b>din timp</b>, de obicei cu o seară înainte, când urmează un ambuteiaj pe drumul dumneavoastră. Vă spune la ce oră să plecați și pe ce drum, ca să stați cât mai puțin pe loc și să ajungeți la timp.</p>
+  ${picker('wH', null, 'Unde locuiți?', 'Scrieți localitatea sau cartierul, ex. Corbeanca')}
+  ${picker('wW', null, 'Unde mergeți de obicei?', 'Localitate, cartier, universitate, gară…', true)}
   <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="wTa" value="09:00"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" id="wU" value="08:00"></div></div>
   <label class="chk"><input type="checkbox" id="wC"><span>Sunt de acord ca localitățile, orele și drumurile mele, fără numele meu, să fie prelucrate de PRO SMART WORK S.R.L. în acest pilot, pentru calculul și îmbunătățirea avertizărilor. Cât timp sunt pe drum, cu aplicația deschisă, poziția GPS este folosită doar pentru a calcula cât durează fiecare porțiune de drum; traseul GPS nu se păstrează. Pot retrage acordul oricând, ștergând datele din Setări.</span></label>
   <button class="btn go" id="wGo" disabled>Încep</button>`;
@@ -795,8 +795,8 @@ function showInstall() {
   if (standalone || S.installDismissed) return;
   const el = $('install');
   el.innerHTML = isIOS
-    ? '<b>📲 Adaugă aplicația pe ecranul principal</b>Pe iPhone, avertizările funcționează doar așa: apasă <b style="display:inline">Partajează</b> (pătratul cu săgeată) → <b style="display:inline">Adaugă pe ecranul principal</b>, apoi deschide aplicația de pe noua iconiță. <div style="margin-top:8px"><button class="link" id="instX" style="background:none;border:none;color:var(--mute);font-weight:800">Mai târziu</button></div>'
-    : '<b>📲 Instalează aplicația</b>Ca să primești avertizările și cu aplicația închisă.<button class="btn dark" id="instGo" style="margin-top:10px">Instalează</button><button class="link" id="instX" style="background:none;border:none;color:var(--mute);font-weight:800;margin-top:6px">Mai târziu</button>';
+    ? '<b>📲 Adăugați aplicația pe ecranul principal</b>Pe iPhone, avertizările funcționează doar așa: apăsați <b style="display:inline">Partajează</b> (pătratul cu săgeată) → <b style="display:inline">Adaugă pe ecranul principal</b>, apoi deschideți aplicația de pe noua iconiță. <div style="margin-top:8px"><button class="link" id="instX" style="background:none;border:none;color:var(--mute);font-weight:800">Mai târziu</button></div>'
+    : '<b>📲 Instalați aplicația</b>Ca să primiți avertizările și cu aplicația închisă.<button class="btn dark" id="instGo" style="margin-top:10px">Instalați</button><button class="link" id="instX" style="background:none;border:none;color:var(--mute);font-weight:800;margin-top:6px">Mai târziu</button>';
   el.classList.add('on');
   if ($('instGo')) $('instGo').onclick = async () => { if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; el.classList.remove('on'); };
   $('instX').onclick = () => { S.installDismissed = true; save(); el.classList.remove('on'); };

@@ -85,7 +85,7 @@ async function all(table, q = x => x) { const { data, error } = await q(db.from(
       if (p.evening_alert && h.days.includes(wday(tomorrow)) && E.dayType(tomorrow) !== 'D' && now.min >= ev && now.min < ev + 60) {
         const f = fc.forecast(h, tomorrow), d = PLT.decision(f, h);
         const u = PLT.urgent(f, h, null);
-        if (u) await send(p.id, `${h.id}|${tomorrow}|e`, { title: '⚠️ Mâine: ' + u.title.replace('⚠️ ', '').toLowerCase(), body: u.text.replace('Dacă pleci', 'Mâine, dacă pleci'), urgent: true });
+        if (u) await send(p.id, `${h.id}|${tomorrow}|e`, { title: '⚠️ Mâine: ' + u.title.replace('⚠️ ', '').toLowerCase(), body: u.text.replace('Dacă plecați', 'Mâine, dacă plecați'), urgent: true });
         else if (d && f.level !== 'g') await send(p.id, `${h.id}|${tomorrow}|e`, d.evening);
       }
     }
