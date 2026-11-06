@@ -1,0 +1,16 @@
+# Manual diagnosis: measured vs model travel times (aggregates only).
+name: diagnose
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm, cache-dependency-path: jobs/package-lock.json }
+      - run: npm ci --prefix jobs --silent
+      - run: node jobs/diag.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_4JjWAvGsIVe17O8tTslGgg_V43b_cwX
