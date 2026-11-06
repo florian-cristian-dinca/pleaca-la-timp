@@ -7,7 +7,9 @@ const graph = require('../graph.json');
 const { createClient } = require('@supabase/supabase-js');
 const webpush = require('web-push');
 
-const env = k => { const v = process.env[k]; if (!v) { console.error('Missing secret ' + k); process.exit(1); } return v; };
+const MISSING = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'].filter(k => !process.env[k]);
+if (MISSING.length) { console.log('Not configured yet (missing secrets: ' + MISSING.join(', ') + ') – nothing to do.'); process.exit(0); }
+const env = k => process.env[k];
 const db = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
 webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'https://florian-cristian-dinca.github.io/pleaca-la-timp/', env('VAPID_PUBLIC_KEY'), env('VAPID_PRIVATE_KEY'));
 
