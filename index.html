@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pleacă la timp – avertizare de ambuteiaj</title>
 <meta name="theme-color" content="#1b1f24">
+<meta name="color-scheme" content="only light">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -15,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f2efe9;--card:#fff;--ink:#1b1f24;--mute:#6b7177;--line:#e5e0d6;--g:#15803d;--gbg:#e8f6ec;--y:#b45309;--ybg:#fff4e0;--r:#b91c1c;--rbg:#fdeceb;--blue:#1d4ed8;--soft:#f7f5f1}
+:root{color-scheme:only light;--bg:#f2efe9;--card:#fff;--ink:#1b1f24;--mute:#6b7177;--line:#e5e0d6;--g:#15803d;--gbg:#e8f6ec;--y:#b45309;--ybg:#fff4e0;--r:#b91c1c;--rbg:#fdeceb;--blue:#1d4ed8;--soft:#f7f5f1}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.42 "Nunito Sans",system-ui,sans-serif}
 .app{max-width:520px;margin:0 auto;padding:16px 16px calc(84px + env(safe-area-inset-bottom))}
@@ -94,6 +95,28 @@ textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:10px
 </div></nav>
 <div class="overlay" id="welcome"><div class="modal" id="welcomeBody"></div></div>
 <div id="toast"></div>
+<script>
+(function () {
+  function repair() {
+    var p = [];
+    try { if (window.caches) p.push(caches.keys().then(function (k) { return Promise.all(k.map(function (x) { return caches.delete(x); })); })); } catch (e) { }
+    try { if (navigator.serviceWorker) p.push(navigator.serviceWorker.getRegistrations().then(function (r) { return Promise.all(r.map(function (x) { return x.unregister(); })); })); } catch (e) { }
+    Promise.all(p).then(function () { location.reload(); }, function () { location.reload(); });
+  }
+  window.__pltRepair = repair;
+  function show(msg) {
+    if (document.getElementById('errbox')) return;
+    var d = document.createElement('div'); d.id = 'errbox';
+    d.style.cssText = 'position:fixed;left:12px;right:12px;top:70px;z-index:99;background:#fff;color:#1b1f24;border-radius:18px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.25);font:15px/1.4 system-ui,sans-serif';
+    d.innerHTML = '<b style="font-size:17px">Aplicația nu s-a încărcat complet</b><p style="margin:8px 0">De obicei se rezolvă cu o actualizare.</p><button id="errfix" style="width:100%;border:none;border-radius:14px;padding:14px;background:#15803d;color:#fff;font-weight:800;font-size:16px">Actualizează aplicația</button><p style="margin:10px 0 0;font-size:12px;color:#6b7177;word-break:break-word">Detaliu tehnic: ' + String(msg).replace(/[<>&]/g, '') + '</p>';
+    (document.body || document.documentElement).appendChild(d);
+    document.getElementById('errfix').onclick = repair;
+  }
+  window.addEventListener('error', function (e) { show((e.message || 'eroare') + (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : '')); });
+  window.addEventListener('unhandledrejection', function (e) { show(e.reason && e.reason.message || e.reason || 'promisiune respinsă'); });
+  window.__pltShowError = show;
+})();
+</script>
 <script src="config.js"></script>
 <script src="engine.js"></script>
 <script src="forecast.js"></script>
@@ -313,7 +336,7 @@ function bindCards(list) {
 function renderHome() {
   if (!S.habits.length) { $('s-home').innerHTML = `<div class="card"><div class="msg">Spune-ne ce drumuri faci de obicei.</div><button class="btn dark" onclick="show('set')">Adaugă drumurile mele</button></div>`; return; }
   const list = nextOccurrences();
-  let h = pushCard() + list.map((x, i) => card(x.h, x.date, i)).join('');
+  let h = pushCard() + list.map((x, i) => { try { return card(x.h, x.date, i); } catch (e) { console.error(e); return `<div class="card"><b>${esc(x.h.name)}</b><p class="muted">Nu am putut calcula prognoza pentru acest drum. Verifică locurile în Setări.</p></div>`; } }).join('');
   h += `<div class="card"><div class="kicker">Un drum ocazional</div>
     <div style="margin-top:8px">${picker('aO', S.home, 'De unde')}</div>
     ${picker('aD', S.work, 'Unde', 'Localitate, cartier, universitate, gară…')}
@@ -413,7 +436,8 @@ function renderSet() {
       <div class="seg" id="leadSeg">${[15, 30, 45, 60].map(v => `<button data-v="${v}" class="${S.lead === v ? 'on' : ''}">${v} min</button>`).join('')}</div>
       <label class="chk"><input type="checkbox" id="evOn" ${S.evening ? 'checked' : ''}><span>Și cu o seară înainte, dacă a doua zi e aglomerat, la ora <input type="time" id="evAt" value="${S.eveningAt}" style="border:none;font:800 15px 'Nunito Sans'"></span></label>
       <button class="btn dark" id="bSave">Salvează</button></div>
-    <div class="card"><div class="kicker">Datele mele</div><p class="muted">Codul tău de participant: <b>${S.pid}</b>. Drumurile se trimit anonim, doar cu acest cod, pentru îmbunătățirea avertizărilor. Butonul de mai jos le șterge definitiv, de pe telefon și de pe server.</p><button class="btn red" id="bWipe">Șterge toate datele</button></div>`;
+    <div class="card"><div class="kicker">Datele mele</div><p class="muted">Codul tău de participant: <b>${S.pid}</b>. Drumurile se trimit anonim, doar cu acest cod, pentru îmbunătățirea avertizărilor. Butonul de mai jos le șterge definitiv, de pe telefon și de pe server.</p><button class="btn red" id="bWipe">Șterge toate datele</button></div>
+    <div class="card"><div class="kicker">Probleme?</div><p class="muted">Dacă aplicația arată ciudat sau nu se actualizează, apasă aici. Datele tale rămân.</p><button class="btn ghost" onclick="window.__pltRepair()">Actualizează aplicația</button></div>`;
   document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; c.querySelectorAll('[data-d]').forEach(b => b.onclick = () => b.classList.toggle('on')); });
   bindPickers($('s-set'));
   $('leadSeg').querySelectorAll('button').forEach(b => b.onclick = () => { $('leadSeg').querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); });
@@ -486,6 +510,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 if (isIOS && !standalone) setTimeout(showInstall, 1500);
 
 (async function boot() {
+  if (typeof E === 'undefined' || typeof PLT === 'undefined' || !window.PLT_CONFIG) { window.__pltShowError('lipsesc fișiere ale aplicației (engine/forecast/config)'); return; }
   try { const r = await fetch('graph.json', { cache: 'no-store' }); if (r.ok) { const g = await r.json(); if (g.nodes && g.edges && !E.validateNet(g).length) window.__OSM_GRAPH__ = g; } } catch (e) { }
   rebuild();
   if (!S.consent) welcome(); else show(S.live ? 'trip' : 'home');
