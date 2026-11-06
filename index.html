@@ -665,7 +665,7 @@ function renderTrip() {
     <p class="muted">Atingeți ruta pe care mergeți. Dacă o schimbați pe drum, aplicația o recunoaște singură după GPS.</p>
     <div class="rep">${[['🐢', 'Coadă', 'coada'], ['💥', 'Accident', 'accident'], ['🚧', 'Bandă închisă', 'banda'], ['👷', 'Lucrări', 'lucrari']].map(([e, t, k]) => `<button class="repb" data-r="${k}"><span class="e">${e}</span>${t}</button>`).join('')}</div>
     <p class="muted">Nu folosiți telefonul în timp ce conduceți. Semnalările se fac doar de către pasager sau când sunteți oprit în siguranță.</p>
-    <button class="btn go" id="bArr">Am ajuns</button><button class="btn ghost" id="bCan">Anulează drumul</button></div>`;
+    <button class="btn go" id="bArr">Am ajuns</button><button class="btn ghost" id="bCan">Anulați drumul</button></div>`;
   $('s-trip').querySelectorAll('.ropt').forEach(r => r.onclick = () => { const i = +r.dataset.i; if (i === (L.sel || 0)) return; L.sel = i; L.path = L.alts[i]; L.cross = {}; L.sMax = null; save(); renderTrip(); });
   $('s-trip').querySelectorAll('[data-r]').forEach(b => b.onclick = () => reportNow(b.dataset.r));
   $('bArr').onclick = () => arrive(false); $('bCan').onclick = () => { stopGeo(); S.live = null; save(); renderTrip(); };
