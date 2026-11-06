@@ -1,6 +1,6 @@
 /* Service worker – network first (always the latest version when online), cache only as offline fallback; web push. */
-const CACHE = 'plt-v12';
-const ASSETS = ['./', 'index.html', 'config.js', 'engine.js', 'forecast.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'vendor/supabase.js', 'vendor/fonts/nunito-sans.css', 'confidentialitate.html'];
+const CACHE = 'plt-v13';
+const ASSETS = ['./', 'index.html', 'config.js', 'engine.js', 'forecast.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'track.js', 'vendor/supabase.js', 'vendor/fonts/nunito-sans.css', 'confidentialitate.html'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(ASSETS.map(a => fetch(new Request(a, { cache: 'reload' })).then(r => r.ok && c.put(a, r)).catch(() => { })))).then(() => self.skipWaiting()));
 });
