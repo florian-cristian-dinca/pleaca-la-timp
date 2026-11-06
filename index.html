@@ -419,10 +419,10 @@ function mapPanel() {
     const h = next.h, ta = parseT(h.ta), o = from || h.o;
     if (next.date === date && ta > now + 5 && o !== h.d) {
       const ctx = E.ctxFor(date, weatherFor(date), false), s = slotEval(M, from ? M.alternatives(o, h.d, date, now, ctx, 3).map(a => a.path) : pathsFor(h.o, h.d, date, now, ctx), date, now, ctx, true);
-      if (s) { let k = 0; for (const x of s.samp || []) if (now + x <= ta - 5) k++; const pr = s.samp && s.samp.length ? Math.min(0.99, k / s.samp.length) : null;
+      if (s) { let k = 0; for (const x of s.samp || []) if (now + x <= ta) k++; const pr = s.samp && s.samp.length ? k / s.samp.length : null;
         const st = routeStatus(s.path, date, now);
-        out.push(`<div class="card"><div class="kicker">Dacă pleci acum${from ? ' de aici' : ''} · ${esc(h.name)} (${esc(placeName(h.d))})</div><div class="msg">Ajungi în jur de ${fmt(now + s.med)}${pr != null ? ` · <span style="color:${pr >= 0.95 ? 'var(--g)' : pr >= 0.8 ? 'var(--y)' : 'var(--r)'}">${s.cal ? '' : '~'}${Math.round(pr * 100)}% șanse</span> să ajungi până la ${h.ta}` : ''}</div>${stBox(st)}</div>`); }
-    } else { const f = forecast(h, next.date), dd = PLT.decision(f, h); if (dd) out.push(`<div class="card"><div class="kicker">Următorul drum · ${esc(h.name)} · ${dayLabel(next.date)}</div><div class="msg">Pleacă la ${fmt(dd.leave)}${f.early && f.early.pOn != null ? ` · ${f.early.cal ? '' : '~'}${Math.round(f.early.pOn * 100)}% șanse să ajungi până la ${h.ta}` : ''}</div></div>`); }
+        out.push(`<div class="card"><div class="kicker">Dacă pleci acum${from ? ' de aici' : ''} · ${esc(h.name)} (${esc(placeName(h.d))})</div><div class="msg">Ajungi în jur de ${fmt(now + s.med)}${pr != null ? ` · <span style="color:${pr >= 0.95 ? 'var(--g)' : pr >= 0.8 ? 'var(--y)' : 'var(--r)'}">${pctTxt(pr, s.cal)} șanse</span> să ajungi până la ${h.ta}` : ''}</div>${stBox(st)}</div>`); }
+    } else { const f = forecast(h, next.date), dd = PLT.decision(f, h); if (dd) out.push(`<div class="card"><div class="kicker">Următorul drum · ${esc(h.name)} · ${dayLabel(next.date)}</div><div class="msg">Pleacă la ${fmt(dd.leave)}${f.early && f.early.pOn != null ? ` · ${pctTxt(f.early.pOn, f.early.cal)} șanse să ajungi până la ${h.ta}` : ''}</div></div>`); }
   }
   // blocaje semnalate acum în zonă
   const uniq = {}; for (const m of MAPMARKS) uniq[m.r.id] = m;
@@ -456,7 +456,9 @@ function nextOccurrences() {
   }
   return out.slice(0, 3);
 }
-const chance = s => s && s.pOn != null ? ` · <b style="display:inline;color:${s.pOn >= 0.95 ? 'var(--g)' : s.pOn >= 0.8 ? 'var(--y)' : 'var(--r)'}">${s.cal ? '' : '~'}${Math.round(s.pOn * 100)}% șanse la timp</b>` : '';
+const pctTxt = (pr, cal) => (pr >= 0.995 ? 'peste 99%' : pr < 0.005 ? 'sub 1%' : (cal ? '' : '~') + Math.round(pr * 100) + '%');
+const chance = s => s && s.pOn != null ? ` · <b style="display:inline;color:${s.pOn >= 0.95 ? 'var(--g)' : s.pOn >= 0.8 ? 'var(--y)' : 'var(--r)'}">${pctTxt(s.pOn, s.cal)} șanse să ajungi până la ${fmt(f_ta)}</b>` : '';
+let f_ta = 0;
 function alertText(date, at, level) {
   const today = date === todayStr(), now = nowMin();
   if (today && at < now) return 'Ora avertizării de azi a trecut.';
@@ -466,7 +468,7 @@ function alertText(date, at, level) {
   return t + '.';
 }
 function card(h, date, idx) {
-  const f = forecast(h, date); if (!f) return `<div class="card">Nu găsesc un drum între ${esc(pname(h.o))} și ${esc(pname(h.d))}.</div>`;
+  const f = forecast(h, date); if (f) f_ta = f.ta; if (!f) return `<div class="card">Nu găsesc un drum între ${esc(pname(h.o))} și ${esc(pname(h.d))}.</div>`;
   const today = date === todayStr(), now = nowMin(), lv = LV[f.level];
   let msg, why = '';
   if (f.level === 'g') msg = `Poți pleca liniștit la ora obișnuită, <b>${fmt(f.usual)}</b>. Stai pe loc cel mult câteva minute.`;
@@ -495,7 +497,7 @@ function card(h, date, idx) {
       <div class="band"><div class="bar">${f.slots.map((s, i) => `<div data-i="${i}" style="background:${slotColor(s)}" title="${fmt(s.t0)}"></div>`).join('')}</div>
       <div class="ticks">${ticks.map(t => `<span>${t}</span>`).join('')}</div>
       <div class="info" id="info-${idx}">Atinge o oră ca să vezi cât ai sta pe loc.</div>
-      <p class="muted" style="margin:8px 0 0">„Șanse la timp” = din 100 de dimineți asemănătoare, în câte ajungi până la ora-țintă (minus 5 minute pentru parcare). Semnul ~ arată că estimarea nu e încă verificată pe drumuri reale.</p>
+      <p class="muted" style="margin:8px 0 0">„Șanse” = din 100 de zile asemănătoare, în câte ajungi până la ora pe care ai ales-o. Ora de sosire afișată este cea mai probabilă; în unele zile drumul durează mai mult, de aceea șansele pot fi sub 100% chiar dacă ora probabilă este înaintea orei alese. Semnul ~ arată că estimarea nu e încă verificată pe drumuri reale.</p>
       <div class="legend"><span><i style="background:#4caf6e"></i>sub 10 min pe loc</span><span><i style="background:#f0a83a"></i>10–25 min</span><span><i style="background:#d9534f"></i>peste 25 min</span></div></div>
     </details>
   </div>`;
@@ -506,7 +508,7 @@ function bindCards(list) {
     c.querySelectorAll('.bar div').forEach(b => b.onclick = () => {
       c.querySelectorAll('.bar div').forEach(x => x.classList.remove('sel')); b.classList.add('sel');
       const s = f.slots[+b.dataset.i], late = s.t0 + s.q > f.deadline;
-      $('info-' + c.dataset.card).innerHTML = `Plecare la <b>${fmt(s.t0)}</b> → ~${mins(s.idle)} pe loc, sosire în jur de <b>${fmt(s.t0 + s.med)}</b>${s.pOn != null ? ` · ${s.cal ? '' : '~'}${Math.round(s.pOn * 100)}% șanse la timp` : (late ? ' · risc de întârziere' : ' · la timp')}`;
+      $('info-' + c.dataset.card).innerHTML = `Plecare la <b>${fmt(s.t0)}</b> → ~${mins(s.idle)} pe loc, sosire în jur de <b>${fmt(s.t0 + s.med)}</b>${s.pOn != null ? ` · ${pctTxt(s.pOn, s.cal)} șanse să ajungi până la ${fmt(f.ta)}` : (late ? ' · risc de întârziere' : ' · la timp')}`;
     });
   });
 }
@@ -646,7 +648,7 @@ function depart(h) {
   const order = alts.map((pth, i) => ({ i, t: M.walk(pth, date, dep, ctx).total })).sort((a, b) => a.t - b.t).map(x => alts[x.i]);
   const f = forecast(h, date), rec = f && (f.early ? f.early.t0 : f.usual);
   S.live = { id: S.pid + '-' + Date.now(), name: h.name, orig: h.o, dest: h.d, alts: order, sel: 0, path: order[0], date, dep, weather: weatherFor(date), cross: {}, sMax: null,
-    pred: { madeAt: new Date().toISOString(), median: s.med, q: s.q, tau: 0.95, deadline: parseT(h.ta) - 5, ta: parseT(h.ta), recT0: rec, version: LR() ? LR().version : 'a-priori', followed: rec != null && dep <= rec + 2 } };
+    pred: { madeAt: new Date().toISOString(), median: s.med, q: s.q, tau: 0.95, deadline: parseT(h.ta), ta: parseT(h.ta), recT0: rec, version: LR() ? LR().version : 'a-priori', followed: rec != null && dep <= rec + 2 } };
   save(); keepAwake(); renderTrip(); toast('Drum bun! Pune telefonul în suport.');
 }
 function reportNow(kind) {

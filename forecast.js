@@ -18,14 +18,20 @@ function createForecaster(o) {
     const { path, w } = best, L = LR(), eb = Math.exp(E.pathShift(L && L.lr, w.parts, date));
     const free = path.reduce((s, e) => s + NET.edges[e].len / NET.edges[e].v0 * 60, 0);
     const med = w.total * eb; let q;
-    let samp = null, cal = false;
-    if (withQ) { const km = E.pathLen(NET, path), qc = E.qhatFor(L && L.conf, km), pp = m.predictPath(path, date, t0, ctx, 200, 0.95), k = eb * Math.exp(qc.qhat); q = pp.q * k; samp = pp.samples.map(x => x * k); cal = !!qc.calibrated; }
+    let samp = null, cal = false, medOut = med;
+    if (withQ) {
+      // O SINGURĂ distribuție pentru tot ce afișăm (ora de sosire, probabilitatea, cuantila de 95%):
+      // corecția învățată (eb) și, doar dacă e calibrată pe date reale, marja conformă.
+      const km = E.pathLen(NET, path), qc = E.qhatFor(L && L.conf, km); cal = !!qc.calibrated;
+      const k = eb * (cal ? Math.exp(qc.qhat) : 1), pp = m.predictPath(path, date, t0, ctx, 400, 0.95);
+      samp = pp.samples.map(x => x * k); medOut = E.quantile(samp, 0.5); q = E.quantile(samp, 0.95);
+    }
     else q = med * 1.3; // estimare rapidă (ecranul „Săptămâna”)
     // drumul (după nume) pe care se pierde cel mai mult timp – se comunică doar numele, fără hartă
     const byName = {};
     for (const p of w.parts) { const e = NET.edges[p.eid], loss = p.med - e.len / e.v0 * 60, nm = e.name; if (!nm) continue; const b = byName[nm] || (byName[nm] = { loss: 0, eid: p.eid, max: -1e9, t: p.t }); b.loss += loss; if (loss > b.max) { b.max = loss; b.eid = p.eid; b.t = p.t; } }
     let worst = null; for (const [name, b] of Object.entries(byName)) if (!worst || b.loss > worst.loss) worst = { name, loss: b.loss, eid: b.eid, t: b.t };
-    return { t0, path, med, q, free, idle: Math.max(0, med - free), worst, samp, cal };
+    return { t0, path, med: medOut, q, free, idle: Math.max(0, medOut - free), worst, samp, cal };
   }
   function pathsFor(o, d, date, t, ctx) {
     const k = o + '>' + d + '|' + E.dayClass(date) + '|' + Math.round(t / 60);
@@ -35,17 +41,19 @@ function createForecaster(o) {
   function forecast(h, date, light) {
     const key = (light ? 'L|' : '') + h.id + '|' + h.o + h.d + '|' + date + '|' + h.ta + '|' + h.usual + '|' + version;
     if (CACHE[key]) return CACHE[key];
-    const ctx = E.ctxFor(date, weatherFor(date), false), ctx0 = E.ctxFor(date, 'senin', false), ta = parseT(h.ta), usual = parseT(h.usual), deadline = ta - 5;
+    const ctx = E.ctxFor(date, weatherFor(date), false), ctx0 = E.ctxFor(date, 'senin', false), ta = parseT(h.ta), usual = parseT(h.usual), deadline = ta - (o.bufferMin || 0); // ora aleasă de utilizator, fără rezerve ascunse
     const from = Math.min(usual - 60, ta - 150), to = Math.max(usual + 60, ta + 30), slots = [];
     const paths = pathsFor(h.o, h.d, date, usual, ctx); if (!paths.length) return (CACHE[key] = null);
     for (let t = Math.round(from / 10) * 10; t <= to; t += 10) { const s = slotEval(M, paths, date, t, ctx, !light); if (s) slots.push(s); }
     if (!slots.length) return (CACHE[key] = null);
-    const pOn = s => { if (!s || !s.samp) return; let k = 0; for (const x of s.samp) if (s.t0 + x <= deadline) k++; s.pOn = Math.min(0.99, k / s.samp.length); s.samp = null; };
+    const pOn = s => { if (!s || !s.samp) return; let k = 0; for (const x of s.samp) if (s.t0 + x <= deadline) k++; s.pOn = k / s.samp.length; s.samp = null; };
   slots.forEach(pOn);
   const near = t => slots.reduce((a, b) => Math.abs(b.t0 - t) < Math.abs(a.t0 - t) ? b : a);
     const cur = slotEval(M, paths, date, usual, ctx, !light), typ = slotEval(M0, paths, date, usual, ctx0, false);
   pOn(cur);
-    const feas = slots.filter(s => s.t0 + s.q <= deadline);
+    // „la timp” = probabilitatea calculată față de ora aleasă ≥ 95% (≥ 97% cât timp modelul nu e verificat pe date reale)
+    const safe = s => s.pOn != null ? s.pOn >= (s.cal ? 0.95 : 0.97) : s.t0 + s.q <= deadline;
+    const feas = slots.filter(safe);
     // cea mai bună oră: la timp (cu marja de siguranță) și cu cât mai puțin timp pe loc; la egalitate, cea mai târzie
     const pool = feas.filter(s => s.t0 <= usual && s.t0 >= usual - 120);
     // cost = minute pe loc + 0,35 × minutele de așteptare la destinație (a sosi prea devreme are și el un cost)
@@ -53,7 +61,7 @@ function createForecaster(o) {
     let early = null; for (const s of pool) if (!early || cost(s) < cost(early) - 0.5 || (Math.abs(cost(s) - cost(early)) <= 0.5 && s.t0 > early.t0)) early = s;
     if (!early && feas.length) early = feas[feas.length - 1];
     const calm = slots.filter(s => s.t0 > usual && s.idle < 10)[0] || null;          // mai târziu, când se liniștește
-    const lateBy = Math.max(0, cur.t0 + cur.q - deadline);
+    const lateBy = safe(cur) ? 0 : Math.max(0, cur.t0 + cur.q - deadline);
     const extra = cur.idle - typ.idle;
     const level = cur.idle >= 25 || lateBy >= 10 ? 'r' : cur.idle >= 10 || lateBy > 0 ? 'y' : 'g';
     // fereastra în care se formează coloana pe locul cel mai problematic
