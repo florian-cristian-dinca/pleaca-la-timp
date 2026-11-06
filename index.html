@@ -74,6 +74,9 @@ textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:10px
 .pkl{position:absolute;left:-12px;right:-12px;top:calc(100% + 8px);background:#fff;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.16);z-index:30;overflow:hidden}
 .pkl:empty{display:none}.pkl button{display:block;width:100%;text-align:left;border:none;background:#fff;padding:11px 14px;border-bottom:1px solid var(--soft);font:inherit;color:var(--ink);cursor:pointer}
 .pkl button:hover,.pkl button:focus{background:var(--soft)}.pkl b{display:block;font-size:15.5px}.pkl span{font-size:12.5px;color:var(--mute)}.pke{padding:12px 14px;color:var(--mute);font-size:14px}
+.rmap{width:100%;height:300px;border-radius:14px;background:#eef1f4;display:block;margin-top:8px}
+.ropt{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--soft);cursor:pointer}.ropt:last-child{border:none}
+.ropt i{width:14px;height:14px;border-radius:4px;flex:none;margin-top:4px}.ropt b{display:block}.ropt span{font-size:13.5px;color:var(--mute)}.ropt.sel b{text-decoration:underline}
 #toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:800;opacity:0;transition:opacity .25s;pointer-events:none;z-index:30;max-width:90%;text-align:center}
 </style>
 </head>
@@ -281,6 +284,55 @@ function pushCard() {
   return '<div class="card"><div class="msg">🔔 Pornește avertizările</div><p class="muted">Așa afli de ambuteiaj cu o seară înainte și înainte de plecare, chiar dacă aplicația e închisă.</p><button class="btn go" id="bPush">Pornește avertizările</button></div>';
 }
 
+
+/* ---------- Drumul și rutele alternative (la cerere) ---------- */
+const RCOL = ['#1d4ed8', '#c2410c', '#7c3aed'];
+function routeOptions(h, date, t0) {
+  const ctx = E.ctxFor(date, weatherFor(date), false), paths = pathsFor(h.o, h.d, date, parseT(h.usual), ctx);
+  return paths.map(path => {
+    const w = M.walk(path, date, t0, ctx), L = LR(), eb = Math.exp(E.pathShift(L && L.lr, w.parts, date));
+    const free = path.reduce((s, e) => s + NET.edges[e].len / NET.edges[e].v0 * 60, 0), med = w.total * eb;
+    const byName = {}; for (const e of path) { const x = NET.edges[e]; if (x.name) byName[x.name] = (byName[x.name] || 0) + x.len; }
+    const via = Object.entries(byName).sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => x[0]);
+    return { path, w, med, idle: Math.max(0, med - free), km: E.pathLen(NET, path), via };
+  }).sort((a, b) => a.med - b.med);
+}
+function drawRoutes(cv, opts, sel, date, ctx) {
+  const r = cv.getBoundingClientRect(); if (!r.width) return;
+  const dpr = devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr;
+  const g = cv.getContext('2d'); let la0 = 90, la1 = -90, lo0 = 180, lo1 = -180;
+  for (const o of opts) for (const e of o.path) for (const id of [NET.edges[e].from, NET.edges[e].to]) { const n = NET.nodes[id]; la0 = Math.min(la0, n.lat); la1 = Math.max(la1, n.lat); lo0 = Math.min(lo0, n.lon); lo1 = Math.max(lo1, n.lon); }
+  const pl = (la1 - la0) * 0.12 + 0.004, po = (lo1 - lo0) * 0.12 + 0.004; la0 -= pl; la1 += pl; lo0 -= po; lo1 += po;
+  const kx = Math.cos(44.43 * Math.PI / 180), W = cv.width, H = cv.height, sc = Math.min(W / ((lo1 - lo0) * kx), H / (la1 - la0));
+  const ox = (W - (lo1 - lo0) * kx * sc) / 2, oy = (H - (la1 - la0) * sc) / 2, X = lon => ox + (lon - lo0) * kx * sc, Y = lat => H - oy - (lat - la0) * sc;
+  g.fillStyle = '#eef1f4'; g.fillRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'round';
+  // drumurile din jur (fundal)
+  g.strokeStyle = '#ffffff'; const done = new Set();
+  for (const e of Object.values(NET.edges)) {
+    const a = NET.nodes[e.from], b = NET.nodes[e.to]; if (a.lat < la0 || a.lat > la1 || a.lon < lo0 || a.lon > lo1) continue;
+    const k = e.from < e.to ? e.from + e.to : e.to + e.from; if (done.has(k)) continue; done.add(k);
+    g.lineWidth = (['A', 'C', 'N', 'M'].includes(e.cls) ? 3 : 1.5) * dpr; g.beginPath(); g.moveTo(X(a.lon), Y(a.lat)); g.lineTo(X(b.lon), Y(b.lat)); g.stroke();
+  }
+  const line = (path, col, wdt) => { g.strokeStyle = col; g.lineWidth = wdt * dpr; g.beginPath(); path.forEach((eid, j) => { const e = NET.edges[eid], a = NET.nodes[e.from], b = NET.nodes[e.to]; if (!j) g.moveTo(X(a.lon), Y(a.lat)); g.lineTo(X(b.lon), Y(b.lat)); }); g.stroke(); };
+  opts.forEach((o, i) => { if (i !== sel) { g.globalAlpha = 0.55; line(o.path, RCOL[i % 3], 5); g.globalAlpha = 1; } });
+  const s = opts[sel]; line(s.path, '#0b1f4d', 9);
+  for (const p of s.w.parts) { const e = NET.edges[p.eid], a = NET.nodes[e.from], b = NET.nodes[e.to], st = M.segState(p.eid, date, p.t, ctx), slow = st.med / (e.len / e.v0 * 60);
+    g.strokeStyle = slow > 2 ? '#dc2626' : slow > 1.4 ? '#f59e0b' : RCOL[sel % 3]; g.lineWidth = 5 * dpr; g.beginPath(); g.moveTo(X(a.lon), Y(a.lat)); g.lineTo(X(b.lon), Y(b.lat)); g.stroke(); }
+  const A = NET.nodes[NET.edges[s.path[0]].from], B = NET.nodes[NET.edges[s.path[s.path.length - 1]].to];
+  for (const [n, c, l] of [[A, '#1d4ed8', 'A'], [B, '#dc2626', 'B']]) { g.fillStyle = c; g.beginPath(); g.arc(X(n.lon), Y(n.lat), 11 * dpr, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = `800 ${12 * dpr}px "Nunito Sans"`; g.textAlign = 'center'; g.fillText(l, X(n.lon), Y(n.lat) + 4 * dpr); }
+  g.textAlign = 'left'; g.fillStyle = 'rgba(27,31,36,.5)'; g.font = `600 ${10 * dpr}px "Nunito Sans"`; g.fillText('© OpenStreetMap contributors', 8 * dpr, H - 8 * dpr);
+}
+function bindRoutes(list) {
+  document.querySelectorAll('details.rdet').forEach(d => d.addEventListener('toggle', () => {
+    if (!d.open) return; const { h, date } = list[+d.dataset.rd], f = forecast(h, date), dd = PLT.decision(f, h); if (!dd) return;
+    const t0 = dd.leave, ctx = E.ctxFor(date, weatherFor(date), false), opts = routeOptions(h, date, t0), cv = $('rmap-' + d.dataset.rd), box = $('rlist-' + d.dataset.rd);
+    let sel = 0;
+    const paint = () => { drawRoutes(cv, opts, sel, date, ctx); box.innerHTML = `<p class="muted" style="margin:8px 0 2px">La plecarea de la ${fmt(t0)}:</p>` + opts.map((o, i) => `<div class="ropt ${i === sel ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === 0 ? 'Cea mai rapidă' : 'Alternativa ' + i} · ${mins(o.med)}${i ? ' (+' + (Math.round(o.med) - Math.round(opts[0].med)) + ' min)' : ''}</b><span>${o.km.toFixed(0)} km · ~${mins(o.idle)} pe loc${o.via.length ? ' · prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('') + '<p class="muted">Pe traseul ales: roșu = coloană, portocaliu = aglomerat. Atinge o rută ca să o vezi pe hartă.</p>';
+      box.querySelectorAll('.ropt').forEach(r => r.onclick = () => { sel = +r.dataset.i; paint(); }); };
+    paint();
+  }));
+}
+
 /* ---------- Ecranul „Avertizări” ---------- */
 function nextOccurrences() {
   const out = [], now = nowMin();
@@ -315,6 +367,7 @@ function card(h, date, idx) {
     ${why ? `<div class="why">${why}</div>` : ''}
     <div class="opts">${opts.map(o => `<div class="opt ${o.best ? 'best' : ''}"><div class="t">${fmt(o.t)}</div><div><b>${o.best ? '✓ ' : ''}${o.b}</b><span>${o.s}</span></div></div>`).join('')}</div>
     <div class="alertline">🔔 <span>${today && alertAt < now ? 'Ora de alertă a trecut.' : `Te anunțăm ${today ? 'azi' : 'în ' + dayLabel(date).split(',')[0]} la <b>${fmt(alertAt)}</b>${S.evening && !today ? ` și cu o seară înainte, la <b>${S.eveningAt}</b>` : ''}.`}</span></div>
+    <details class="rdet" data-rd="${idx}"><summary>Vezi drumul și rutele alternative</summary><canvas class="rmap" id="rmap-${idx}"></canvas><div id="rlist-${idx}"></div></details>
     <details><summary>Vezi toate orele de plecare</summary>
       <div class="band"><div class="bar">${f.slots.map((s, i) => `<div data-i="${i}" style="background:${slotColor(s)}" title="${fmt(s.t0)}"></div>`).join('')}</div>
       <div class="ticks">${ticks.map(t => `<span>${t}</span>`).join('')}</div>
@@ -342,8 +395,8 @@ function renderHome() {
     ${picker('aD', S.work, 'Unde', 'Localitate, cartier, universitate, gară…')}
     <div class="row" style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="aTa" value="10:00"></div><div class="field" style="flex:1"><small>Ziua</small><select id="aDay"><option value="0">Azi</option><option value="1">Mâine</option><option value="2">Poimâine</option></select></div></div>
     <button class="btn ghost" id="aGo">Verifică</button><div id="aOut"></div></div>
-    <p class="muted" style="text-align:center">Aplicația nu îți arată drumul. Îți spune <b>când</b> să pleci ca să nu stai în coloană.</p>`;
-  $('s-home').innerHTML = h; bindCards(list); if ($('bPush')) $('bPush').onclick = enablePush;
+    <p class="muted" style="text-align:center">Îți spunem <b>când</b> să pleci și pe ce drum, ca să nu stai în coloană.</p>`;
+  $('s-home').innerHTML = h; bindCards(list); bindRoutes(list); if ($('bPush')) $('bPush').onclick = enablePush;
   bindPickers($('s-home'));
   $('aGo').onclick = () => {
     const ta = $('aTa').value, date = dayStr(+$('aDay').value), adhoc = { id: 'adhoc', name: 'Drum ocazional', o: $('aO').value, d: $('aD').value, ta, usual: fmt(parseT(ta) - 60), days: [] };
@@ -453,7 +506,7 @@ function renderSet() {
 function welcome() {
   const o = placeOptions();
   $('welcomeBody').innerHTML = `<h2 style="margin:0 0 6px;font-size:24px;font-weight:900">Află de ambuteiaj înainte să fii în el.</h2>
-  <p>Aplicația <b>nu îți arată drumul</b>. Te anunță din timp, de obicei cu o seară înainte, când urmează un ambuteiaj pe drumul tău. Îți spune la ce oră să pleci ca să stai cât mai puțin pe loc și să ajungi la timp.</p>
+  <p>Te anunță <b>din timp</b>, de obicei cu o seară înainte, când urmează un ambuteiaj pe drumul tău. Îți spune la ce oră să pleci și pe ce drum, ca să stai cât mai puțin pe loc și să ajungi la timp.</p>
   ${picker('wH', null, 'Unde locuiești?', 'Scrie localitatea sau cartierul, ex. Corbeanca')}
   ${picker('wW', null, 'Unde mergi de obicei?', 'Localitate, cartier, universitate, gară…')}
   <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="wTa" value="09:00"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" id="wU" value="08:00"></div></div>
