@@ -306,9 +306,9 @@ E.CLS = {
   A: { label: 'autostradă', lanes: 2, capLane: 1900, v0: 100, alpha: 0.5, beta: 4, base: 0.60 },
   C: { label: 'Centura (DNCB)', lanes: 2, capLane: 1500, v0: 60, alpha: 0.8, beta: 4, base: 0.68 },
   N: { label: 'drum național / penetrație', lanes: 2, capLane: 1500, v0: 60, alpha: 0.8, beta: 4, base: 0.66 },
-  J: { label: 'drum județean / local', lanes: 1, capLane: 950, v0: 50, alpha: 0.9, beta: 4, base: 0.62 },
-  M: { label: 'bulevard principal (semaforizat)', lanes: 3, capLane: 850, v0: 45, alpha: 1.2, beta: 4, base: 0.72 },
-  B: { label: 'bulevard / stradă colectoare', lanes: 2, capLane: 800, v0: 40, alpha: 1.3, beta: 4, base: 0.70 }
+  J: { label: 'drum județean / local', lanes: 1, capLane: 950, v0: 45, alpha: 0.9, beta: 4, base: 0.62 },
+  M: { label: 'bulevard principal (semaforizat)', lanes: 3, capLane: 850, v0: 32, alpha: 1.2, beta: 4, base: 0.72 },
+  B: { label: 'bulevard / stradă colectoare', lanes: 2, capLane: 800, v0: 26, alpha: 1.3, beta: 4, base: 0.70 }
 };
 
 /* ---------- Rețeaua-schelet București–Ilfov (schematică; înlocuibilă cu graph.json din OSM) ---------- */
@@ -1122,7 +1122,7 @@ $('bSwap').onclick = () => { const o = $('fO').value; $('fO').value = $('fD').va
 ['fO', 'fD', 'fDate', 'fWx', 'fVac', 'fTau', 'fTa', 'fBuf'].forEach(i => $(i).onchange = runRec);
 function renderAll() { fillSelects(); renderPills(); renderTrips(); renderLive(); renderRestr(); renderCase(); renderQueue(); renderCusum(); renderNetInfo(); renderSegTable(); runRec(); }
 async function boot() {
-  try { const r = await fetch('graph.json', { cache: 'no-store' }); if (r.ok) { const g = await r.json(); if (g.nodes && g.edges && !E.validateNet(g).length) window.__OSM_GRAPH__ = g; } } catch (e) { }
+  try { const r = await fetch('../graph.json', { cache: 'no-store' }); if (r.ok) { const g = await r.json(); if (g.nodes && g.edges && !E.validateNet(g).length) window.__OSM_GRAPH__ = g; } } catch (e) { }
   rebuildNet(); renderAll();
 }
 boot();
