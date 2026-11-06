@@ -1,4 +1,4 @@
--- Pleacă la timp – Supabase schema (Postgres, EU region recommended: Frankfurt)
+-- Pleacă la timp – Supabase schema (safe to run again: every statement is idempotent) (Postgres, EU region recommended: Frankfurt)
 -- Participants sign in anonymously (Supabase anonymous sign-ins); every row is owned by auth.uid().
 -- The scheduled forecast job uses the service-role key (GitHub secret) and bypasses RLS.
 
@@ -95,12 +95,19 @@ alter table push_subscriptions enable row level security;
 alter table model_packs enable row level security;
 alter table sent_alerts enable row level security;
 
+drop policy if exists own_participant on participants;
 create policy own_participant on participants for all using (id = auth.uid()) with check (id = auth.uid());
+drop policy if exists own_habits on habits;
 create policy own_habits on habits for all using (participant = auth.uid()) with check (participant = auth.uid());
+drop policy if exists own_trips on trips;
 create policy own_trips on trips for all using (participant = auth.uid()) with check (participant = auth.uid());
+drop policy if exists own_segobs on segment_observations;
 create policy own_segobs on segment_observations for all using (participant = auth.uid()) with check (participant = auth.uid());
+drop policy if exists own_reports on reports;
 create policy own_reports on reports for all using (participant = auth.uid()) with check (participant = auth.uid());
+drop policy if exists own_push on push_subscriptions;
 create policy own_push on push_subscriptions for all using (participant = auth.uid()) with check (participant = auth.uid());
+drop policy if exists read_packs on model_packs;
 create policy read_packs on model_packs for select using (auth.role() = 'authenticated');
 
 -- right to erasure: deleting the auth user cascades to every table above
