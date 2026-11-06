@@ -95,6 +95,25 @@ function decision(f, h) {
     evening: { title: `Mâine: ${LV[f.level][0].toLowerCase()} · ${h.name.toLowerCase()}`, body: `Pleacă la ${fmt(leave)} în loc de ${h.usual}.${where}${unusual}` }
   };
 }
-const api = { createForecaster, decision, LV, slotColor, fmt, parseT };
+
+/* număr + „minut/minute/de minute” corect în română */
+const minTxt = n => { n = Math.round(n); return n === 1 ? '1 minut' : (n % 100 === 0 || n % 100 >= 20) ? `${n} de minute` : `${n} minute`; };
+/* Avertizare GRAVĂ (cu voce): doar dacă întârzierea la ora obișnuită de plecare e evidentă ȘI are o cauză clară
+   (restricție / accident semnalat) sau o încetinire măsurată de cel puțin 15% pe drumul principal. */
+function urgent(f, h, live) {
+  if (!f) return null;
+  const lv = live || { extra: 0 }, ta = f.ta, usual = f.usual;
+  const typ = f.typ ? f.typ.med : f.cur.med, med = f.cur.med + (lv.extra || 0), late = usual + med - ta;
+  const growth = (med - typ) / typ;
+  const restr = f.causes.length > 0 && (f.extra >= 5 || growth >= 0.1), slow = ((lv.drop || 0) >= 0.15 && (lv.extra || 0) >= 3) || (lv.extra || 0) >= Math.max(5, 0.15 * typ);
+  if (!(late >= 5 && (restr || slow))) return null;
+  const leave = Math.floor((usual - late - 5) / 5) * 5;
+  let cause = '';
+  if (restr) cause = ` Cauza: ${f.causes[0]}.`;
+  else if (lv.road) cause = ` Viteza pe ${lv.road} a scăzut cu aproximativ ${Math.round((lv.drop || 0) * 100)}%.`;
+  const text = `Dacă pleci la ora stabilită, ${fmt(usual)}, ajungi cu aproximativ ${minTxt(late)} întârziere! Pleacă la ${fmt(leave)}.${cause}`;
+  return { late, leave, text, title: `⚠️ Ambuteiaj grav pe drumul tău (${h.name.toLowerCase()})` };
+}
+const api = { createForecaster, decision, urgent, minTxt, LV, slotColor, fmt, parseT };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.PLT = api;
 })(typeof self !== 'undefined' ? self : this);

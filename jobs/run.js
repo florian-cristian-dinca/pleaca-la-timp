@@ -51,12 +51,20 @@ async function all(table, q = x => x) { const { data, error } = await q(db.from(
 
   // 3) forecasts + alerts (only inside the relevant time windows)
   const fc = PLT.createForecaster({ E, net: graph, model, model0, pack, version: pack.version });
+  // încetinire măsurată acum: timpii pe tronsoane trimiși de participanți în ultimele 75 de minute, față de o zi obișnuită
+  const ctxT = E.ctxFor(today, 'senin', false), ratio = {};
+  for (const s of S) { if (s.date !== today || s.t < now.min - 75 || s.t > now.min) continue; const ex = model0.segState(s.segId, today, s.t, ctxT).med; if (ex > 0.05) (ratio[s.segId] = ratio[s.segId] || []).push(s.dur / ex); }
+  for (const k in ratio) { const a = ratio[k].sort((x, y) => x - y); ratio[k] = a[Math.floor(a.length / 2)]; }
+  const liveFor = path => { const w = model.walk(path, today, now.min, E.ctxFor(today, 'senin', false)); let extra = 0; const road = {};
+    for (const p of w.parts) { const r = ratio[p.eid]; if (r && r >= 1.15) { extra += p.med * (r - 1); const nm = graph.edges[p.eid].name; if (nm) { road[nm] = road[nm] || { len: 0, r: 0 }; road[nm].len += graph.edges[p.eid].len; road[nm].r = Math.max(road[nm].r, r); } } }
+    const top = Object.entries(road).sort((a, b) => b[1].len - a[1].len)[0];
+    return { extra, road: top ? top[0] : null, drop: top ? 1 - 1 / top[1].r : 0 }; };
   const byP = {}; for (const s of subs) (byP[s.participant] = byP[s.participant] || []).push(s);
   let n = 0, fails = 0, gone = 0;
   const send = async (pid, key, msg) => {
     if (sent.has(pid + '|' + key)) return;
     for (const s of byP[pid] || []) {
-      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify({ title: msg.title, body: msg.body, tag: key })); n++; }
+      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify({ title: msg.title, body: msg.body, tag: key, urgent: !!msg.urgent, speak: msg.urgent ? msg.body : null }), { urgency: msg.urgent ? 'high' : 'normal', TTL: 3 * 3600 }); n++; }
       catch (e) { if (e.statusCode === 404 || e.statusCode === 410) { gone++; await db.from('push_subscriptions').delete().eq('endpoint', s.endpoint); } else fails++; }
     }
     await db.from('sent_alerts').upsert({ participant: pid, alert_key: key });
@@ -68,13 +76,17 @@ async function all(table, q = x => x) { const { data, error } = await q(db.from(
       const h = { id: String(hr.id), name: hr.name, o: hr.origin_node, d: hr.dest_node, ta: String(hr.arrive_by).slice(0, 5), usual: String(hr.usual_departure).slice(0, 5), days: hr.days };
       const usual = toMin(h.usual);
       if (h.days.includes(wday(today)) && E.dayType(today) !== 'D' && now.min >= usual - 150 && now.min <= usual + 5) {
-        const d = PLT.decision(fc.forecast(h, today), h);
-        if (d && now.min >= d.leave - p.lead_min && now.min < d.leave + 5) await send(p.id, `${h.id}|${today}|m`, d.morning);
+        const f = fc.forecast(h, today), d = PLT.decision(f, h);
+        const u = f && PLT.urgent(f, h, liveFor(f.cur.path));          // a apărut între timp ceva grav?
+        if (u && now.min < usual) await send(p.id, `${h.id}|${today}|u`, { title: u.title, body: u.text, urgent: true });
+        else if (d && now.min >= d.leave - p.lead_min && now.min < d.leave + 5) await send(p.id, `${h.id}|${today}|m`, d.morning);
       }
       const ev = toMin(p.evening_at);
       if (p.evening_alert && h.days.includes(wday(tomorrow)) && E.dayType(tomorrow) !== 'D' && now.min >= ev && now.min < ev + 60) {
         const f = fc.forecast(h, tomorrow), d = PLT.decision(f, h);
-        if (d && f.level !== 'g') await send(p.id, `${h.id}|${tomorrow}|e`, d.evening);
+        const u = PLT.urgent(f, h, null);
+        if (u) await send(p.id, `${h.id}|${tomorrow}|e`, { title: '⚠️ Mâine: ' + u.title.replace('⚠️ ', '').toLowerCase(), body: u.text.replace('Dacă pleci', 'Mâine, dacă pleci'), urgent: true });
+        else if (d && f.level !== 'g') await send(p.id, `${h.id}|${tomorrow}|e`, d.evening);
       }
     }
   }

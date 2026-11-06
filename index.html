@@ -447,6 +447,26 @@ function renderMap() {
   LMT = 0; drawLiveMap(); $('mapPanel').innerHTML = mapPanel(); startMapGeo();
 }
 
+
+/* ---------- Anunț vocal pentru ambuteiajele grave ---------- */
+function speak(text) {
+  if (!text || S.voice === false || !('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text.replace(/⚠️|🔔|🌙/g, '')), vs = speechSynthesis.getVoices();
+    const v = vs.find(x => /^ro(-|_|$)/i.test(x.lang)); if (v) u.voice = v; u.lang = 'ro-RO'; u.rate = 0.95; u.volume = 1;
+    speechSynthesis.speak(u);
+  } catch (e) { }
+}
+if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => { };
+if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', ev => { if (ev.data && ev.data.type === 'speak' && ev.data.text) { banner('⚠️ ' + ev.data.text); speak(ev.data.text); } });
+function speakFromUrl() {
+  const q = new URLSearchParams(location.search).get('speak'); if (!q) return;
+  history.replaceState(null, '', location.pathname); banner('⚠️ ' + q);
+  speak(q); // după atingerea notificării
+  document.addEventListener('pointerdown', () => speak(q), { once: true }); // rezervă: unele telefoane cer o atingere pe ecran
+}
+
 /* ---------- Ecranul „Avertizări” ---------- */
 function nextOccurrences() {
   const out = [], now = nowMin();
@@ -694,14 +714,18 @@ function renderSet() {
       <p class="muted" style="margin:8px 0 4px">Cu cât timp înainte de ora la care trebuie să pleci</p>
       <div class="seg" id="leadSeg">${[15, 30, 45, 60].map(v => `<button data-v="${v}" class="${S.lead === v ? 'on' : ''}">${v} min</button>`).join('')}</div>
       <label class="chk"><input type="checkbox" id="evOn" ${S.evening ? 'checked' : ''}><span>Și cu o seară înainte, dacă a doua zi e aglomerat, la ora <input type="time" id="evAt" value="${S.eveningAt}" style="border:none;font:800 15px 'Nunito Sans'"></span></label>
+      <label class="chk"><input type="checkbox" id="vOn" ${S.voice === false ? '' : 'checked'}><span><b>Anunț vocal</b> pentru ambuteiajele grave (când întârzierea e sigură și are o cauză clară). Telefonul citește mesajul când atingi notificarea sau dacă aplicația e deschisă.</span></label>
+      <button class="btn ghost" id="bVoice">🔊 Ascultă un exemplu</button>
       <button class="btn dark" id="bSave">Salvează</button></div>
     <div class="card"><div class="kicker">Datele mele</div><p class="muted">Codul tău de participant: <b>${S.pid}</b>. Drumurile se trimit anonim, doar cu acest cod, pentru îmbunătățirea avertizărilor. Butonul de mai jos le șterge definitiv, de pe telefon și de pe server.</p><button class="btn red" id="bWipe">Șterge toate datele</button></div>
     <div class="card"><div class="kicker">Probleme?</div><p class="muted">Dacă aplicația arată ciudat sau nu se actualizează, apasă aici. Datele tale rămân.</p><button class="btn ghost" onclick="window.__pltRepair()">Actualizează aplicația</button></div>`;
   document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; c.querySelectorAll('[data-d]').forEach(b => b.onclick = () => b.classList.toggle('on')); });
   bindPickers($('s-set'));
   $('leadSeg').querySelectorAll('button').forEach(b => b.onclick = () => { $('leadSeg').querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); });
+  $('bVoice').onclick = () => { const was = S.voice; S.voice = true; speak('Dacă pleci la ora stabilită, șapte și patruzeci și cinci, ajungi cu aproximativ zece minute întârziere! Pleacă la șapte și douăzeci și cinci. Cauza: o bandă închisă pe Șoseaua București-Ploiești.'); S.voice = was; if (!('speechSynthesis' in window)) toast('Telefonul nu are funcția de citire cu voce.'); };
   $('bSave').onclick = () => {
     document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; const o = $('ho' + c.dataset.hf).value, d = $('hd' + c.dataset.hf).value; if (o) h.o = o; if (d) h.d = d; h.ta = c.querySelector('[data-k=ta]').value; h.usual = c.querySelector('[data-k=usual]').value; h.days = [...c.querySelectorAll('[data-d].on')].map(b => +b.dataset.d); });
+    S.voice = $('vOn').checked;
     S.lead = +($('leadSeg').querySelector('.on') || { dataset: { v: 30 } }).dataset.v; S.evening = $('evOn').checked; S.eveningAt = $('evAt').value || '21:00';
     save(); enqueue('participant'); enqueue('habits'); rebuild(); toast('Am salvat.'); show('home');
   };
@@ -736,7 +760,8 @@ function checkAlerts() {
   if (!S.consent || !S.habits.length) return;
   const now = nowMin(), today = todayStr(), tomorrow = dayStr(1);
   for (const h of S.habits) {
-    if (h.days.includes(wday(today))) { const dd = PLT.decision(forecast(h, today), h), key = h.id + today + 'm'; if (dd && now >= dd.leave - S.lead && now < dd.leave + 5 && !S.seen[key]) { banner('🔔 ' + dd.morning.title + ' – ' + dd.morning.body); S.seen[key] = 1; save(); } }
+    if (h.days.includes(wday(today))) { const fT = forecast(h, today), uu = PLT.urgent(fT, h, null), ku = h.id + today + 'u'; if (uu && now < parseT(h.usual) && now >= parseT(h.usual) - 150 && !S.seen[ku]) { banner(uu.title + ' – ' + uu.text); speak(uu.text); S.seen[ku] = 1; save(); }
+      const dd = PLT.decision(fT, h), key = h.id + today + 'm'; if (dd && now >= dd.leave - S.lead && now < dd.leave + 5 && !S.seen[key]) { banner('🔔 ' + dd.morning.title + ' – ' + dd.morning.body); S.seen[key] = 1; save(); } }
     if (S.evening && h.days.includes(wday(tomorrow)) && now >= parseT(S.eveningAt)) { const f = forecast(h, tomorrow), dd = PLT.decision(f, h), key = h.id + tomorrow + 'e'; if (dd && f.level !== 'g' && !S.seen[key]) { banner('🌙 ' + dd.evening.title + ' – ' + dd.evening.body); S.seen[key] = 1; save(); } }
   }
 }
@@ -775,6 +800,7 @@ if (isIOS && !standalone) setTimeout(showInstall, 1500);
   rebuild();
   if (!S.consent) welcome(); else show(S.live ? 'trip' : 'home');
   flush(); pullPack(); setInterval(pullPack, 15 * 60000);
+  speakFromUrl();
   checkAlerts(); setInterval(checkAlerts, 30000); setInterval(() => { if (S.live && $('s-trip').classList.contains('on')) drawTrip(); if ($('s-map').classList.contains('on')) { LMT = 0; drawLiveMap(); } }, 5000); setInterval(() => { if ($('s-map').classList.contains('on')) $('mapPanel').innerHTML = mapPanel(); }, 60000);
 })();
 </script>

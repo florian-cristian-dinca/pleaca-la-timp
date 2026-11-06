@@ -1,5 +1,5 @@
 /* Service worker – network first (always the latest version when online), cache only as offline fallback; web push. */
-const CACHE = 'plt-v8';
+const CACHE = 'plt-v9';
 const ASSETS = ['./', 'index.html', 'config.js', 'engine.js', 'forecast.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(ASSETS.map(a => fetch(new Request(a, { cache: 'reload' })).then(r => r.ok && c.put(a, r)).catch(() => { })))).then(() => self.skipWaiting()));
@@ -13,6 +13,11 @@ self.addEventListener('fetch', e => {
 });
 self.addEventListener('push', e => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Pleacă la timp', { body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: d.tag || 'plt', data: { url: d.url || './' } }));
+  const url = './' + (d.speak ? '?speak=' + encodeURIComponent(d.speak) : '');
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(d.title || 'Pleacă la timp', { body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: d.tag || 'plt', renotify: !!d.urgent, requireInteraction: !!d.urgent, vibrate: d.urgent ? [400, 150, 400, 150, 800] : [200], data: { url } }),
+    // dacă aplicația e deschisă pe ecran, anunță mesajul cu voce imediat
+    d.speak ? clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => cs.forEach(c => c.postMessage({ type: 'speak', text: d.speak }))) : null
+  ]));
 });
-self.addEventListener('notificationclick', e => { e.notification.close(); e.waitUntil(clients.openWindow(e.notification.data.url || './')); });
+self.addEventListener('notificationclick', e => { e.notification.close(); const url = e.notification.data.url || './'; e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => { const c = cs.find(x => 'focus' in x); if (c) { c.postMessage({ type: 'speak', text: new URL(url, self.location).searchParams.get('speak') }); return c.focus(); } return clients.openWindow(url); })); });
