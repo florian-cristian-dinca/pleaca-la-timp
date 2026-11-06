@@ -144,6 +144,35 @@ class Collector(osmium.SimpleHandler):
         self.ways.append((tags, pts))
 
 
+def simplify(pts, tol_km=0.012):
+    """Douglas-Peucker on (lat, lon) points; returns the kept interior points (endpoints excluded)."""
+    if len(pts) < 3:
+        return []
+    lat0 = pts[0][0]
+    kx = math.cos(math.radians(lat0)) * 111.32
+    xy = [((p[1] - pts[0][1]) * kx, (p[0] - lat0) * 110.57) for p in pts]
+    keep = [False] * len(pts)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(pts) - 1)]
+    while stack:
+        i, j = stack.pop()
+        ax, ay = xy[i]
+        bx, by = xy[j]
+        dx, dy = bx - ax, by - ay
+        L2 = dx * dx + dy * dy
+        best, bk = -1.0, -1
+        for k in range(i + 1, j):
+            px, py = xy[k]
+            t = 0 if L2 == 0 else max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / L2))
+            d = math.hypot(px - ax - t * dx, py - ay - t * dy)
+            if d > best:
+                best, bk = d, k
+        if best > tol_km:
+            keep[bk] = True
+            stack += [(i, bk), (bk, j)]
+    return [[round(pts[k][0], 5), round(pts[k][1], 5)] for k in range(1, len(pts) - 1) if keep[k]]
+
+
 def build(ways, places):
     use = defaultdict(int)
     loc = {}
@@ -189,6 +218,7 @@ def build(ways, places):
                 dirs = [(a, b)]
             else:
                 dirs = [(a, b), (b, a)]
+            shape = simplify([(p[1], p[2]) for p in s])
             for (u, v) in dirs:
                 c = CLS[cls]
                 if oneway or reverse_only:
@@ -217,6 +247,8 @@ def build(ways, places):
                     # heuristic: inbound entries of national roads / motorways crossing the city radius
                     bottleneck=bool(cls in ('N', 'A', 'M') and ru > CITY_RADIUS_KM >= rv),
                     radial=round(cos, 2))
+                if shape:  # intermediate shape points (simplified), in the direction of travel
+                    edges[eid]['g'] = shape if (u, v) == (a, b) else shape[::-1]
     # fix edge ids as strings
     edges = {f"{e['from']}>{e['to']}": e for e in edges.values()}
 
