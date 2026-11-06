@@ -53,7 +53,7 @@ details{margin-top:12px}summary{font-weight:800;color:var(--blue);cursor:pointer
 .field{background:var(--soft);border-radius:14px;padding:10px 12px;margin-bottom:10px}
 .field small{display:block;font-size:12.5px;color:var(--mute);font-weight:700}
 .field select,.field input{width:100%;border:none;background:transparent;font:700 16px "Nunito Sans";color:var(--ink);outline:none}
-.days{display:flex;gap:6px;margin:4px 0 10px}.days button{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:8px 0;font:800 13px "Nunito Sans";cursor:pointer;color:var(--ink)}.days button.on{border-color:var(--ink);background:var(--ink);color:#fff}
+.days{display:flex;gap:6px;margin:4px 0 10px}.days button{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:8px 0;font:800 13px "Nunito Sans";cursor:pointer;color:var(--ink)}.days button.on{border-color:var(--blue);background:var(--blue);color:#fff;box-shadow:0 2px 6px rgba(29,78,216,.35)}.days button:not(.on){color:var(--mute);background:#fff}
 .seg{display:flex;background:var(--soft);border-radius:14px;padding:4px;gap:4px;margin:6px 0 12px}.seg button{flex:1;border:none;background:none;border-radius:11px;padding:9px 0;font:800 14px "Nunito Sans";cursor:pointer;color:var(--mute)}.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .rep{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
 .repb{background:#fff;border:2px solid var(--line);border-radius:16px;padding:12px 4px;font:800 13px "Nunito Sans";cursor:pointer;color:var(--ink)}.repb .e{font-size:24px;display:block;margin-bottom:3px}
@@ -342,6 +342,7 @@ function nextOccurrences() {
   }
   return out.slice(0, 3);
 }
+const chance = s => s && s.pOn != null ? ` · <b style="display:inline;color:${s.pOn >= 0.95 ? 'var(--g)' : s.pOn >= 0.8 ? 'var(--y)' : 'var(--r)'}">${s.cal ? '' : '~'}${Math.round(s.pOn * 100)}% șanse la timp</b>` : '';
 function card(h, date, idx) {
   const f = forecast(h, date); if (!f) return `<div class="card">Nu găsesc un drum între ${esc(pname(h.o))} și ${esc(pname(h.d))}.</div>`;
   const today = date === todayStr(), now = nowMin(), lv = LV[f.level];
@@ -353,9 +354,9 @@ function card(h, date, idx) {
   else if (f.level !== 'g') why += `Este aglomerația obișnuită pentru ${WD[wday(date)]} la această oră.`;
   const opts = [];
   const gain = f.early ? f.cur.idle - f.early.idle : 0;
-  if (f.early && f.early.t0 < f.usual - 4 && (gain >= 5 || f.lateBy > 0)) opts.push({ best: true, t: f.early.t0, b: gain >= 5 ? 'Pleacă mai devreme' : 'Pleacă puțin mai devreme', s: (gain >= 5 ? `stai doar ~${mins(f.early.idle)} pe loc (cu ${mins(gain)} mai puțin)` : 'ajungi sigur la timp') + ` · ajungi în jur de ${fmt(f.early.t0 + f.early.med)}` });
-  opts.push({ best: !opts.length && f.level === 'g', t: f.usual, b: 'La ora obișnuită', s: `stai ~${mins(f.cur.idle)} pe loc · ajungi în jur de ${fmt(f.usual + f.cur.med)}${f.lateBy > 0 ? ' · risc de întârziere' : ''}` });
-  if (f.calm && f.level !== 'g' && f.cur.idle - f.calm.idle >= 5) opts.push({ best: false, t: f.calm.t0, b: 'Mai târziu, dacă poți', s: `stai doar ~${mins(f.calm.idle)} pe loc · ajungi în jur de ${fmt(f.calm.t0 + f.calm.med)}${f.calm.t0 + f.calm.med > f.ta ? ' (după ora-țintă)' : ''}` });
+  if (f.early && f.early.t0 < f.usual - 4 && (gain >= 5 || f.lateBy > 0)) opts.push({ best: true, t: f.early.t0, b: gain >= 5 ? 'Pleacă mai devreme' : 'Pleacă puțin mai devreme', s: (gain >= 5 ? `stai doar ~${mins(f.early.idle)} pe loc (cu ${mins(gain)} mai puțin)` : 'ajungi la timp cu mai multă siguranță') + ` · ajungi în jur de ${fmt(f.early.t0 + f.early.med)}` + chance(f.early) });
+  opts.push({ best: !opts.length && f.level === 'g', t: f.usual, b: 'La ora obișnuită', s: `stai ~${mins(f.cur.idle)} pe loc · ajungi în jur de ${fmt(f.usual + f.cur.med)}` + chance(f.cur) });
+  if (f.calm && f.level !== 'g' && f.cur.idle - f.calm.idle >= 5) opts.push({ best: false, t: f.calm.t0, b: 'Mai târziu, dacă poți', s: `stai doar ~${mins(f.calm.idle)} pe loc · ajungi în jur de ${fmt(f.calm.t0 + f.calm.med)}${f.calm.t0 + f.calm.med > f.ta ? ' (după ora-țintă)' : ''}` + chance(f.calm) });
   if (!f.early && f.level === 'r') opts.unshift({ best: true, t: f.slots[0].t0, b: 'Pleacă cât mai devreme', s: 'nicio oră din intervalul analizat nu garantează sosirea la timp' });
   const leaveAt = opts.find(o => o.best) ? opts.find(o => o.best).t : f.usual;
   const alertAt = leaveAt - S.lead;
@@ -372,6 +373,7 @@ function card(h, date, idx) {
       <div class="band"><div class="bar">${f.slots.map((s, i) => `<div data-i="${i}" style="background:${slotColor(s)}" title="${fmt(s.t0)}"></div>`).join('')}</div>
       <div class="ticks">${ticks.map(t => `<span>${t}</span>`).join('')}</div>
       <div class="info" id="info-${idx}">Atinge o oră ca să vezi cât stai pe loc.</div>
+      <p class="muted" style="margin:8px 0 0">„Șanse la timp” = din 100 de dimineți asemănătoare, în câte ajungi până la ora-țintă (minus 5 minute pentru parcare). Semnul ~ arată că estimarea nu e încă verificată pe drumuri reale.</p>
       <div class="legend"><span><i style="background:#4caf6e"></i>sub 10 min pe loc</span><span><i style="background:#f0a83a"></i>10–25 min</span><span><i style="background:#d9534f"></i>peste 25 min</span></div></div>
     </details>
   </div>`;
@@ -382,7 +384,7 @@ function bindCards(list) {
     c.querySelectorAll('.bar div').forEach(b => b.onclick = () => {
       c.querySelectorAll('.bar div').forEach(x => x.classList.remove('sel')); b.classList.add('sel');
       const s = f.slots[+b.dataset.i], late = s.t0 + s.q > f.deadline;
-      $('info-' + c.dataset.card).innerHTML = `Plecare <b>${fmt(s.t0)}</b> → ~${mins(s.idle)} pe loc, ajungi în jur de <b>${fmt(s.t0 + s.med)}</b>${late ? ' · <span style="color:var(--r)">risc de întârziere</span>' : ' · la timp'}`;
+      $('info-' + c.dataset.card).innerHTML = `Plecare <b>${fmt(s.t0)}</b> → ~${mins(s.idle)} pe loc, ajungi în jur de <b>${fmt(s.t0 + s.med)}</b>${s.pOn != null ? ` · ${s.cal ? '' : '~'}${Math.round(s.pOn * 100)}% șanse la timp` : (late ? ' · risc de întârziere' : ' · la timp')}`;
     });
   });
 }

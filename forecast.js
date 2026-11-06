@@ -17,13 +17,14 @@ function createForecaster(o) {
     const { path, w } = best, L = LR(), eb = Math.exp(E.pathShift(L && L.lr, w.parts, date));
     const free = path.reduce((s, e) => s + NET.edges[e].len / NET.edges[e].v0 * 60, 0);
     const med = w.total * eb; let q;
-    if (withQ) { const km = E.pathLen(NET, path), pp = m.predictPath(path, date, t0, ctx, 200, 0.95); q = pp.q * eb * Math.exp(E.qhatFor(L && L.conf, km).qhat); }
+    let samp = null, cal = false;
+    if (withQ) { const km = E.pathLen(NET, path), qc = E.qhatFor(L && L.conf, km), pp = m.predictPath(path, date, t0, ctx, 200, 0.95), k = eb * Math.exp(qc.qhat); q = pp.q * k; samp = pp.samples.map(x => x * k); cal = !!qc.calibrated; }
     else q = med * 1.3; // estimare rapidă (ecranul „Săptămâna”)
     // drumul (după nume) pe care se pierde cel mai mult timp – se comunică doar numele, fără hartă
     const byName = {};
     for (const p of w.parts) { const e = NET.edges[p.eid], loss = p.med - e.len / e.v0 * 60, nm = e.name; if (!nm) continue; const b = byName[nm] || (byName[nm] = { loss: 0, eid: p.eid, max: -1e9, t: p.t }); b.loss += loss; if (loss > b.max) { b.max = loss; b.eid = p.eid; b.t = p.t; } }
     let worst = null; for (const [name, b] of Object.entries(byName)) if (!worst || b.loss > worst.loss) worst = { name, loss: b.loss, eid: b.eid, t: b.t };
-    return { t0, path, med, q, free, idle: Math.max(0, med - free), worst };
+    return { t0, path, med, q, free, idle: Math.max(0, med - free), worst, samp, cal };
   }
   function pathsFor(o, d, date, t, ctx) {
     const k = o + '>' + d + '|' + E.dayClass(date) + '|' + Math.round(t / 60);
@@ -38,8 +39,11 @@ function createForecaster(o) {
     const paths = pathsFor(h.o, h.d, date, usual, ctx); if (!paths.length) return (CACHE[key] = null);
     for (let t = Math.round(from / 10) * 10; t <= to; t += 10) { const s = slotEval(M, paths, date, t, ctx, !light); if (s) slots.push(s); }
     if (!slots.length) return (CACHE[key] = null);
-    const near = t => slots.reduce((a, b) => Math.abs(b.t0 - t) < Math.abs(a.t0 - t) ? b : a);
+    const pOn = s => { if (!s || !s.samp) return; let k = 0; for (const x of s.samp) if (s.t0 + x <= deadline) k++; s.pOn = Math.min(0.99, k / s.samp.length); s.samp = null; };
+  slots.forEach(pOn);
+  const near = t => slots.reduce((a, b) => Math.abs(b.t0 - t) < Math.abs(a.t0 - t) ? b : a);
     const cur = slotEval(M, paths, date, usual, ctx, !light), typ = slotEval(M0, paths, date, usual, ctx0, false);
+  pOn(cur);
     const feas = slots.filter(s => s.t0 + s.q <= deadline);
     // cea mai bună oră: la timp (cu marja de siguranță) și cu cât mai puțin timp pe loc; la egalitate, cea mai târzie
     const pool = feas.filter(s => s.t0 <= usual && s.t0 >= usual - 120);
