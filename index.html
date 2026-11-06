@@ -13,8 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Pleacă la timp">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<link href="vendor/fonts/nunito-sans.css" rel="stylesheet">
 <style>
 :root{color-scheme:only light;--bg:#f2efe9;--card:#fff;--ink:#1b1f24;--mute:#6b7177;--line:#e5e0d6;--g:#15803d;--gbg:#e8f6ec;--y:#b45309;--ybg:#fff4e0;--r:#b91c1c;--rbg:#fdeceb;--blue:#1d4ed8;--soft:#f7f5f1}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -240,10 +239,11 @@ const LV = PLT.LV, slotColor = PLT.slotColor;
 
 /* ---------- Sincronizare cu serverul (Supabase) – local întâi, trimitere când există internet ---------- */
 let SBC = null, SBP = null;
+function loadScript(src) { return new Promise((ok, no) => { if (window.supabase && window.supabase.createClient) return ok(); const t = document.createElement('script'); t.src = src; t.onload = () => ok(); t.onerror = no; document.head.appendChild(t); }); }
 function sb() {
   const c = window.PLT_CONFIG; if (!c || !c.supabaseUrl) return Promise.resolve(null);
   if (SBC) return Promise.resolve(SBC);
-  if (!SBP) SBP = import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm').then(m => (SBC = m.createClient(c.supabaseUrl, c.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'plt-auth' } }))).catch(() => { SBP = null; return null; });
+  if (!SBP) SBP = loadScript('vendor/supabase.js').then(() => (SBC = window.supabase.createClient(c.supabaseUrl, c.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, storageKey: 'plt-auth' } }))).catch(() => { SBP = null; return null; });
   return SBP;
 }
 async function session() {
@@ -703,7 +703,7 @@ function histHTML() {
   const tr = [...S.trips].reverse().slice(0, 15), f = S.trips.filter(t => t.pred && t.pred.followed), ok = f.filter(t => t.onTime).length;
   return `${f.length ? `<div class="msg">${ok} din ${f.length} la timp</div><p class="muted">când ați plecat la ora recomandată</p>` : '<p class="muted">Încă niciun drum înregistrat.</p>'}
   ${tr.map(t => `<div class="item"><div><b>${esc(pname(t.orig))} → ${esc(pname(t.dest))}</b><small>${t.date} · ${fmt(t.dep)} · ${mins(t.dur)}</small></div><span class="tag ${!t.pred ? 'na' : t.onTime ? 'ok' : 'no'}">${!t.pred ? '—' : t.onTime ? 'La timp' : 'Întârziere'}</span></div>`).join('')}
-  <p class="muted" id="syncState" style="margin-top:10px"></p><p class="muted">Drumurile se trimit automat, anonim (cod ${S.pid}), ca avertizările să devină mai precise pentru toți.</p>`;
+  <p class="muted" id="syncState" style="margin-top:10px"></p><p class="muted">Drumurile se trimit automat, fără nume, doar cu codul ${S.pid}, ca avertizările să devină mai precise pentru toți.</p>`;
 }
 function bindSend() {
   if (!$('bSend')) return;
@@ -727,7 +727,7 @@ function renderSet() {
       <label class="chk"><input type="checkbox" id="vOn" ${S.voice === false ? '' : 'checked'}><span><b>Anunț vocal</b> pentru ambuteiajele grave (când întârzierea e sigură și are o cauză clară). Telefonul citește mesajul când atingeți notificarea sau dacă aplicația e deschisă.</span></label>
       <button class="btn ghost" id="bVoice">🔊 Ascultați un exemplu</button>
       <button class="btn dark" id="bSave">Salvați</button></div>
-    <div class="card"><div class="kicker">Datele mele</div><p class="muted">Codul dumneavoastră de participant: <b>${S.pid}</b>. Drumurile se trimit anonim, doar cu acest cod, pentru îmbunătățirea avertizărilor. Butonul de mai jos le șterge definitiv, de pe telefon și de pe server.</p><button class="btn red" id="bWipe">Ștergeți toate datele</button></div>
+    <div class="card"><div class="kicker">Datele mele</div><p class="muted">Codul dumneavoastră de participant: <b>${S.pid}</b>. Drumurile se trimit fără nume, doar cu acest cod, pentru îmbunătățirea avertizărilor. Butonul de mai jos le șterge definitiv, de pe telefon și de pe server. <a href="confidentialitate.html" target="_blank" rel="noopener">Informarea privind datele personale</a></p><button class="btn red" id="bWipe">Ștergeți toate datele</button></div>
     <div class="card"><div class="kicker">Probleme?</div><p class="muted">Dacă aplicația arată ciudat sau nu se actualizează, apăsați aici. Datele dumneavoastră rămân.</p><button class="btn ghost" onclick="window.__pltRepair()">Actualizează aplicația</button></div>`;
   document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; c.querySelectorAll('[data-d]').forEach(b => b.onclick = () => b.classList.toggle('on')); });
   bindPickers($('s-set'));
@@ -750,7 +750,8 @@ function welcome() {
   ${picker('wH', null, 'Unde locuiți?', 'Scrieți localitatea sau cartierul, ex. Corbeanca')}
   ${picker('wW', null, 'Unde mergeți de obicei?', 'Localitate, cartier, universitate, gară…', true)}
   <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="wTa" value="09:00"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" id="wU" value="08:00"></div></div>
-  <label class="chk"><input type="checkbox" id="wC"><span>Sunt de acord ca localitățile, orele și drumurile mele, fără numele meu, să fie prelucrate de PRO SMART WORK S.R.L. în acest pilot, pentru calculul și îmbunătățirea avertizărilor. Cât timp sunt pe drum, cu aplicația deschisă, poziția GPS este folosită doar pentru a calcula cât durează fiecare porțiune de drum; traseul GPS nu se păstrează. Pot retrage acordul oricând, ștergând datele din Setări.</span></label>
+  <label class="chk"><input type="checkbox" id="wC"><span>Am cel puțin 18 ani și sunt de acord ca localitățile, orele și drumurile mele, fără numele meu, să fie prelucrate de PRO SMART WORK S.R.L. în acest pilot, pentru calculul și îmbunătățirea avertizărilor. Cât timp sunt pe drum, cu aplicația deschisă, poziția GPS este folosită doar pentru a calcula cât durează fiecare porțiune de drum; traseul GPS nu se păstrează. Pot retrage acordul oricând, ștergând datele din Setări.</span></label>
+  <p class="muted" style="margin:6px 0 0"><a href="confidentialitate.html" target="_blank" rel="noopener">Citiți informarea privind datele personale</a></p>
   <button class="btn go" id="wGo" disabled>Încep</button>`;
   $('welcome').classList.add('on');
   bindPickers($('welcome'));
