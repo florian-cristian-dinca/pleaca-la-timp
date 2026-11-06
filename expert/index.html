@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motor predictiv mobilitate – pilot București + Ilfov</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f2ed;--card:#fffdf8;--ink:#1c1e21;--mute:#666a70;--line:#d9d4c8;--acc:#1f5fa8;--ok:#0f766e;--warn:#b45309;--bad:#b91c1c;--soft:#ece8de}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "IBM Plex Sans",system-ui,sans-serif}
+header{padding:18px 24px 10px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;justify-content:space-between}
+h1{font-size:19px;margin:0;font-weight:700;letter-spacing:-.01em}
+.sub{color:var(--mute);font-size:12.5px}
+.pill{display:inline-flex;gap:6px;align-items:center;font:600 11.5px "IBM Plex Mono",monospace;padding:3px 8px;border:1px solid var(--line);border-radius:20px;background:var(--card)}
+.pill.ok{color:var(--ok);border-color:#9fd6cf}.pill.warn{color:var(--warn);border-color:#f0c48a}.pill.bad{color:var(--bad);border-color:#f2a7a7}
+nav{display:flex;gap:2px;padding:0 18px;border-bottom:1px solid var(--line);overflow-x:auto;background:var(--bg);position:sticky;top:0;z-index:5}
+nav button{background:none;border:none;padding:11px 14px;font:500 13.5px "IBM Plex Sans";color:var(--mute);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+nav button.on{color:var(--ink);border-bottom-color:var(--ink)}
+main{padding:18px 24px 60px;max-width:1280px}
+section{display:none}section.on{display:block}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}.g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.card h3{margin:0 0 10px;font-size:14px;font-weight:600}
+.card h3 small{font-weight:400;color:var(--mute)}
+label{display:block;font-size:12px;color:var(--mute);margin-bottom:3px}
+input,select,textarea{font:13.5px "IBM Plex Sans";padding:6px 8px;border:1px solid var(--line);border-radius:5px;background:#fff;color:var(--ink);width:100%}
+textarea{font-family:"IBM Plex Mono";font-size:11.5px}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 12px;align-items:end}
+.chk{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink)}.chk input{width:auto}
+button.b{font:600 13px "IBM Plex Sans";padding:7px 13px;border-radius:5px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer}
+button.b2{font:500 12.5px "IBM Plex Sans";padding:6px 11px;border-radius:5px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+button.b2:hover{border-color:var(--ink)}button.x{border:none;background:none;color:var(--bad);cursor:pointer;font-size:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.big{font:600 34px "IBM Plex Mono";letter-spacing:-.02em}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:8px}
+.kpi div{border-left:3px solid var(--line);padding:2px 10px}.kpi b{display:block;font:600 18px "IBM Plex Mono"}.kpi span{font-size:11.5px;color:var(--mute)}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{padding:5px 7px;border-bottom:1px solid var(--soft);text-align:left;vertical-align:top}
+th{font-weight:600;color:var(--mute);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+td.n,th.n{text-align:right;font-family:"IBM Plex Mono"}
+.mono{font-family:"IBM Plex Mono"}
+.note{font-size:12px;color:var(--mute);margin-top:8px}
+.warnbox{background:#fff6e8;border:1px solid #f0c48a;border-radius:6px;padding:9px 12px;font-size:12.5px;margin:8px 0}
+.okbox{background:#eaf6f3;border:1px solid #9fd6cf;border-radius:6px;padding:9px 12px;font-size:12.5px;margin:8px 0}
+.badbox{background:#fdeeee;border:1px solid #f2a7a7;border-radius:6px;padding:9px 12px;font-size:12.5px;margin:8px 0}
+.heat td.c{text-align:center;font:600 11px "IBM Plex Mono";color:#fff;min-width:44px}
+.tag{font:600 10.5px "IBM Plex Mono";padding:1px 6px;border-radius:3px;background:var(--soft);color:var(--mute)}
+.tag.s{background:#efe6ff;color:#5b21b6}.tag.r{background:#e0f2fe;color:#075985}.tag.d{background:#fdeeee;color:var(--bad)}
+svg text{font-family:"IBM Plex Sans";font-size:11px;fill:var(--mute)}
+.eq{font-family:"IBM Plex Mono";background:var(--soft);padding:8px 10px;border-radius:5px;font-size:12.5px;white-space:pre-wrap;margin:6px 0}
+.method p{margin:6px 0}.method h4{margin:16px 0 4px;font-size:13.5px}
+#toast{position:fixed;bottom:16px;right:16px;background:var(--ink);color:#fff;padding:9px 14px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
+</style>
+<style>
+#map{width:100%;height:520px;border-radius:6px;background:#faf8f3;cursor:crosshair;display:block}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--mute);margin-top:6px}.legend i{display:inline-block;width:14px;height:4px;margin-right:4px;vertical-align:middle}
+.odhint{font-size:12px;color:var(--mute)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Motor predictiv de mobilitate · pilot București + Ilfov</h1>
+    <div class="sub">Prototip v0.3 · orice origine și destinație din regiune · calcul 100% local · fără API-uri comerciale · ProSmart / UNSTPB</div>
+  </div>
+  <div class="row" id="hdrPills"></div>
+</header>
+<nav id="nav">
+  <button data-t="rec" class="on">Recomandare</button>
+  <button data-t="trips">Deplasări</button>
+  <button data-t="urrd">Restricții &amp; URRD</button>
+  <button data-t="val">Validare</button>
+  <button data-t="net">Rețea &amp; date</button>
+  <button data-t="met">Metodologie</button>
+</nav>
+<main>
+
+<section id="t-rec" class="on">
+  <div class="card">
+    <div class="form">
+      <div style="grid-column:span 2"><label>Origine</label><select id="fO"></select></div>
+      <div style="grid-column:span 2"><label>Destinație</label><select id="fD"></select></div>
+      <div><label>Data</label><input type="date" id="fDate"></div>
+      <div><label>Ora obligatorie de sosire</label><input type="time" id="fTa" value="09:00"></div>
+      <div><label>Rezervă parcare + mers (min)</label><input type="number" id="fBuf" value="5" min="0" max="30"></div>
+      <div><label>Vreme</label><select id="fWx"></select></div>
+      <div><label>Nivel de încredere țintă</label><select id="fTau"><option value="0.9">90%</option><option value="0.95" selected>95%</option><option value="0.98">98%</option></select></div>
+      <div><label class="chk"><input type="checkbox" id="fVac"> Vacanță școlară</label></div>
+      <div class="row"><button class="b" id="bRec">Calculează</button><button class="b2" id="bSwap" title="Inversează originea și destinația">⇄</button></div>
+    </div>
+    <div class="odhint" style="margin-top:6px">Puteți alege și pe hartă: primul clic = origine, al doilea = destinație.</div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card" id="recOut"></div>
+    <div class="card"><h3 class="row" style="justify-content:space-between"><span>Harta regiunii <small>(P congestie severă la ora de referință; traseul recomandat îngroșat)</small></span><button class="b2" id="bZoom">Zoom București</button></h3><canvas id="map"></canvas>
+      <div class="legend"><span><i style="background:#0f766e"></i>&lt;10%</span><span><i style="background:#65a30d"></i>10–25%</span><span><i style="background:#d97706"></i>25–50%</span><span><i style="background:#c2410c"></i>50–75%</span><span><i style="background:#991b1b"></i>&gt;75%</span><span id="mapInfo"></span></div></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card"><h3>Probabilitatea sosirii la timp vs. ora plecării <small>(model, înainte de marja conformă)</small></h3><div id="recChart"></div></div>
+    <div class="card"><h3>Trasee alternative</h3><div id="recTable"></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Anticiparea congestiei severe pe traseul recomandat <small>(0–60 min, P[t &gt; 2,5·t<sub>liber</sub>], cele mai expuse segmente)</small></h3><div id="recHeat"></div></div>
+</section>
+
+<section id="t-trips">
+  <div class="grid g2">
+    <div class="card" id="liveCard"></div>
+    <div class="card">
+      <h3>Înregistrare manuală a unei deplasări</h3>
+      <div class="form">
+        <div style="grid-column:span 2"><label>Origine</label><select id="mO"></select></div>
+        <div style="grid-column:span 2"><label>Destinație</label><select id="mD"></select></div>
+        <div><label>Data</label><input type="date" id="mDate"></div>
+        <div><label>Plecare</label><input type="time" id="mDep" value="07:30"></div>
+        <div><label>Sosire</label><input type="time" id="mArr" value="08:20"></div>
+        <div><label>Vreme</label><select id="mWx"></select></div>
+        <div style="grid-column:1/-1"><label>Traseu urmat</label><select id="mPath"></select></div>
+        <div style="grid-column:1/-1"><label>Observații</label><input id="mNote"></div>
+        <div><button class="b" id="bAddTrip">Adaugă</button></div>
+      </div>
+      <div class="note">Traseele propuse sunt alternativele modelului pentru ora de plecare indicată. Doar deplasările pornite din aplicație, cu predicția arhivată <b>înainte</b> de plecare, intră în validarea prospectivă a punctualității.</div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Istoric deplasări <small id="tripCount"></small></h3><div id="tripTable"></div></div>
+</section>
+
+<section id="t-urrd">
+  <div class="grid g2">
+    <div class="card">
+      <h3>Restricții de capacitate cunoscute / raportate / detectate</h3>
+      <div id="restrList"></div>
+      <h3 style="margin-top:14px">Adaugă restricție</h3>
+      <div class="form">
+        <div style="grid-column:1/-1"><label>Caută segmentul (nume stradă / nod)</label><input id="rFind" placeholder="ex. DN1, Pipera, Iuliu Maniu"><select id="rSeg" style="margin-top:4px"></select></div>
+        <div><label>Benzi închise</label><input type="number" id="rLanes" value="1" min="1" max="4"></div>
+        <div><label>Început – data</label><input type="date" id="rSD"></div>
+        <div><label>ora</label><input type="time" id="rST" value="06:00"></div>
+        <div><label>Sfârșit – data (gol = necunoscut)</label><input type="date" id="rED"></div>
+        <div><label>ora</label><input type="time" id="rET" value="20:00"></div>
+        <div><label>Sursa</label><select id="rSrc"><option>oficială</option><option>raportată</option><option>detectată</option></select></div>
+        <div style="grid-column:1/-1"><label>Notă / referință sursă</label><input id="rNote"></div>
+        <div><button class="b" id="bAddR">Adaugă</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Simulator de coadă la blocaj <small>(model Vickrey, pas 1 min)</small></h3>
+      <div class="form">
+        <div style="grid-column:1/-1"><label>Caută segmentul</label><input id="qFind" placeholder="ex. DN1"><select id="qSeg" style="margin-top:4px"></select></div>
+        <div><label>Data</label><input type="date" id="qDate"></div>
+        <div><label>Benzi închise</label><input type="number" id="qLanes" value="1" min="0" max="4"></div>
+        <div><label>De la ora</label><input type="time" id="qFrom" value="06:00"></div>
+        <div><label>Factor capacitate zonă lucrări: <span id="qWzV" class="mono"></span></label><input type="range" id="qWz" min="0.65" max="1" step="0.01" value="0.9"></div>
+      </div>
+      <div id="qChart" style="margin-top:8px"></div><div id="qOut"></div>
+    </div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card">
+      <h3>Detecție restricții neanunțate (CUSUM pe timpii de segment)</h3>
+      <div class="form">
+        <div style="grid-column:1/-1"><label>Caută segmentul</label><input id="oFind" placeholder="ex. DN1"><select id="oSeg" style="margin-top:4px"></select></div>
+        <div><label>Data</label><input type="date" id="oDate"></div>
+        <div><label>Intrare pe segment</label><input type="time" id="oT" value="07:40"></div>
+        <div><label>Durată observată (min)</label><input type="number" id="oDur" value="30" step="0.5"></div>
+        <div><button class="b2" id="bAddObs">Adaugă observație</button></div>
+      </div>
+      <div id="cusumOut" style="margin-top:10px"></div>
+    </div>
+    <div class="card" id="caseCard"></div>
+  </div>
+</section>
+
+<section id="t-val">
+  <div class="grid g2"><div class="card" id="prospCard"></div><div class="card" id="nreqCard"></div></div>
+  <div class="card" style="margin-top:14px">
+    <h3>Backtest cronologic regional <small>(60% ajustare · 20% calibrare · 20% test, fără scurgere de informație)</small></h3>
+    <div class="row"><label class="chk"><input type="checkbox" id="btSyn" checked> include datele sintetice</label><button class="b" id="bBT">Rulează backtest</button></div>
+    <div id="btOut" style="margin-top:10px"></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px"><div class="card" id="freezeCard"></div><div class="card" id="costCard"></div></div>
+</section>
+
+<section id="t-net">
+  <div class="grid g2">
+    <div class="card" id="netInfo"></div>
+    <div class="card">
+      <h3>Date</h3>
+      <div class="row">
+        <button class="b2" id="bSynAdd">Încarcă set sintetic regional</button>
+        <button class="b2" id="bSynDel">Elimină datele sintetice</button>
+        <button class="b2" id="bExp">Exportă JSON (copiere)</button>
+        <button class="b2" id="bCsv">Exportă CSV deplasări (copiere)</button>
+        <button class="b" id="bPackOut">Exportă actualizare pentru participanți</button>
+      </div>
+      <div class="note">Ciclul cu participanții, la cost zero: ei vă trimit datele din aplicația lor („Trimite datele coordonatorului”), dumneavoastră le importați aici, apoi trimiteți înapoi codul de actualizare. Prin el, fiecare participant primește ce s-a învățat din drumurile tuturor.</div><div class="warnbox">Datele sintetice provin dintr-un „adevăr” simulat (14 navetiști fictivi din Ilfov și București, mai–noiembrie 2026, cu incidente neanunțate), intenționat diferit de modelul a priori. Verifică mecanismele, nu performanța reală.</div>
+      <label>Import JSON – date exportate sau <b>graph.json</b> generat din OSM (lipire sau fișier)</label>
+      <textarea id="ioText" rows="5" placeholder="Lipiți un export JSON sau un graph.json"></textarea>
+      <div class="row" style="margin-top:6px"><input type="file" id="ioFile" accept=".json,application/json" style="width:auto"><button class="b2" id="bImp">Importă</button><button class="b2" id="bReset" style="color:var(--bad)">Resetează tot</button></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h3>Parametrii segmentelor <small>(editabili; am/pm = raport cerere/capacitate la vârf în sensul muchiei)</small></h3>
+    <div class="row"><input id="segFind" placeholder="Filtrează după nume sau nod" style="max-width:320px"><span class="sub" id="segCount"></span></div>
+    <div id="segTable" style="overflow-x:auto;margin-top:8px"></div>
+    <div class="row" style="margin-top:8px"><button class="b" id="bSegSave">Salvează parametrii afișați</button></div>
+  </div>
+</section>
+
+<section id="t-met"><div class="card method" id="metBody"></div></section>
+</main>
+<div id="toast"></div>
+<script>
+'use strict';
+const E = {};
+/* ---------- Utilitare numerice ---------- */
+E.rng = function (seed) { // mulberry32 – reproductibil
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+E.normal = function (r) { let u = 0, v = 0; while (u === 0) u = r(); while (v === 0) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+E.hash = function (s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(16).padStart(8, '0'); };
+E.quantile = function (sorted, p) { // cuantilă empirică (interpolare liniară)
+  if (!sorted.length) return NaN;
+  const h = (sorted.length - 1) * p, lo = Math.floor(h), hi = Math.ceil(h);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (h - lo);
+};
+E.median = a => E.quantile([...a].sort((x, y) => x - y), 0.5);
+E.Phi = function (z) { // CDF normală standard
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989423 * Math.exp(-z * z / 2);
+  const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+  return z > 0 ? 1 - p : p;
+};
+E.lnGamma = function (z) {
+  const g = 7, c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+  if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - E.lnGamma(1 - z);
+  z -= 1; let x = c[0]; for (let i = 1; i < g + 2; i++) x += c[i] / (z + i);
+  const t = z + g + 0.5; return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+};
+E.binomUpperTail = function (x, n, p) { // P(X >= x), X ~ Bin(n,p)
+  if (x <= 0) return 1; if (x > n) return 0;
+  if (p <= 0) return 0; if (p >= 1) return 1;
+  const lnC = (k) => E.lnGamma(n + 1) - E.lnGamma(k + 1) - E.lnGamma(n - k + 1);
+  let s = 0; for (let k = x; k <= n; k++) s += Math.exp(lnC(k) + k * Math.log(p) + (n - k) * Math.log(1 - p));
+  return Math.min(1, s);
+};
+/* Limita inferioară Clopper–Pearson unilaterală, nivel 1-alpha */
+E.cpLower = function (x, n, alpha = 0.05) {
+  if (n === 0 || x === 0) return 0;
+  if (x === n) return Math.pow(alpha, 1 / n);
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (E.binomUpperTail(x, n, m) < alpha) lo = m; else hi = m; }
+  return (lo + hi) / 2;
+};
+E.wilson = function (x, n, z = 1.96) {
+  if (!n) return [0, 1];
+  const p = x / n, d = 1 + z * z / n, c = p + z * z / (2 * n), w = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n));
+  return [(c - w) / d, (c + w) / d];
+};
+/* Nr. minim de deplasări pentru a demonstra punctualitate >= p0 (CP, 1-alpha), cu f eșecuri */
+E.nRequired = function (p0 = 0.95, f = 0, alpha = 0.05) {
+  for (let n = f + 1; n <= 5000; n++) if (E.cpLower(n - f, n, alpha) >= p0) return n;
+  return Infinity;
+};
+
+/* ---------- Calendar România ---------- */
+E.dayIndex = d => Math.round(Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)) / 86400000);
+E.dateFromIndex = i => new Date(i * 86400000).toISOString().slice(0, 10);
+E.orthodoxEaster = function (y) { // Meeus (calendar iulian) + 13 zile (valabil 1900–2099)
+  const a = y % 4, b = y % 7, c = y % 19, d = (19 * c + 15) % 30, e = (2 * a + 4 * b - d + 34) % 7;
+  const month = Math.floor((d + e + 114) / 31), day = ((d + e + 114) % 31) + 1;
+  return E.dateFromIndex(E.dayIndex(`${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`) + 13);
+};
+E._hol = {};
+E.holidays = function (y) {
+  if (E._hol[y]) return E._hol[y];
+  const f = ['01-01', '01-02', '01-06', '01-07', '01-24', '05-01', '06-01', '08-15', '11-30', '12-01', '12-25', '12-26'].map(s => `${y}-${s}`);
+  const ei = E.dayIndex(E.orthodoxEaster(y));
+  [-2, 0, 1, 49, 50].forEach(k => f.push(E.dateFromIndex(ei + k))); // Vinerea Mare, Paști, Rusalii
+  return (E._hol[y] = new Set(f));
+};
+E.dayType = function (date) { // L = luni–joi, V = vineri, S = sâmbătă, D = duminică/sărbătoare
+  if (E.holidays(+date.slice(0, 4)).has(date)) return 'D';
+  const w = new Date(date + 'T12:00:00Z').getUTCDay();
+  return w === 0 ? 'D' : w === 6 ? 'S' : w === 5 ? 'V' : 'L';
+};
+E.dayClass = date => (['L', 'V'].includes(E.dayType(date)) ? 'lucr' : 'lib');
+
+/* =====================================================================
+   Motor predictiv mobilitate – București + Ilfov (pilot regional)
+   Motor 0.3.0 – graf orientat, orice origine/destinație, 0 apeluri externe.
+   ===================================================================== */
+E.VERSION = '0.3.0';
+E.CENTER = { lat: 44.4355, lon: 26.1025 }; // Universitate – referința pentru orientarea radială
+
+/* ---------- Clase de drum (valori a priori, de calibrat) ---------- */
+E.CLS = {
+  A: { label: 'autostradă', lanes: 2, capLane: 1900, v0: 100, alpha: 0.5, beta: 4, base: 0.60 },
+  C: { label: 'Centura (DNCB)', lanes: 2, capLane: 1500, v0: 60, alpha: 0.8, beta: 4, base: 0.68 },
+  N: { label: 'drum național / penetrație', lanes: 2, capLane: 1500, v0: 60, alpha: 0.8, beta: 4, base: 0.66 },
+  J: { label: 'drum județean / local', lanes: 1, capLane: 950, v0: 50, alpha: 0.9, beta: 4, base: 0.62 },
+  M: { label: 'bulevard principal (semaforizat)', lanes: 3, capLane: 850, v0: 45, alpha: 1.2, beta: 4, base: 0.72 },
+  B: { label: 'bulevard / stradă colectoare', lanes: 2, capLane: 800, v0: 40, alpha: 1.3, beta: 4, base: 0.70 }
+};
+
+/* ---------- Rețeaua-schelet București–Ilfov (schematică; înlocuibilă cu graph.json din OSM) ---------- */
+E.SKELETON = {
+  nodes: [
+    ['UNI', 'Universitate', 44.4355, 26.1025, 'B'], ['UNR', 'Piața Unirii', 44.4268, 26.1025, 'B'], ['ROM', 'Piața Romană', 44.4466, 26.0975, 'B'],
+    ['VIC', 'Piața Victoriei', 44.4520, 26.0855, 'B'], ['ARC', 'Arcul de Triumf', 44.4672, 26.0780, 'B'], ['CDG', 'Piața Charles de Gaulle', 44.4649, 26.0844, 'B'],
+    ['PPL', 'Piața Presei Libere', 44.4874, 26.0750, 'B'], ['BAN', 'Băneasa', 44.4990, 26.0820, 'B'], ['AVI', 'Aviației / Barbu Văcărescu', 44.4800, 26.1050, 'B'],
+    ['PIP', 'Pipera', 44.5050, 26.1300, 'B'], ['OBO', 'Obor', 44.4500, 26.1260, 'B'], ['COL', 'Colentina (Doamna Ghica)', 44.4600, 26.1430, 'B'],
+    ['IAN', 'Piața Iancului', 44.4405, 26.1330, 'B'], ['DEL', 'Pantelimon (Delfinului)', 44.4490, 26.1540, 'B'], ['MUN', 'Piața Muncii', 44.4317, 26.1395, 'B'],
+    ['DRI', 'Dristor', 44.4210, 26.1440, 'B'], ['TIT', 'Titan', 44.4230, 26.1700, 'B'], ['ALB', 'Piața Alba Iulia', 44.4290, 26.1240, 'B'],
+    ['VIT', 'Vitan', 44.4180, 26.1250, 'B'], ['SUD', 'Piața Sudului', 44.3955, 26.1222, 'B'], ['BER', 'Berceni (Apărătorii Patriei)', 44.3790, 26.1150, 'B'],
+    ['ERV', 'Eroii Revoluției', 44.4100, 26.0980, 'B'], ['PRO', 'Piața Progresului', 44.3860, 26.0890, 'B'], ['RAH', 'Rahova (Sebastian)', 44.4150, 26.0730, 'B'],
+    ['GHE', 'Ghencea', 44.4120, 26.0450, 'B'], ['RAZ', 'Răzoare', 44.4210, 26.0600, 'B'], ['EROI', 'Eroilor', 44.4355, 26.0745, 'B'],
+    ['UPB', 'POLITEHNICA (Grozăvești)', 44.4385, 26.0490, 'B'], ['LUJ', 'Lujerului', 44.4337, 26.0347, 'B'], ['MIL', 'Militari (Gorjului)', 44.4350, 26.0110, 'B'],
+    ['DRT', 'Drumul Taberei', 44.4200, 26.0300, 'B'], ['GNO', 'Gara de Nord', 44.4465, 26.0735, 'B'], ['GRA', 'Podul Grant / Crângași', 44.4510, 26.0480, 'B'],
+    ['CHB', 'Bucureștii Noi (Chibrit)', 44.4690, 26.0510, 'B'], ['BNO', 'Bucureștii Noi (nord)', 44.4880, 26.0380, 'B'],
+    ['OTO', 'Otopeni', 44.5520, 26.0730, 'IF'], ['COR', 'Corbeanca', 44.5960, 26.0390, 'IF'], ['BAL', 'Balotești', 44.6130, 26.0940, 'IF'],
+    ['TUN', 'Tunari', 44.5490, 26.1390, 'IF'], ['VOL', 'Voluntari', 44.4930, 26.1760, 'IF'], ['AFU', 'Afumați', 44.5260, 26.2440, 'IF'],
+    ['PNT', 'Pantelimon (oraș)', 44.4520, 26.2050, 'IF'], ['CER', 'Cernica', 44.4190, 26.2780, 'IF'], ['POP', 'Popești-Leordeni', 44.3790, 26.1710, 'IF'],
+    ['BRI', 'Berceni (Ilfov)', 44.3150, 26.1150, 'IF'], ['JIL', 'Jilava', 44.3330, 26.0780, 'IF'], ['MAG', 'Măgurele', 44.3500, 26.0300, 'IF'],
+    ['BRG', 'Bragadiru', 44.3720, 25.9770, 'IF'], ['DOM', 'Domnești', 44.3970, 25.9150, 'IF'], ['CHJ', 'Chiajna', 44.4600, 25.9750, 'IF'],
+    ['CHT', 'Chitila', 44.5080, 25.9820, 'IF'], ['BUF', 'Buftea', 44.5610, 25.9480, 'IF'], ['MOG', 'Mogoșoaia', 44.5290, 25.9960, 'IF'],
+    ['cPOD', 'Centura – Pod Otopeni (DN1)', 44.5230, 26.0800, 'C'], ['cTUN', 'Centura – Tunari', 44.5320, 26.1330, 'C'], ['cA3', 'Centura – A3 Ștefănești', 44.5270, 26.1720, 'C'],
+    ['cDN2', 'Centura – DN2 Afumați', 44.5070, 26.2120, 'C'], ['cDN3', 'Centura – DN3 Pantelimon', 44.4470, 26.2220, 'C'], ['cA2', 'Centura – A2', 44.4110, 26.2260, 'C'],
+    ['cDN4', 'Centura – DN4 Popești', 44.3560, 26.1680, 'C'], ['cDN5', 'Centura – DN5 Jilava', 44.3430, 26.0920, 'C'], ['cDN6', 'Centura – DN6 Bragadiru', 44.3680, 25.9920, 'C'],
+    ['cA1', 'Centura – A1 Chiajna', 44.4300, 25.9660, 'C'], ['cDN7', 'Centura – DN7', 44.4560, 25.9580, 'C'], ['cD1A', 'Centura – DN1A', 44.5150, 26.0060, 'C']
+  ],
+  /* [a, b, clasă, denumire, {suprascrieri}] – fiecare legătură generează două muchii orientate */
+  links: [
+    ['cPOD', 'cTUN', 'C', 'Centura nord'], ['cTUN', 'cA3', 'C', 'Centura nord'], ['cA3', 'cDN2', 'C', 'Centura nord-est'], ['cDN2', 'cDN3', 'C', 'Centura est'],
+    ['cDN3', 'cA2', 'C', 'Centura est'], ['cA2', 'cDN4', 'C', 'Centura sud-est'], ['cDN4', 'cDN5', 'C', 'Centura sud'], ['cDN5', 'cDN6', 'C', 'Centura sud-vest'],
+    ['cDN6', 'cA1', 'C', 'Centura vest'], ['cA1', 'cDN7', 'C', 'Centura vest'], ['cDN7', 'cD1A', 'C', 'Centura nord-vest'], ['cD1A', 'cPOD', 'C', 'Centura nord'],
+    ['COR', 'OTO', 'J', 'DJ Corbeanca–Otopeni'], ['BAL', 'OTO', 'N', 'DN1 Balotești–Otopeni'],
+    ['OTO', 'cPOD', 'N', 'DN1 Otopeni → Pod Otopeni', { lanes: 3, capLane: 1800, len: 3.0, ab: { am: 0.90, bottleneck: true } }],
+    ['cPOD', 'BAN', 'N', 'DN1 Pod Otopeni → Băneasa', { lanes: 3, capLane: 1800, len: 4.5 }],
+    ['BAN', 'PPL', 'M', 'Șos. București–Ploiești'], ['PPL', 'ARC', 'M', 'Șos. Kiseleff'], ['ARC', 'VIC', 'M', 'Șos. Kiseleff'],
+    ['ARC', 'CDG', 'B', 'Bd. Constantin Prezan'], ['CDG', 'VIC', 'B', 'Bd. Aviatorilor'], ['CDG', 'ROM', 'B', 'Calea Dorobanți'],
+    ['COR', 'MOG', 'J', 'Corbeanca–Mogoșoaia (schematic)'], ['BUF', 'MOG', 'N', 'DN1A Buftea–Mogoșoaia'], ['MOG', 'cD1A', 'N', 'DN1A'],
+    ['cD1A', 'BNO', 'N', 'DN1A → Bucureștii Noi', { ab: { bottleneck: true } }], ['CHT', 'cD1A', 'J', 'Chitila – Centura'], ['CHT', 'BNO', 'J', 'Chitila → Bucureștii Noi'],
+    ['BNO', 'CHB', 'M', 'Bd. Bucureștii Noi'], ['CHB', 'GRA', 'M', 'Bd. Bucureștii Noi → Podul Grant'], ['CHB', 'PPL', 'B', 'Bd. Expoziției / Ion Mihalache'],
+    ['GRA', 'GNO', 'B', 'Calea Griviței'], ['GNO', 'VIC', 'B', 'Gara de Nord → Victoriei'], ['GRA', 'UPB', 'M', 'Podul Grant → Grozăvești'],
+    ['UPB', 'EROI', 'M', 'Splaiul Independenței'], ['EROI', 'UNI', 'M', 'Bd. M. Kogălniceanu'], ['GNO', 'EROI', 'B', 'Bd. Berzei'],
+    ['UPB', 'LUJ', 'M', 'Bd. Iuliu Maniu'], ['LUJ', 'MIL', 'M', 'Bd. Iuliu Maniu'], ['MIL', 'cA1', 'N', 'Bd. Iuliu Maniu → A1', { ba: { bottleneck: true } }],
+    ['CHJ', 'MIL', 'J', 'Chiajna → Militari', { ab: { bottleneck: true } }], ['CHJ', 'cDN7', 'J', 'Chiajna – Centura'], ['cDN7', 'GRA', 'N', 'DN7 → Calea Giulești'],
+    ['DOM', 'cA1', 'J', 'Domnești – Centura'], ['DOM', 'GHE', 'J', 'Prelungirea Ghencea', { ab: { bottleneck: true } }], ['GHE', 'RAZ', 'B', 'Bd. Ghencea'],
+    ['DRT', 'RAZ', 'B', 'Bd. Drumul Taberei'], ['DRT', 'LUJ', 'B', 'Drumul Taberei → Lujerului'], ['RAZ', 'EROI', 'B', 'Șos. Panduri / Bd. Geniului'],
+    ['RAZ', 'RAH', 'B', 'Calea 13 Septembrie'], ['RAH', 'ERV', 'B', 'Calea Rahovei'], ['BRG', 'cDN6', 'N', 'DN6 Bragadiru'],
+    ['cDN6', 'RAH', 'N', 'DN6 Șos. Alexandriei', { ab: { bottleneck: true } }], ['MAG', 'PRO', 'J', 'Șos. Măgurele', { ab: { bottleneck: true } }], ['MAG', 'cDN5', 'J', 'Măgurele – Jilava'],
+    ['JIL', 'cDN5', 'N', 'DN5 Jilava'], ['cDN5', 'PRO', 'N', 'DN5 Șos. Giurgiului', { ab: { bottleneck: true } }], ['PRO', 'ERV', 'M', 'Șos. Giurgiului'],
+    ['ERV', 'UNR', 'M', 'Calea Șerban Vodă'], ['BRI', 'cDN4', 'J', 'Berceni (IF) – Centura'], ['BRI', 'BER', 'J', 'Berceni (IF) → Apărătorii Patriei'],
+    ['BER', 'SUD', 'M', 'Bd. Berceni'], ['SUD', 'UNR', 'M', 'Șos. Olteniței – Bd. D. Cantemir'], ['POP', 'cDN4', 'N', 'DN4 Popești-Leordeni'],
+    ['cDN4', 'SUD', 'N', 'DN4 Șos. Olteniței', { ab: { bottleneck: true } }], ['VIT', 'UNR', 'B', 'Calea Vitan'], ['VIT', 'DRI', 'B', 'Calea Vitan – Dristor'],
+    ['cA2', 'TIT', 'N', 'A2 → Bd. Theodor Pallady', { lanes: 3, ab: { bottleneck: true } }], ['CER', 'cA2', 'J', 'Cernica – Centura'], ['TIT', 'DRI', 'B', 'Bd. 1 Decembrie 1918'],
+    ['TIT', 'MUN', 'M', 'Bd. Basarabia'], ['DRI', 'MUN', 'M', 'Bd. Camil Ressu'], ['MUN', 'ALB', 'M', 'Calea Călărașilor'], ['ALB', 'UNR', 'M', 'Bd. Unirii'],
+    ['PNT', 'cDN3', 'J', 'Pantelimon (oraș) – Centura'], ['cDN3', 'DEL', 'N', 'DN3 Șos. Pantelimon', { ab: { bottleneck: true } }], ['DEL', 'IAN', 'M', 'Șos. Pantelimon'],
+    ['IAN', 'MUN', 'B', 'Bd. Ferdinand'], ['IAN', 'OBO', 'B', 'Șos. Mihai Bravu'], ['IAN', 'UNI', 'M', 'Bd. Pache Protopopescu – Carol I'],
+    ['AFU', 'cDN2', 'N', 'DN2 Afumați'], ['cDN2', 'VOL', 'N', 'DN2 → Voluntari'], ['VOL', 'COL', 'M', 'Șos. Colentina', { ab: { bottleneck: true } }],
+    ['COL', 'OBO', 'M', 'Șos. Colentina'], ['OBO', 'ROM', 'M', 'Bd. Dacia'], ['OBO', 'VIC', 'M', 'Bd. Ștefan cel Mare'],
+    ['cA3', 'PIP', 'N', 'A3 → Pipera'], ['VOL', 'PIP', 'J', 'Voluntari → Pipera', { ab: { bottleneck: true } }], ['PIP', 'AVI', 'M', 'Bd. Dimitrie Pompeiu – Barbu Văcărescu', { ab: { bottleneck: true } }],
+    ['AVI', 'CDG', 'B', 'Calea Floreasca'], ['cTUN', 'PIP', 'J', 'Șos. Pipera–Tunari'], ['TUN', 'cTUN', 'J', 'Tunari – Centura'], ['TUN', 'OTO', 'J', 'Tunari – Otopeni'],
+    ['BAN', 'AVI', 'B', 'Bd. Ion Ionescu de la Brad'], ['ROM', 'UNI', 'M', 'Bd. Magheru – Bălcescu'], ['VIC', 'ROM', 'M', 'Bd. Lascăr Catargiu'], ['UNI', 'UNR', 'M', 'Bd. I.C. Brătianu']
+  ]
+};
+
+E.haversine = (a, b) => { const R = 6371, r = Math.PI / 180, dl = (b.lat - a.lat) * r, dn = (b.lon - a.lon) * r; const h = Math.sin(dl / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dn / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(h)); };
+/* cos între direcția muchiei și direcția spre centru: +1 = spre centru, −1 = dinspre centru */
+E.radialCos = (a, b) => {
+  const kx = Math.cos(E.CENTER.lat * Math.PI / 180);
+  const dx = (b.lon - a.lon) * kx, dy = b.lat - a.lat, cx = (E.CENTER.lon - (a.lon + b.lon) / 2) * kx, cy = E.CENTER.lat - (a.lat + b.lat) / 2;
+  const n1 = Math.hypot(dx, dy), n2 = Math.hypot(cx, cy); if (n1 < 1e-9 || n2 < 1e-6) return 0;
+  return (dx * cx + dy * cy) / (n1 * n2);
+};
+/* atribute a priori ale unei muchii orientate – aceeași funcție e replicată în importatorul OSM */
+E.edgeAttrs = function (cls, a, b, ov) {
+  const c = E.CLS[cls], cos = E.radialCos(a, b), ov2 = ov || {};
+  const cin = Math.max(0, cos), cout = Math.max(0, -cos);
+  const e = {
+    cls, lanes: ov2.lanes || c.lanes, capLane: ov2.capLane || c.capLane, v0: ov2.v0 || c.v0, alpha: c.alpha, beta: c.beta,
+    len: ov2.len || Math.round(E.haversine(a, b) * 1.2 * 100) / 100,
+    am: Math.min(0.95, Math.max(0.35, c.base + 0.25 * cin - 0.12 * cout)),
+    pm: Math.min(0.95, Math.max(0.35, c.base + 0.22 * cout - 0.10 * cin)),
+    bottleneck: false, radial: Math.round(cos * 100) / 100
+  };
+  return Object.assign(e, ov2.dir || {});
+};
+E.buildSkeleton = function () {
+  const nodes = {}, edges = {};
+  for (const [id, name, lat, lon, zone] of E.SKELETON.nodes) nodes[id] = { name, lat, lon, zone };
+  for (const [a, b, cls, name, ov] of E.SKELETON.links) {
+    const o = ov || {};
+    edges[a + '>' + b] = Object.assign({ from: a, to: b, name }, E.edgeAttrs(cls, nodes[a], nodes[b], { lanes: o.lanes, capLane: o.capLane, len: o.len, dir: o.ab }));
+    edges[b + '>' + a] = Object.assign({ from: b, to: a, name }, E.edgeAttrs(cls, nodes[b], nodes[a], { lanes: o.lanes, capLane: o.capLane, len: o.len, dir: o.ba }));
+  }
+  return { meta: { source: 'schelet schematic v0.3 (nu OSM)', nodes: Object.keys(nodes).length, edges: Object.keys(edges).length }, nodes, edges };
+};
+E.adjacency = function (net) { const adj = {}; for (const id in net.nodes) adj[id] = []; for (const [eid, e] of Object.entries(net.edges)) if (adj[e.from]) adj[e.from].push(eid); return adj; };
+E.validateNet = function (net) {
+  const err = [];
+  if (!net || !net.nodes || !net.edges) return ['lipsesc nodes/edges'];
+  for (const [eid, e] of Object.entries(net.edges)) {
+    if (!net.nodes[e.from] || !net.nodes[e.to]) err.push(eid + ': nod inexistent');
+    for (const k of ['len', 'lanes', 'capLane', 'v0', 'alpha', 'beta', 'am', 'pm']) if (!(typeof e[k] === 'number' && isFinite(e[k]) && e[k] > 0)) err.push(eid + ': ' + k + ' invalid');
+    if (err.length > 20) break;
+  }
+  return err;
+};
+
+E.WEATHER = {
+  senin: { label: 'Senin / uscat', cap: 1.00, speed: 1.00, sig: 0.00 },
+  ploaie: { label: 'Ploaie', cap: 0.92, speed: 0.95, sig: 0.03 },
+  torential: { label: 'Ploaie torențială', cap: 0.85, speed: 0.88, sig: 0.06 },
+  ceata: { label: 'Ceață', cap: 0.90, speed: 0.85, sig: 0.05 },
+  ninsoare: { label: 'Ninsoare / polei', cap: 0.78, speed: 0.75, sig: 0.10 }
+};
+E.PARAMS = { rho: 0.55, workZoneFactor: 0.90, kJam: 130, n0: 8, safetyUncal: Math.log(1.10), minCal: 19 };
+E.ctxFor = (date, weather, vacation) => ({ dayType: E.dayType(date), weather: weather || 'senin', vacation: !!vacation });
+E.period = t => { const h = ((t % 1440) + 1440) % 1440 / 60; return h < 6 ? 'noapte' : h < 10 ? 'am' : h < 15 ? 'zi' : h < 20 ? 'pm' : 'seara'; };
+E.lenClass = km => (km < 10 ? 'sub 10 km' : km < 25 ? '10–25 km' : 'peste 25 km');
+
+/* ---------- Modelul fizico-statistic pe graf ---------- */
+class Model {
+  constructor(net, restrictions, params) {
+    this.net = net; this.seg = net.edges; this.restr = restrictions || []; this.p = Object.assign({}, E.PARAMS, params || {});
+    this.adj = E.adjacency(net); this.qcache = new Map(); this.memo = new Map();
+  }
+  demandX(s, t, ctx) {
+    const dt = ctx.dayType; let base = 0.33, ka = 1, kp = 1, kb = 1;
+    if (dt === 'V') kp = 1.06;
+    if (dt === 'S') { ka = 0.15; kp = 0.35; kb = 0.8; }
+    if (dt === 'D') { ka = 0.05; kp = 0.30; kb = 0.6; }
+    if (ctx.vacation) ka *= 0.8;
+    const tt = ((t % 1440) + 1440) % 1440;
+    const day = 1 / (1 + Math.exp(-(tt - 330) / 25)) / (1 + Math.exp((tt - 1290) / 40));
+    const g = (mu, sd) => Math.exp(-0.5 * ((tt - mu) / sd) ** 2);
+    return 0.06 + (base * kb - 0.06) * day + ka * Math.max(0, s.am - base) * g(470, 55) + kp * Math.max(0, s.pm - base) * g(1060, 75);
+  }
+  activeRestr(eid, absMin) {
+    let closed = 0, open = false; const list = [];
+    for (const r of this.restr) {
+      if (r.segId !== eid || r.disabled) continue;
+      const a = E.dayIndex(r.startDate) * 1440 + r.startMin, b = r.endDate ? E.dayIndex(r.endDate) * 1440 + r.endMin : Infinity;
+      if (absMin >= a && absMin < b) { closed = Math.max(closed, r.closedLanes); if (!r.endDate) open = true; list.push(r); }
+    }
+    return { closed, open, list };
+  }
+  flowCap(eid, date, t, ctx) {
+    const s = this.seg[eid], w = E.WEATHER[ctx.weather] || E.WEATHER.senin;
+    const ar = this.activeRestr(eid, E.dayIndex(date) * 1440 + t);
+    const lanesEff = Math.max(0.5, s.lanes - ar.closed);
+    const C = lanesEff * s.capLane * (ar.closed > 0 ? this.p.workZoneFactor : 1) * w.cap;
+    return { q: this.demandX(s, t, ctx) * s.lanes * s.capLane, C, ar };
+  }
+  queue(eid, date, ctx) {
+    const s = this.seg[eid], di = E.dayIndex(date);
+    let sig = '';
+    for (const r of this.restr) if (r.segId === eid && !r.disabled && E.dayIndex(r.startDate) <= di + 1 && (!r.endDate || E.dayIndex(r.endDate) >= di)) sig += r.id + ',';
+    if (!s.bottleneck && !sig) return null;
+    const key = eid + '|' + date + '|' + ctx.weather + '|' + (ctx.vacation ? 1 : 0) + '|' + sig;
+    let res = this.qcache.get(key); if (res) return res;
+    const T0 = 240, T1 = 1500, delay = new Float32Array(T1 - T0 + 1), N = new Float32Array(T1 - T0 + 1);
+    let n = 0;
+    for (let t = T0; t <= T1; t++) { const { q, C } = this.flowCap(eid, date, t, ctx); n = Math.max(0, n + (q - C) / 60); N[t - T0] = n; delay[t - T0] = n / C * 60; }
+    res = { T0, delay, N }; this.qcache.set(key, res); return res;
+  }
+  segState(eid, date, t, ctx) {
+    t = Math.round(t);
+    const key = eid + '|' + date + '|' + t + '|' + ctx.weather + (ctx.vacation ? 1 : 0);
+    const m = this.memo.get(key); if (m) return m;
+    const s = this.seg[eid], w = E.WEATHER[ctx.weather] || E.WEATHER.senin;
+    const { q, C, ar } = this.flowCap(eid, date, t, ctx);
+    const tff = s.len / (s.v0 * w.speed) * 60, xr = Math.min(q / C, 1.2);
+    const bpr = tff * (1 + s.alpha * Math.pow(xr, s.beta));
+    const Q = this.queue(eid, date, ctx);
+    let delay = 0, Nq = 0;
+    if (Q) { const i = Math.min(Math.max(t - Q.T0, 0), Q.delay.length - 1); delay = Q.delay[i]; Nq = Q.N[i]; }
+    const med = bpr + delay;
+    const sigma = 0.07 + 0.18 * Math.min(1, q / C) + (delay > 0 ? 0.30 * delay / med : 0) + (ar.open ? 0.08 : 0) + w.sig;
+    const res = { med, sigma, tff, q, C, delay, Nq, qlenKm: Nq / (s.lanes * this.p.kJam), closed: ar.closed };
+    if (this.memo.size > 400000) this.memo.clear();
+    this.memo.set(key, res); return res;
+  }
+  /* parcurgere deterministă (mediane), cu propagarea orei de intrare */
+  walk(path, date, t0, ctx) {
+    let t = t0; const parts = [];
+    for (const eid of path) { const st = this.segState(eid, date, t, ctx); parts.push({ eid, t, med: st.med }); t += st.med; }
+    return { total: t - t0, parts };
+  }
+  simPath(path, date, t0, ctx, K, seed) {
+    const r = E.rng(seed), rho = this.p.rho, sq = Math.sqrt(1 - rho * rho), out = new Float64Array(K);
+    for (let k = 0; k < K; k++) {
+      const zd = E.normal(r); let t = t0;
+      for (const eid of path) { const st = this.segState(eid, date, t, ctx); t += st.med * Math.exp(st.sigma * (rho * zd + sq * E.normal(r))); }
+      out[k] = t - t0;
+    }
+    return Array.from(out).sort((a, b) => a - b);
+  }
+  predictPath(path, date, t0, ctx, K = 500, tau = 0.95) {
+    const seed = parseInt(E.hash(path.join(',') + '|' + date + '|' + t0 + '|' + ctx.weather + '|' + ctx.vacation), 16);
+    const sm = this.simPath(path, date, t0, ctx, K, seed);
+    return { samples: sm, median: E.quantile(sm, 0.5), q: E.quantile(sm, tau) };
+  }
+  /* Dijkstra dependent de timp (FIFO) pe medianele modelului; cost = timp × penalizare */
+  route(o, d, date, t0, ctx, penalty) {
+    const dist = { [o]: 0 }, prev = {}, done = new Set(), heap = [[0, o]];
+    const push = (x) => { heap.push(x); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, rr = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (rr < heap.length && heap[rr][0] < heap[m][0]) m = rr; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+    const tt = { [o]: 0 };
+    while (heap.length) {
+      const [c, u] = pop(); if (done.has(u)) continue; done.add(u); if (u === d) break;
+      for (const eid of this.adj[u] || []) {
+        const e = this.seg[eid], st = this.segState(eid, date, t0 + tt[u], ctx);
+        const nc = c + st.med * (penalty && penalty[eid] ? penalty[eid] : 1);
+        if (dist[e.to] === undefined || nc < dist[e.to]) { dist[e.to] = nc; tt[e.to] = tt[u] + st.med; prev[e.to] = eid; push([nc, e.to]); }
+      }
+    }
+    if (!prev[d] && o !== d) return null;
+    const path = []; let v = d; while (v !== o) { const eid = prev[v]; path.unshift(eid); v = this.seg[eid].from; }
+    return path;
+  }
+  /* trasee alternative prin metoda penalizării (până la K, suprapunere < 75% în lungime) */
+  alternatives(o, d, date, t0, ctx, K = 3) {
+    const out = [], pen = {};
+    for (let it = 0; it < K + 3 && out.length < K; it++) {
+      const p = this.route(o, d, date, t0, ctx, pen); if (!p) break;
+      const L = p.reduce((s, e) => s + this.seg[e].len, 0);
+      const dup = out.some(q => { const set = new Set(q.path); return p.filter(e => set.has(e)).reduce((s, e) => s + this.seg[e].len, 0) / L > 0.75; });
+      if (!dup) out.push({ path: p, len: L });
+      for (const e of p) pen[e] = (pen[e] || 1) * 1.6;
+    }
+    return out.map((r, i) => Object.assign(r, { id: E.hash(r.path.join(',')).slice(0, 6), name: E.pathName(this.net, r.path), idx: i }));
+  }
+}
+E.Model = Model;
+E.pathName = function (net, path) {
+  const names = []; for (const eid of path) { const n = net.edges[eid].name; if (names[names.length - 1] !== n) names.push(n); }
+  return names.length > 4 ? [names[0], names[1], '…', names[names.length - 2], names[names.length - 1]].join(' → ') : names.join(' → ');
+};
+E.pathLen = (net, path) => path.reduce((s, e) => s + net.edges[e].len, 0);
+
+/* ---------- Învățare pe muchii: backfitting ierarhic (muchie → muchie × clasă zi × perioadă) ---------- */
+E.bkey = (eid, date, t) => eid + '|' + E.dayClass(date) + '|' + E.period(t);
+E.learnEdges = function (rows, segObs, n0, iters = 3) {
+  // rows: {trip, parts:[{eid,t,med}], prior: total median, obs}
+  const L1 = {}, L2 = {}, W = {};
+  const bOf = (eid, date, t) => (L1[eid] ? L1[eid].b : 0) + (L2[E.bkey(eid, date, t)] ? L2[E.bkey(eid, date, t)].b : 0);
+  for (let it = 0; it < iters; it++) {
+    for (const level of [1, 2]) {
+      const acc = {};
+      const add = (k, w, r) => { (acc[k] = acc[k] || { s: 0, w: 0 }); acc[k].s += w * r; acc[k].w += w; };
+      for (const row of rows) {
+        let tot = 0; const adj = row.parts.map(p => { const m = p.med * Math.exp(bOf(p.eid, row.trip.date, p.t)); tot += m; return m; });
+        const r = Math.log(row.obs) - Math.log(tot);
+        row.parts.forEach((p, i) => add(level === 1 ? p.eid : E.bkey(p.eid, row.trip.date, p.t), adj[i] / tot, r));
+      }
+      for (const o of segObs || []) { if (!o._med) continue; const r = Math.log(o.dur) - Math.log(o._med * Math.exp(bOf(o.segId, o.date, o.t))); add(level === 1 ? o.segId : E.bkey(o.segId, o.date, o.t), 1, r); }
+      const T = level === 1 ? L1 : L2;
+      for (const [k, a] of Object.entries(acc)) { (T[k] = T[k] || { b: 0, w: 0 }); T[k].b += a.s / (a.w + n0); T[k].w = a.w; }
+    }
+  }
+  for (const [k, v] of Object.entries(L1)) W[k] = v.w;
+  return { L1, L2, W, n0 };
+};
+E.edgeBias = (lr, eid, date, t) => lr ? (lr.L1[eid] ? lr.L1[eid].b : 0) + (lr.L2[E.bkey(eid, date, t)] ? lr.L2[E.bkey(eid, date, t)].b : 0) : 0;
+/* deplasarea traseului pe scară log prin corecțiile muchiilor (ponderi = mediane) */
+E.pathShift = function (lr, parts, date) {
+  if (!lr) return 0; let a = 0, b = 0;
+  for (const p of parts) { a += p.med; b += p.med * Math.exp(E.edgeBias(lr, p.eid, date, p.t)); }
+  return Math.log(b / a);
+};
+/* sprijinul datelor: fracția din lungimea traseului pe muchii cu ≥ 10 observații efective */
+E.support = function (lr, net, path) {
+  if (!lr) return 0; let L = 0, Ls = 0;
+  for (const e of path) { L += net.edges[e].len; if ((lr.W[e] || 0) >= 10) Ls += net.edges[e].len; }
+  return L ? Ls / L : 0;
+};
+E.priorRows = function (model, trips, K, tau) {
+  return trips.map(tr => {
+    const ctx = E.ctxFor(tr.date, tr.weather, tr.vacation);
+    const w = model.walk(tr.path, tr.date, tr.dep, ctx);
+    const p = model.predictPath(tr.path, tr.date, tr.dep, ctx, K, tau);
+    return { trip: tr, parts: w.parts, med: p.median, q: p.q, obs: tr.dur, km: E.pathLen(model.net, tr.path) };
+  });
+};
+/* calibrare conformă Mondrian pe clase de lungime, cu revenire la setul agregat */
+E.conformal = function (cal, lr, tau, minCal) {
+  const score = r => Math.log(r.obs) - Math.log(r.q) - E.pathShift(lr, r.parts, r.trip.date);
+  const one = (arr) => {
+    const s = arr.map(score).sort((a, b) => a - b), n = s.length, k = Math.ceil((n + 1) * tau);
+    if (n < minCal || k > n) return { calibrated: false, qhat: E.PARAMS.safetyUncal, n };
+    let qhat = s[k - 1]; if (n < 40) qhat = Math.max(qhat, 0);
+    return { calibrated: true, qhat, n };
+  };
+  const pooled = one(cal), byClass = {};
+  for (const c of ['sub 10 km', '10–25 km', 'peste 25 km']) { const r = one(cal.filter(x => E.lenClass(x.km) === c)); byClass[c] = r.calibrated ? r : Object.assign({}, pooled, { fromPooled: true, nClass: r.n }); }
+  return { pooled, byClass, calibrated: pooled.calibrated };
+};
+E.qhatFor = (conf, km) => (conf ? conf.byClass[E.lenClass(km)] : { calibrated: false, qhat: E.PARAMS.safetyUncal, n: 0 });
+E.sortTrips = trips => [...trips].filter(t => t.dur > 0 && t.path && t.path.length).sort((a, b) => (E.dayIndex(a.date) * 1440 + a.dep) - (E.dayIndex(b.date) * 1440 + b.dep));
+E.attachSegMed = function (model, segObs) { for (const o of segObs || []) if (model.seg[o.segId]) o._med = model.segState(o.segId, o.date, o.t, E.ctxFor(o.date, o.weather, false)).med; return (segObs || []).filter(o => o._med); };
+E.train = function (model, trips, segObs, opts) {
+  const o = Object.assign({ tau: 0.95, K: 150, calFrac: 0.25 }, opts || {});
+  const tr = E.sortTrips(trips).filter(t => t.path.every(e => model.seg[e]));
+  const rows = E.priorRows(model, tr, o.K, o.tau), nCal = Math.floor(rows.length * o.calFrac);
+  const fit = rows.slice(0, rows.length - nCal), cal = rows.slice(rows.length - nCal);
+  const so = E.attachSegMed(model, segObs);
+  const lr = E.learnEdges(fit, so, model.p.n0);
+  const conf = E.conformal(cal, lr, o.tau, model.p.minCal);
+  const version = E.hash(JSON.stringify({ n: Object.keys(model.seg).length, s: model.net.meta, restr: model.restr.map(r => r.id), ids: tr.map(t => t.id), tau: o.tau, v: E.VERSION }));
+  return { lr, conf, tau: o.tau, nFit: fit.length, nCal: cal.length, version, trainedOn: tr.length };
+};
+
+/* ---------- Recomandare pentru orice O/D ---------- */
+E.recommend = function (model, learned, q) {
+  const { o, d, date, ta, buffer = 5, window = 180, step = 5, K = 400 } = q;
+  const tau = learned ? learned.tau : 0.95, ctx = E.ctxFor(date, q.weather, q.vacation), deadline = ta - buffer;
+  const lr = learned ? learned.lr : null;
+  // alternativele se caută la o oră de plecare reprezentativă (≈ termen − 1,3 × durata liberă estimată)
+  const probe = model.route(o, d, date, deadline - 60, ctx);
+  if (!probe) return { error: 'Nu există drum între origine și destinație în rețeaua curentă.' };
+  const tProbe = Math.round(deadline - 1.2 * model.walk(probe, date, deadline - 60, ctx).total);
+  const alts = model.alternatives(o, d, date, tProbe, ctx, 3);
+  const per = alts.map(alt => {
+    const conf = E.qhatFor(learned && learned.conf, alt.len), curve = [];
+    for (let t0 = ta - window; t0 <= deadline - 5; t0 += step) {
+      const w = model.walk(alt.path, date, t0, ctx), p = model.predictPath(alt.path, date, t0, ctx, K, tau);
+      const eb = Math.exp(E.pathShift(lr, w.parts, date)), qc = p.q * eb * Math.exp(conf.qhat), avail = deadline - t0;
+      let ok = 0; for (const x of p.samples) if (x * eb <= avail) ok++;
+      curve.push({ t0, med: p.median * eb, qModel: p.q * eb, qc, pModel: ok / p.samples.length, feasible: t0 + qc <= deadline });
+    }
+    const feas = curve.filter(c => c.feasible);
+    return { route: alt, curve, best: feas.length ? feas[feas.length - 1] : null, conf, support: E.support(lr, model.net, alt.path) };
+  });
+  const cands = per.filter(p => p.best).sort((a, b) => (b.best.t0 - a.best.t0) || (a.best.med - b.best.med));
+  const best = cands.length ? Object.assign({ route: cands[0].route, conf: cands[0].conf, support: cands[0].support }, cands[0].best) : null;
+  let fallback = null;
+  if (!best) for (const p of per) for (const c of p.curve) if (!fallback || c.pModel > fallback.pModel || (c.pModel === fallback.pModel && c.t0 < fallback.t0)) fallback = Object.assign({ route: p.route }, c);
+  return { per, best, fallback, ctx, tau };
+};
+
+E.congestionForecast = function (model, date, tNow, ctx, segIds, horizon = 60, step = 10, factor = 2.5) {
+  return segIds.map(sid => {
+    const cells = [];
+    for (let h = 0; h <= horizon; h += step) { const st = model.segState(sid, date, tNow + h, ctx); cells.push({ h, p: 1 - E.Phi((Math.log(factor * st.tff) - Math.log(st.med)) / st.sigma), med: st.med, qlen: st.qlenKm }); }
+    return { sid, cells };
+  });
+};
+E.pSevere = (st, factor = 2.5) => 1 - E.Phi((Math.log(factor * st.tff) - Math.log(st.med)) / st.sigma);
+
+/* ---------- URRD ---------- */
+E.cusum = function (model, obs, ctxOf, k = 0.5, h = 3.0) {
+  let S = 0; return obs.map(o => { const st = model.segState(o.segId, o.date, o.t, ctxOf(o)); const z = (Math.log(o.dur) - Math.log(st.med)) / st.sigma; S = Math.max(0, S + z - k); return Object.assign({}, o, { z, S, expected: st.med, alarm: S > h || z > h }); });
+};
+E.invertRestriction = function (net, baseRestr, obs, ctxOf) {
+  if (!obs.length) return null;
+  const o0 = obs[0], last = obs[obs.length - 1], s = net.edges[o0.segId]; let best = null;
+  for (let closed = 1; closed < Math.max(2, s.lanes); closed++) for (let start = last.t - 240; start <= last.t; start += 10) {
+    if (start < 240) continue;
+    const m = new Model(net, baseRestr.concat([{ id: 'hyp', segId: o0.segId, closedLanes: Math.min(closed, s.lanes - 0.5), startDate: o0.date, startMin: start, endDate: null, endMin: 0 }]));
+    let err = 0; for (const o of obs) { const st = m.segState(o.segId, o.date, o.t, ctxOf(o)); err += (Math.log(o.dur) - Math.log(st.med)) ** 2; }
+    if (!best || err < best.err) best = { closed, start, err, rmsLog: Math.sqrt(err / obs.length) };
+  }
+  return best;
+};
+
+/* ---------- Evaluare ---------- */
+E.metrics = function (rows) {
+  const n = rows.length; if (!n) return null;
+  const ae = rows.map(r => Math.abs(r.obs - r.med)).sort((a, b) => a - b), cov = rows.filter(r => r.obs <= r.q).length, tau = rows[0].tau;
+  const pin = rows.reduce((s, r) => { const u = r.obs - r.q; return s + Math.max(tau * u, (tau - 1) * u); }, 0) / n;
+  return { n, medAE: E.quantile(ae, 0.5), meanAE: ae.reduce((a, b) => a + b, 0) / n, cov, covRate: cov / n, wilson: E.wilson(cov, n), cpLow: E.cpLower(cov, n), pinball: pin };
+};
+E.backtest = function (model, trips, segObs, opts) {
+  const o = Object.assign({ tau: 0.95, K: 150 }, opts || {});
+  const tr = E.sortTrips(trips).filter(t => t.path.every(e => model.seg[e]));
+  if (tr.length < 30) return { error: 'Sunt necesare cel puțin 30 de deplasări pentru backtest (60% ajustare / 20% calibrare / 20% test).' };
+  const rows = E.priorRows(model, tr, o.K, o.tau), n = rows.length, i1 = Math.floor(n * 0.6), i2 = Math.floor(n * 0.8);
+  const fit = rows.slice(0, i1), cal = rows.slice(i1, i2), test = rows.slice(i2);
+  const tEnd = E.dayIndex(fit[fit.length - 1].trip.date) * 1440 + fit[fit.length - 1].trip.dep;
+  const so = E.attachSegMed(model, segObs).filter(x => E.dayIndex(x.date) * 1440 + x.t <= tEnd);
+  const lr = E.learnEdges(fit, so, model.p.n0), conf = E.conformal(cal, lr, o.tau, model.p.minCal);
+  const mk = (r, med, q) => ({ obs: r.obs, med, q, tau: o.tau, r });
+  const grp = {}; fit.concat(cal).forEach(r => { const k = r.trip.orig + '>' + r.trip.dest + '|' + E.period(r.trip.dep); (grp[k] = grp[k] || []).push(r.obs); });
+  const sets = {
+    'Referință (istoric O/D × perioadă)': test.map(r => { const a = grp[r.trip.orig + '>' + r.trip.dest + '|' + E.period(r.trip.dep)]; if (!a || a.length < 5) return mk(r, r.med, r.q); const s = [...a].sort((x, y) => x - y); return mk(r, E.quantile(s, 0.5), E.quantile(s, o.tau)); }),
+    'Model fizic a priori': test.map(r => mk(r, r.med, r.q)),
+    '+ corecții învățate pe muchii': test.map(r => { const eb = Math.exp(E.pathShift(lr, r.parts, r.trip.date)); return mk(r, r.med * eb, r.q * eb); }),
+    '+ calibrare conformă Mondrian (final)': test.map(r => { const eb = Math.exp(E.pathShift(lr, r.parts, r.trip.date)); return mk(r, r.med * eb, r.q * eb * Math.exp(E.qhatFor(conf, r.km).qhat)); })
+  };
+  const models = {}; for (const [k, v] of Object.entries(sets)) models[k] = E.metrics(v);
+  // acoperire pe clase de lungime și pe zona de origine (modelul final)
+  const fin = sets['+ calibrare conformă Mondrian (final)'], strata = {};
+  for (const x of fin) { for (const key of ['Lungime: ' + E.lenClass(x.r.km), 'Origine: ' + (model.net.nodes[x.r.trip.orig] ? (model.net.nodes[x.r.trip.orig].zone === 'B' ? 'București' : 'Ilfov') : '?')]) (strata[key] = strata[key] || []).push(x); }
+  const strat = Object.entries(strata).map(([k, v]) => Object.assign({ k }, E.metrics(v))).sort((a, b) => a.k.localeCompare(b.k));
+  return { nFit: fit.length, nCal: cal.length, nTest: test.length, conf, from: test[0].trip.date, to: test[test.length - 1].trip.date, models, strat, edgesLearned: Object.keys(lr.L1).length };
+};
+
+/* ---------- Date SINTETICE regionale (doar pentru verificarea mecanismelor) ---------- */
+E.synthetic = function (net, opts) {
+  const o = Object.assign({ start: '2026-05-04', end: '2026-11-05', seed: 20261106, participants: 14 }, opts || {});
+  const r = E.rng(o.seed), nrm = () => E.normal(r);
+  const truth = JSON.parse(JSON.stringify(net));
+  for (const e of Object.values(truth.edges)) { e.am = Math.min(0.97, Math.max(0.3, e.am + 0.06 * nrm())); e.pm = Math.min(0.97, Math.max(0.3, e.pm + 0.05 * nrm())); e.alpha *= Math.exp(0.2 * nrm()); }
+  const origins = ['COR', 'BAL', 'OTO', 'VOL', 'PNT', 'POP', 'BRG', 'MAG', 'CHJ', 'DOM', 'BUF', 'CHT', 'TUN', 'BER', 'DRT', 'MIL', 'TIT', 'COL'];
+  const dests = ['UPB', 'UNI', 'VIC', 'PIP', 'AVI', 'UNR', 'GNO', 'BAN'];
+  const ppl = Array.from({ length: o.participants }, (_, i) => ({ o: origins[i % origins.length], d: dests[Math.floor(r() * dests.length)], dep: 380 + Math.floor(r() * 120) }));
+  const keys = Object.keys(net.edges).filter(k => ['N', 'M', 'C', 'A'].includes(net.edges[k].cls));
+  const incidents = [], trips = [], i0 = E.dayIndex(o.start), i1 = E.dayIndex(o.end);
+  const wx = () => { const u = r(); return u < 0.70 ? 'senin' : u < 0.92 ? 'ploaie' : u < 0.97 ? 'torential' : 'ceata'; };
+  for (let di = i0; di <= i1; di++) {
+    const date = E.dateFromIndex(di); if (E.dayClass(date) !== 'lucr') continue;
+    if (r() < 0.25) { const sid = keys[Math.floor(r() * keys.length)], st = 390 + Math.floor(r() * 150); incidents.push({ id: 'inc' + di, segId: sid, closedLanes: 1, startDate: date, startMin: st, endDate: date, endMin: st + 60 + Math.floor(r() * 120) }); }
+  }
+  const prior = new Model(net, []), tm = new Model(truth, incidents);
+  let id = 0;
+  for (let di = i0; di <= i1; di++) {
+    const date = E.dateFromIndex(di); if (E.dayClass(date) !== 'lucr') continue;
+    const weather = wx();
+    for (const p of ppl) {
+      if (r() < 0.12) continue; // absențe
+      const dep = p.dep + Math.round(15 * nrm()), ctx = E.ctxFor(date, weather, false);
+      const alts = prior.alternatives(p.o, p.d, date, dep, ctx, 2); if (!alts.length) continue;
+      const path = alts[r() < 0.75 ? 0 : alts.length - 1].path;
+      const dur = tm.simPath(path, date, dep, ctx, 1, Math.floor(r() * 1e9))[0];
+      trips.push({ id: 'syn' + (++id), date, dep, dur: Math.round(dur * 10) / 10, orig: p.o, dest: p.d, path, weather, vacation: false, source: 'sintetic' });
+    }
+  }
+  return { trips, incidents };
+};
+
+if (typeof module !== 'undefined') module.exports = E;
+
+</script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const fmt = m => { m = Math.round(m); const d = ((m % 1440) + 1440) % 1440; return String(Math.floor(d / 60)).padStart(2, '0') + ':' + String(d % 60).padStart(2, '0'); };
+const parseT = s => { const [h, m] = (s || '00:00').split(':').map(Number); return h * 60 + m; };
+const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; };
+const f1 = x => (Math.round(x * 10) / 10).toFixed(1).replace('.', ',');
+const pct = x => (x * 100).toFixed(1).replace('.', ',') + '%';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const COLORS = ['#1f5fa8', '#c2410c', '#0f766e', '#7c3aed'];
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.opacity = 1; clearTimeout(toast._t); toast._t = setTimeout(() => el.style.opacity = 0, 2400); }
+
+/* ---------- Stare ---------- */
+const KEY = 'mpred_regional_v03';
+const DEFAULT_RESTR = [{ id: 'r-20261106-dn1', segId: 'OTO>cPOD', closedLanes: 1, startDate: '2026-11-06', startMin: 360, endDate: null, endMin: 0, source: 'raportată',
+  note: 'DN1 Otopeni→București, înainte de traversarea Centurii: 3→2 benzi. Observație utilizator 06.11.2026: ~7 km în ~90 min. Ora de început aproximativă; surse publice de verificat.' }];
+function freshState() { return { v: 3, trips: [], segObs: [], restrictions: JSON.parse(JSON.stringify(DEFAULT_RESTR)), netCustom: null, edgeEdits: {}, frozen: null, live: null, extCalls: 0, lastRec: null, od: { o: 'COR', d: 'UPB' } }; }
+let S = freshState();
+try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(freshState(), JSON.parse(raw)); } catch (e) { }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { try { const c = Object.assign({}, S, { netCustom: null }); localStorage.setItem(KEY, JSON.stringify(c)); } catch (e2) { } } renderPills(); }
+
+let NET = null;
+function baseNet() { return S.netCustom || window.__OSM_GRAPH__ || E.buildSkeleton(); }
+function rebuildNet() { NET = JSON.parse(JSON.stringify(baseNet())); if (typeof MAP !== 'undefined') MAP.route = null; for (const [eid, ed] of Object.entries(S.edgeEdits || {})) if (NET.edges[eid]) Object.assign(NET.edges[eid], ed); _mkey = ''; }
+const isOSM = () => !!(NET.meta && NET.meta.source === 'OpenStreetMap');
+let _model = null, _mkey = '';
+function model() { const k = JSON.stringify(S.restrictions) + Object.keys(S.edgeEdits || {}).length + (NET.meta ? NET.meta.edges : 0); if (k !== _mkey) { _model = new E.Model(NET, S.restrictions.filter(r => NET.edges[r.segId])); _mkey = k; _lk = ''; } return _model; }
+let _learned = null, _lk = '';
+function validTrips() { return S.trips.filter(t => t.path && t.path.every(e => NET.edges[e])); }
+function learned(tau) {
+  if (S.frozen && S.frozen.tau === tau && S.frozen.netEdges === Object.keys(NET.edges).length) return S.frozen;
+  const m = model(), vt = validTrips();
+  const k = tau + '|' + vt.length + '|' + (vt.length ? vt[vt.length - 1].id : '') + '|' + S.segObs.length + '|' + _mkey.length;
+  if (k !== _lk) { _learned = vt.length ? E.train(m, vt, S.segObs, { tau }) : null; if (_learned) _learned.netEdges = Object.keys(NET.edges).length; _lk = k; }
+  return _learned;
+}
+const nodeName = id => NET.nodes[id] ? (NET.nodes[id].place || NET.nodes[id].name) : id;
+const edgeLabel = eid => { const e = NET.edges[eid]; return e ? `${e.name} (${nodeName(e.from)} → ${nodeName(e.to)})` : eid; };
+
+/* ---------- Selectoare O/D ---------- */
+function odOptions() {
+  if (NET.places && NET.places.length >= 2) {
+    const groups = {}; NET.places.forEach(p => { const z = NET.nodes[p.node] && NET.nodes[p.node].zone === 'B' ? 'București' : 'Ilfov'; (groups[z] = groups[z] || []).push(p); });
+    return Object.entries(groups).map(([g, a]) => `<optgroup label="${g}">${a.sort((x, y) => x.name.localeCompare(y.name, 'ro')).map(p => `<option value="${p.node}">${esc(p.name)}</option>`).join('')}</optgroup>`).join('');
+  }
+  const g = { B: [], IF: [] };
+  for (const [id, n] of Object.entries(NET.nodes)) if (n.zone !== 'C') g[n.zone === 'B' ? 'B' : 'IF'].push([id, n.name]);
+  return `<optgroup label="București">${g.B.sort((a, b) => a[1].localeCompare(b[1], 'ro')).map(([i, n]) => `<option value="${i}">${esc(n)}</option>`).join('')}</optgroup><optgroup label="Ilfov">${g.IF.sort((a, b) => a[1].localeCompare(b[1], 'ro')).map(([i, n]) => `<option value="${i}">${esc(n)}</option>`).join('')}</optgroup>`;
+}
+function edgeSearch(inp, sel) {
+  const q = $(inp).value.trim().toLowerCase();
+  const ids = Object.keys(NET.edges).filter(eid => !q || edgeLabel(eid).toLowerCase().includes(q)).slice(0, 200);
+  const cur = $(sel).value; $(sel).innerHTML = ids.map(eid => `<option value="${esc(eid)}">${esc(edgeLabel(eid))} · ${NET.edges[eid].lanes} benzi</option>`).join('');
+  if (ids.includes(cur)) $(sel).value = cur;
+}
+function fillSelects() {
+  const wx = Object.entries(E.WEATHER).map(([k, w]) => `<option value="${k}">${w.label}</option>`).join('');
+  $('fWx').innerHTML = wx; $('mWx').innerHTML = wx;
+  const od = odOptions(); ['fO', 'fD', 'mO', 'mD'].forEach(i => $(i).innerHTML = od);
+  const o = NET.nodes[S.od.o] ? S.od.o : $('fO').options[0].value, d = NET.nodes[S.od.d] ? S.od.d : $('fD').options[Math.min(5, $('fD').options.length - 1)].value;
+  $('fO').value = o; $('fD').value = d; $('mO').value = o; $('mD').value = d;
+  [['rFind', 'rSeg'], ['qFind', 'qSeg'], ['oFind', 'oSeg']].forEach(([i, s]) => { $(i).oninput = () => { edgeSearch(i, s); if (s === 'qSeg') renderQueue(); if (s === 'oSeg') renderCusum(); }; edgeSearch(i, s); });
+  const dflt = NET.edges['OTO>cPOD'] ? 'OTO>cPOD' : $('qSeg').value;
+  ['rSeg', 'qSeg', 'oSeg'].forEach(s => { if ([...$(s).options].some(o => o.value === dflt)) $(s).value = dflt; });
+  const t = todayStr(); ['fDate', 'mDate', 'rSD', 'qDate', 'oDate'].forEach(i => $(i).value = t);
+  refreshManualPaths();
+}
+
+/* ---------- Grafic SVG ---------- */
+function chart(o) {
+  const W = o.w || 560, H = o.h || 250, L = 44, R = 12, T = 12, B = 30;
+  const X = x => L + (x - o.x0) / (o.x1 - o.x0) * (W - L - R), Y = y => T + (1 - (y - o.y0) / (o.y1 - o.y0)) * (H - T - B);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px">`;
+  for (let i = 0; i <= 4; i++) { const y = o.y0 + (o.y1 - o.y0) * i / 4; s += `<line x1="${L}" x2="${W - R}" y1="${Y(y)}" y2="${Y(y)}" stroke="#ece8de"/><text x="${L - 5}" y="${Y(y) + 4}" text-anchor="end">${o.yf(y)}</text>`; }
+  for (let x = Math.ceil(o.x0 / o.xstep) * o.xstep; x <= o.x1; x += o.xstep) s += `<line x1="${X(x)}" x2="${X(x)}" y1="${H - B}" y2="${H - B + 4}" stroke="#bbb"/><text x="${X(x)}" y="${H - 10}" text-anchor="middle">${o.xf(x)}</text>`;
+  (o.hl || []).forEach(h => { s += `<line x1="${L}" x2="${W - R}" y1="${Y(h.y)}" y2="${Y(h.y)}" stroke="#1c1e21" stroke-dasharray="4 3"/><text x="${W - R}" y="${Y(h.y) - 4}" text-anchor="end" style="fill:#1c1e21">${h.t}</text>`; });
+  (o.vl || []).forEach(v => { s += `<line x1="${X(v.x)}" x2="${X(v.x)}" y1="${T}" y2="${H - B}" stroke="${v.c || '#1c1e21'}" stroke-dasharray="2 3"/><text x="${X(v.x) + 4}" y="${T + 11}" style="fill:${v.c || '#1c1e21'}">${v.t}</text>`; });
+  o.series.forEach(se => { if (se.pts.length) s += `<path d="M${se.pts.map(p => X(p[0]).toFixed(1) + ',' + Y(p[1]).toFixed(1)).join('L')}" fill="none" stroke="${se.c}" stroke-width="2"/>`; });
+  let lx = L + 6; o.series.forEach(se => { if (!se.n) return; s += `<rect x="${lx}" y="${H - B - 16}" width="10" height="3" fill="${se.c}"/><text x="${lx + 14}" y="${H - B - 12}" style="fill:${se.c}">${se.n}</text>`; lx += 14 + se.n.length * 6.2 + 12; });
+  return s + '</svg>';
+}
+const heatColor = p => p < 0.1 ? '#0f766e' : p < 0.25 ? '#65a30d' : p < 0.5 ? '#d97706' : p < 0.75 ? '#c2410c' : '#991b1b';
+
+function renderPills() {
+  const nReal = S.trips.filter(t => t.source !== 'sintetic').length, nSyn = S.trips.length - nReal, act = S.restrictions.filter(r => !r.disabled && !r.endDate).length;
+  $('hdrPills').innerHTML = `<span class="pill ok">Apeluri externe: ${S.extCalls} · Cost: 0,00 €</span><span class="pill">${NET && isOSM() ? 'Graf OSM' : 'Rețea-schelet'}: ${NET ? Object.keys(NET.nodes).length : 0} noduri · ${NET ? Object.keys(NET.edges).length : 0} muchii</span><span class="pill">Deplasări reale: ${nReal}${nSyn ? ' · sintetice: ' + nSyn : ''}</span><span class="pill ${act ? 'warn' : ''}">Restricții deschise: ${act}</span>${S.frozen ? `<span class="pill warn">Model înghețat ${S.frozen.version}</span>` : ''}${S.live ? '<span class="pill bad">Deplasare în curs</span>' : ''}`;
+}
+
+/* ---------- Hartă (canvas) ---------- */
+let MAP = { route: null, ref: null, ctx: null, date: null, pick: 0 };
+function mapProj(cv) {
+  let la0 = 90, la1 = -90, lo0 = 180, lo1 = -180;
+  const pool = MAP.zoom ? Object.values(NET.nodes).filter(n => n.zone === 'B') : Object.values(NET.nodes);
+  for (const n of (pool.length ? pool : Object.values(NET.nodes))) { la0 = Math.min(la0, n.lat); la1 = Math.max(la1, n.lat); lo0 = Math.min(lo0, n.lon); lo1 = Math.max(lo1, n.lon); }
+  const kx = Math.cos(44.43 * Math.PI / 180), W = cv.width, H = cv.height, pad = 22 * devicePixelRatio;
+  const sc = Math.min((W - 2 * pad) / ((lo1 - lo0) * kx), (H - 2 * pad) / (la1 - la0));
+  const ox = (W - (lo1 - lo0) * kx * sc) / 2, oy = (H - (la1 - la0) * sc) / 2;
+  return { X: lon => ox + (lon - lo0) * kx * sc, Y: lat => H - oy - (lat - la0) * sc };
+}
+function drawMap() {
+  const cv = $('map'); const r = cv.getBoundingClientRect(); if (!r.width) return;
+  cv.width = r.width * devicePixelRatio; cv.height = r.height * devicePixelRatio;
+  const g = cv.getContext('2d'), P = mapProj(cv), m = model(), dpr = devicePixelRatio;
+  const q = currentQuery(), ctx = MAP.ctx || E.ctxFor(q.date, q.weather, q.vacation), ref = MAP.ref == null ? q.ta - 60 : MAP.ref, date = MAP.date || q.date;
+  g.clearRect(0, 0, cv.width, cv.height); g.lineCap = 'round';
+  const osm = isOSM();
+  for (const [eid, e] of Object.entries(NET.edges)) {
+    const a = NET.nodes[e.from], b = NET.nodes[e.to]; if (!a || !b) continue;
+    const st = m.segState(eid, date, ref, ctx), p = E.pSevere(st);
+    const x1 = P.X(a.lon), y1 = P.Y(a.lat), x2 = P.X(b.lon), y2 = P.Y(b.lat), L = Math.hypot(x2 - x1, y2 - y1) || 1, off = (osm ? 0.8 : 2) * dpr;
+    const nx = -(y2 - y1) / L * off, ny = (x2 - x1) / L * off;
+    g.strokeStyle = heatColor(p); g.globalAlpha = 0.85; g.lineWidth = (osm ? 0.6 + e.lanes * 0.35 : 1 + e.lanes * 0.9) * dpr;
+    g.beginPath(); g.moveTo(x1 + nx, y1 + ny); g.lineTo(x2 + nx, y2 + ny); g.stroke();
+  }
+  g.globalAlpha = 1;
+  if (MAP.route && MAP.route.every(eid => NET.edges[eid])) {
+    g.strokeStyle = '#1c1e21'; g.lineWidth = 5 * dpr; g.globalAlpha = 0.55; g.beginPath();
+    MAP.route.forEach((eid, i) => { const e = NET.edges[eid], a = NET.nodes[e.from], b = NET.nodes[e.to]; if (i === 0) g.moveTo(P.X(a.lon), P.Y(a.lat)); g.lineTo(P.X(b.lon), P.Y(b.lat)); }); g.stroke(); g.globalAlpha = 1;
+  }
+  g.font = `${11 * dpr}px "IBM Plex Sans", sans-serif`;
+  const KEYN = ['UPB', 'UNI', 'VIC', 'PIP', 'BAN', 'MIL', 'TIT', 'SUD', 'UNR', 'OBO', 'DRT', 'BER'];
+  const labels = osm ? (NET.places || []).filter(p => (MAP.zoom ? ['suburb', 'quarter'] : ['town', 'city', 'village']).includes(p.kind)).map(p => [p.node, p.name]) : Object.entries(NET.nodes).filter(([i, n]) => n.zone === 'IF' || (n.zone === 'B' && (MAP.zoom || KEYN.includes(i)))).map(([i, n]) => [i, n.name]);
+  if (!osm) for (const [id, n] of Object.entries(NET.nodes)) { g.fillStyle = n.zone === 'C' ? '#d9d4c8' : '#fff'; g.strokeStyle = '#1c1e21'; g.lineWidth = 1.2 * dpr; g.beginPath(); g.arc(P.X(n.lon), P.Y(n.lat), (n.zone === 'C' ? 2.5 : 3.5) * dpr, 0, 7); g.fill(); g.stroke(); }
+  for (const [id, name] of labels) { const n = NET.nodes[id]; if (!n) continue; g.fillStyle = 'rgba(28,30,33,.78)'; g.fillText(name.length > 22 ? name.slice(0, 21) + '…' : name, P.X(n.lon) + 5 * dpr, P.Y(n.lat) - 4 * dpr); }
+  for (const [id, c] of [[S.od.o, '#1f5fa8'], [S.od.d, '#b91c1c']]) { const n = NET.nodes[id]; if (!n) continue; g.fillStyle = c; g.beginPath(); g.arc(P.X(n.lon), P.Y(n.lat), 6 * dpr, 0, 7); g.fill(); }
+  $('mapInfo').textContent = `ora ${fmt(ref)} · ${date} · ${osm ? 'graf OSM' : 'rețea-schelet schematică'}`;
+}
+$('map').addEventListener('click', ev => {
+  const cv = $('map'), r = cv.getBoundingClientRect(), P = mapProj(cv), x = (ev.clientX - r.left) * devicePixelRatio, y = (ev.clientY - r.top) * devicePixelRatio;
+  let best = null, bd = 1e9; const ids = NET.places && NET.places.length >= 2 ? NET.places.map(p => p.node) : Object.keys(NET.nodes).filter(i => NET.nodes[i].zone !== 'C');
+  for (const id of ids) { const n = NET.nodes[id]; const d = Math.hypot(P.X(n.lon) - x, P.Y(n.lat) - y); if (d < bd) { bd = d; best = id; } }
+  if (!best || bd > 30 * devicePixelRatio) return;
+  if (MAP.pick === 0) { $('fO').value = best; MAP.pick = 1; toast('Origine: ' + nodeName(best) + ' – alegeți destinația'); S.od.o = best; drawMap(); }
+  else { $('fD').value = best; MAP.pick = 0; S.od.d = best; runRec(); }
+});
+window.addEventListener('resize', () => drawMap());
+$('bZoom').onclick = () => { MAP.zoom = !MAP.zoom; $('bZoom').textContent = MAP.zoom ? 'Toată regiunea' : 'Zoom București'; drawMap(); };
+
+/* ---------- Recomandare ---------- */
+function currentQuery() { return { o: $('fO').value, d: $('fD').value, date: $('fDate').value || todayStr(), ta: parseT($('fTa').value), buffer: +$('fBuf').value || 0, weather: $('fWx').value, vacation: $('fVac').checked, tau: +$('fTau').value }; }
+function runRec() {
+  const q = currentQuery(); S.od = { o: q.o, d: q.d };
+  if (q.o === q.d) { $('recOut').innerHTML = '<div class="warnbox">Originea și destinația coincid.</div>'; return; }
+  const m = model(), L = learned(q.tau), res = E.recommend(m, L, q);
+  if (res.error) { $('recOut').innerHTML = `<div class="badbox">${res.error}</div>`; return; }
+  S.lastRec = { q, best: res.best ? { path: res.best.route.path, t0: res.best.t0, med: res.best.med, qc: res.best.qc, qhat: res.best.conf.qhat, calibrated: res.best.conf.calibrated } : null, version: L ? L.version : 'a-priori' };
+  save();
+  const tauP = Math.round(q.tau * 100); let h = '';
+  if (res.best) {
+    const b = res.best, act = b.route.path.flatMap(eid => m.activeRestr(eid, E.dayIndex(q.date) * 1440 + b.t0).list);
+    h += `<h3>Recomandare · ${esc(nodeName(q.o))} → ${esc(nodeName(q.d))}</h3><div class="sub">Plecare cel târziu la</div><div class="big">${fmt(b.t0)}</div><div style="font-weight:600;margin:2px 0 6px">Traseul ${b.route.idx + 1} · ${f1(b.route.len)} km · ${esc(b.route.name)}</div>
+    <div class="kpi"><div><b>${f1(b.med)} min</b><span>durată mediană</span></div><div><b>${f1(b.qc)} min</b><span>cuantila ${tauP}% calibrată</span></div><div><b>${fmt(b.t0 + b.med)}</b><span>sosire mediană</span></div><div><b>${Math.round(b.support * 100)}%</b><span>din traseu cu date suficiente</span></div></div>`;
+    if (act.length) h += `<div class="warnbox"><b>Restricții active pe traseu:</b> ${act.map(r => esc(edgeLabel(r.segId) + ' – ' + r.closedLanes + ' bandă(benzi) închise, sursa ' + r.source)).join('; ')}</div>`;
+    const c = b.conf;
+    h += c.calibrated ? `<div class="okbox">Cuantilă calibrată conform pentru clasa „${E.lenClass(b.route.len)}” pe ${c.n} deplasări${c.fromPooled ? ' (setul agregat; clasa are prea puține date)' : ''} · q̂ = ${c.qhat.toFixed(3)} · model <span class="mono">${L.version}</span>${S.frozen ? ' (înghețat)' : ''}.</div>`
+      : `<div class="warnbox"><b>Model necalibrat</b> (${c.n} deplasări de calibrare; minim ${E.PARAMS.minCal}). Se aplică o marjă fixă de +10%. Garanția de ${tauP}% nu este încă demonstrată.</div>`;
+    if (b.support < 0.5) h += `<div class="warnbox">Sub jumătate din lungimea traseului are cel puțin 10 observații: predicția se bazează în principal pe modelul fizic a priori.</div>`;
+  } else {
+    h += `<h3>Recomandare</h3><div class="badbox"><b>Nicio combinație traseu–oră de plecare nu asigură ${tauP}%</b> în fereastra de 3 ore.</div>`;
+    if (res.fallback) h += `<div>Varianta cu riscul cel mai mic: traseul ${res.fallback.route.idx + 1}, plecare <b>${fmt(res.fallback.t0)}</b>, probabilitate ${pct(res.fallback.pModel)}.</div>`;
+  }
+  h += `<div class="row" style="margin-top:8px"><button class="b" id="bGo">Plec acum (arhivează predicția)</button><span class="note">Determinist, reproductibil · 0 apeluri externe</span></div>`;
+  $('recOut').innerHTML = h; $('bGo').onclick = () => startTrip(res, q);
+  const x0 = q.ta - 180, x1 = q.ta - q.buffer;
+  $('recChart').innerHTML = chart({ x0, x1, y0: 0, y1: 1, xf: fmt, yf: y => Math.round(y * 100) + '%', xstep: 30, series: res.per.map((p, i) => ({ n: 'Traseul ' + (i + 1), c: COLORS[i], pts: p.curve.map(c => [c.t0, c.pModel]) })), hl: [{ y: q.tau, t: 'ținta ' + tauP + '%' }], vl: res.best ? [{ x: res.best.t0, t: 'plecare recomandată' }] : [] });
+  $('recTable').innerHTML = `<table><tr><th>Traseu</th><th class="n">km</th><th class="n">Plecare max.</th><th class="n">Mediană</th><th class="n">Q${tauP} cal.</th><th class="n">Date</th></tr>${res.per.map((p, i) => `<tr><td><span style="color:${COLORS[i]};font-weight:600">Traseul ${i + 1}</span> <span class="sub">${esc(p.route.name)}</span></td><td class="n">${f1(p.route.len)}</td>${p.best ? `<td class="n">${fmt(p.best.t0)}</td><td class="n">${f1(p.best.med)}</td><td class="n">${f1(p.best.qc)}</td>` : '<td class="n" colspan="3">nefezabil</td>'}<td class="n">${Math.round(p.support * 100)}%</td></tr>`).join('')}</table><div class="note">„Date” = fracția din lungime pe segmente cu ≥ 10 observații efective. Alternativele sunt găsite prin rutare dependentă de timp cu penalizarea segmentelor deja folosite.</div>`;
+  const route = res.best ? res.best.route.path : res.per[0].route.path, t0 = res.best ? res.best.t0 : q.ta - 90;
+  const ref = (q.date === todayStr() && nowMin() > q.ta - 240 && nowMin() < q.ta) ? Math.round(nowMin()) : t0;
+  const w = m.walk(route, q.date, t0, res.ctx);
+  const ranked = w.parts.map(p => ({ eid: p.eid, p: E.pSevere(m.segState(p.eid, q.date, p.t, res.ctx)) })).sort((a, b) => b.p - a.p).slice(0, 10).map(x => x.eid);
+  const cf = E.congestionForecast(m, q.date, ref, res.ctx, ranked);
+  $('recHeat').innerHTML = cf.length ? `<div class="sub">Ora de referință ${fmt(ref)}</div><table class="heat"><tr><th>Segment</th>${cf[0].cells.map(c => `<th class="n">+${c.h}′</th>`).join('')}</tr>${cf.map(r => `<tr><td>${esc(edgeLabel(r.sid))}</td>${r.cells.map(c => `<td class="c" style="background:${heatColor(c.p)}" title="mediană ${f1(c.med)} min${c.qlen > 0.05 ? ', coadă ~' + f1(c.qlen) + ' km' : ''}">${Math.round(c.p * 100)}%</td>`).join('')}</tr>`).join('')}</table>` : '';
+  MAP = Object.assign(MAP, { route, ref, ctx: res.ctx, date: q.date }); drawMap();
+}
+
+/* ---------- Deplasare live ---------- */
+function startTrip(res, q) {
+  if (S.live) { toast('Există deja o deplasare în curs'); return; }
+  const dep = Math.round(nowMin()), date = todayStr(), L = learned(q.tau), m = model();
+  const alt = res.best ? res.best.route : (res.fallback ? res.fallback.route : res.per[0].route), ctx = E.ctxFor(date, q.weather, q.vacation);
+  const w = m.walk(alt.path, date, dep, ctx), p = m.predictPath(alt.path, date, dep, ctx, 500, q.tau), eb = Math.exp(E.pathShift(L && L.lr, w.parts, date));
+  const conf = E.qhatFor(L && L.conf, alt.len);
+  S.live = { id: 't' + Date.now(), orig: q.o, dest: q.d, path: alt.path, date, dep, weather: q.weather, vacation: q.vacation, cps: [],
+    pred: { madeAt: new Date().toISOString(), median: p.median * eb, q: p.q * eb * Math.exp(conf.qhat), tau: q.tau, deadline: q.ta - q.buffer, ta: q.ta, recT0: res.best ? res.best.t0 : null, version: L ? L.version : 'a-priori', calibrated: conf.calibrated,
+      followed: !!(res.best && q.date === date && dep <= res.best.t0 + 2) } };
+  save(); renderLive(); show('trips'); toast('Predicție arhivată – drum bun!');
+}
+function checkpoints(path) { // puncte de control = schimbări de denumire a drumului
+  const cps = []; for (let i = 0; i < path.length - 1; i++) if (NET.edges[path[i]].name !== NET.edges[path[i + 1]].name) cps.push(i);
+  return cps.slice(0, 12);
+}
+function renderLive() {
+  const el = $('liveCard'), L = S.live;
+  if (!L) { el.innerHTML = `<h3>Deplasare în curs</h3><div class="sub">Nicio deplasare activă. Porniți una din „Recomandare” (butonul „Plec acum”), ca predicția să fie arhivată înainte de plecare.</div>`; return; }
+  const cps = checkpoints(L.path), done = L.cps.length;
+  el.innerHTML = `<h3>Deplasare în curs · ${esc(nodeName(L.orig))} → ${esc(nodeName(L.dest))}</h3>
+    <div class="kpi"><div><b>${fmt(L.dep)}</b><span>plecare</span></div><div><b>${f1(L.pred.median)}′</b><span>mediană arhivată</span></div><div><b>${f1(L.pred.q)}′</b><span>Q${Math.round(L.pred.tau * 100)} arhivată</span></div><div><b>${fmt(L.pred.deadline)}</b><span>termen</span></div></div>
+    <div style="margin-top:10px">${cps.map((ix, i) => `<button class="b2" ${i !== done ? 'disabled style="opacity:.45"' : ''} data-cp="${i}" style="margin:2px">${i < done ? '✓ ' + fmt(L.cps[i].t) + ' ' : ''}Am ajuns la ${esc(nodeName(NET.edges[L.path[ix]].to))}</button>`).join('')}</div>
+    <div class="row" style="margin-top:10px"><button class="b" id="bArr">Am ajuns la ${esc(nodeName(L.dest))}</button><button class="b2" id="bCancel">Anulează</button></div>
+    <div class="note">Punctele de control sunt plasate unde se schimbă drumul. Ele produc timpi pe tronsoane, folosiți la învățarea pe segmente și la detecția CUSUM. În aplicația mobilă, cu acordul participantului, se vor marca automat.</div>`;
+  el.querySelectorAll('[data-cp]').forEach(b => b.onclick = () => { L.cps.push({ ix: cps[+b.dataset.cp], t: Math.round(nowMin()) }); save(); renderLive(); });
+  $('bArr').onclick = finishTrip; $('bCancel').onclick = () => { S.live = null; save(); renderLive(); };
+}
+function finishTrip() {
+  const L = S.live, arr = Math.round(nowMin()); let dur = arr - L.dep; if (dur <= 0) dur += 1440;
+  // tronsoane între puncte de control → observații pe segmente (distribuite proporțional cu medianele modelului)
+  const m = model(), ctx = E.ctxFor(L.date, L.weather, L.vacation), w = m.walk(L.path, L.date, L.dep, ctx);
+  const marks = [{ ix: -1, t: L.dep }, ...L.cps, { ix: L.path.length - 1, t: arr }];
+  for (let k = 1; k < marks.length; k++) {
+    const a = marks[k - 1].ix + 1, b = marks[k].ix, span = marks[k].t - marks[k - 1].t; if (b < a || span <= 0) continue;
+    const parts = w.parts.slice(a, b + 1), tot = parts.reduce((s, p) => s + p.med, 0); let t = marks[k - 1].t;
+    for (const p of parts) { const d = span * p.med / tot; S.segObs.push({ segId: p.eid, date: L.date, t, dur: Math.round(d * 10) / 10, weather: L.weather }); t += d; }
+  }
+  S.trips.push({ id: L.id, date: L.date, dep: L.dep, dur, orig: L.orig, dest: L.dest, path: L.path, weather: L.weather, vacation: L.vacation, source: 'aplicație', pred: L.pred, onTime: L.dep + dur <= L.pred.deadline });
+  S.live = null; save(); renderLive(); renderTrips(); toast('Deplasare salvată: ' + f1(dur) + ' min');
+}
+
+/* ---------- Istoric & manual ---------- */
+let _manAlts = [];
+function refreshManualPaths() {
+  const o = $('mO').value, d = $('mD').value, date = $('mDate').value || todayStr(), dep = parseT($('mDep').value);
+  if (!o || !d || o === d) { $('mPath').innerHTML = ''; return; }
+  _manAlts = model().alternatives(o, d, date, dep, E.ctxFor(date, $('mWx').value, false), 3);
+  $('mPath').innerHTML = _manAlts.map((a, i) => `<option value="${i}">Traseul ${i + 1} · ${f1(a.len)} km · ${esc(a.name)}</option>`).join('');
+}
+['mO', 'mD', 'mDate', 'mDep', 'mWx'].forEach(i => $(i).onchange = refreshManualPaths);
+$('bAddTrip').onclick = () => {
+  const dep = parseT($('mDep').value), arr = parseT($('mArr').value); let dur = arr - dep; if (dur <= 0) dur += 1440;
+  if (dur > 300) { toast('Durată neplauzibilă (> 5 h)'); return; }
+  const alt = _manAlts[+$('mPath').value]; if (!alt) { toast('Alegeți un traseu'); return; }
+  S.trips.push({ id: 'm' + Date.now(), date: $('mDate').value, dep, dur, orig: $('mO').value, dest: $('mD').value, path: alt.path, weather: $('mWx').value, vacation: false, source: 'manual', note: $('mNote').value });
+  save(); renderTrips(); toast('Deplasare adăugată');
+};
+function renderTrips() {
+  const tr = [...S.trips].reverse(), real = S.trips.filter(t => t.source !== 'sintetic').length, inval = S.trips.length - validTrips().length;
+  $('tripCount').textContent = `(${S.trips.length} total, ${real} reale${inval ? `, ${inval} pe segmente absente din rețeaua curentă` : ''})`;
+  const sh = tr.slice(0, 80);
+  $('tripTable').innerHTML = sh.length ? `<table><tr><th>Data</th><th>Origine → destinație</th><th class="n">km</th><th class="n">Plecare</th><th class="n">Durată</th><th class="n">Pred. mediană</th><th class="n">Pred. Q</th><th>La timp</th><th>Sursă</th><th></th></tr>${sh.map(t => `<tr><td class="mono">${t.date}</td><td>${esc(nodeName(t.orig))} → ${esc(nodeName(t.dest))}</td><td class="n">${t.path && t.path.every(e => NET.edges[e]) ? f1(E.pathLen(NET, t.path)) : '–'}</td><td class="n">${fmt(t.dep)}</td><td class="n">${f1(t.dur)}</td><td class="n">${t.pred ? f1(t.pred.median) : '–'}</td><td class="n">${t.pred ? f1(t.pred.q) : '–'}</td><td>${t.pred ? (t.onTime ? '✓' : '<b style="color:var(--bad)">✗</b>') : '–'}</td><td><span class="tag ${t.source === 'sintetic' ? 's' : 'r'}">${t.source}</span> ${t.note ? '<span class="sub">' + esc(t.note) + '</span>' : ''}</td><td><button class="x" data-del="${t.id}">✕</button></td></tr>`).join('')}</table>${tr.length > 80 ? `<div class="note">Afișate ultimele 80 din ${tr.length}.</div>` : ''}` : '<div class="sub">Nicio deplasare înregistrată.</div>';
+  $('tripTable').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { S.trips = S.trips.filter(t => t.id !== b.dataset.del); save(); renderTrips(); });
+}
+
+/* ---------- URRD ---------- */
+function renderRestr() {
+  $('restrList').innerHTML = S.restrictions.length ? `<table><tr><th>Segment</th><th>Benzi</th><th>Interval</th><th>Sursă</th><th></th></tr>${S.restrictions.map(r => { const ok = !!NET.edges[r.segId]; return `<tr style="${r.disabled || !ok ? 'opacity:.45' : ''}"><td><b>${esc(ok ? edgeLabel(r.segId) : r.segId)}</b>${ok ? '' : ' <span class="tag d">absent din rețeaua curentă</span>'}<div class="sub">${esc(r.note || '')}</div></td><td class="n">−${r.closedLanes}${ok ? '/' + NET.edges[r.segId].lanes : ''}</td><td class="mono" style="font-size:11.5px">${r.startDate} ${fmt(r.startMin)}<br>→ ${r.endDate ? r.endDate + ' ' + fmt(r.endMin) : '<b>necunoscut</b>'}</td><td><span class="tag ${r.source === 'detectată' ? 'd' : r.source === 'oficială' ? 'r' : ''}">${r.source}</span></td><td style="white-space:nowrap"><button class="b2" data-end="${r.id}">Încheiată acum</button> <button class="b2" data-tog="${r.id}">${r.disabled ? 'Activează' : 'Dezactivează'}</button> <button class="x" data-rdel="${r.id}">✕</button></td></tr>`; }).join('')}</table>` : '<div class="sub">Nicio restricție.</div>';
+  const on = (sel, key, fn) => $('restrList').querySelectorAll(sel).forEach(b => b.onclick = () => { fn(S.restrictions.find(r => r.id === b.dataset[key])); save(); renderRestr(); });
+  on('[data-end]', 'end', r => { r.endDate = todayStr(); r.endMin = Math.round(nowMin()); });
+  on('[data-tog]', 'tog', r => { r.disabled = !r.disabled; });
+  $('restrList').querySelectorAll('[data-rdel]').forEach(b => b.onclick = () => { S.restrictions = S.restrictions.filter(r => r.id !== b.dataset.rdel); save(); renderRestr(); });
+}
+$('bAddR').onclick = () => {
+  const sid = $('rSeg').value; if (!NET.edges[sid]) { toast('Alegeți un segment'); return; }
+  const ed = $('rED').value, lanes = NET.edges[sid].lanes;
+  S.restrictions.push({ id: 'r' + Date.now(), segId: sid, closedLanes: Math.max(1, Math.min(+$('rLanes').value || 1, Math.max(1, lanes - 1))), startDate: $('rSD').value, startMin: parseT($('rST').value), endDate: ed || null, endMin: ed ? parseT($('rET').value) : 0, source: $('rSrc').value, note: $('rNote').value });
+  save(); renderRestr(); toast('Restricție adăugată');
+};
+function renderQueue() {
+  const sid = $('qSeg').value; if (!NET.edges[sid]) { $('qChart').innerHTML = ''; $('qOut').innerHTML = ''; return; }
+  const date = $('qDate').value || todayStr(), cl = +$('qLanes').value, from = parseT($('qFrom').value), wz = +$('qWz').value;
+  $('qWzV').textContent = wz.toFixed(2);
+  const seg = NET.edges[sid], net2 = { meta: NET.meta, nodes: NET.nodes, edges: { [sid]: Object.assign({}, seg, { bottleneck: true }) } };
+  const ctx = E.ctxFor(date, $('fWx').value, $('fVac').checked), clE = Math.min(cl, Math.max(0, seg.lanes - 0.5));
+  const m0 = new E.Model(net2, []), m1 = new E.Model(net2, cl > 0 ? [{ id: 'q', segId: sid, closedLanes: clE, startDate: date, startMin: from, endDate: null, endMin: 0 }] : [], { workZoneFactor: wz });
+  const p0 = [], p1 = []; let mx = { d: 0, t: 0, km: 0, delay: 0 };
+  for (let t = 300; t <= 720; t += 5) { const a = m0.segState(sid, date, t, ctx), b = m1.segState(sid, date, t, ctx); p0.push([t, a.med]); p1.push([t, b.med]); if (b.med > mx.d) mx = { d: b.med, t, km: b.qlenKm, delay: b.delay }; }
+  $('qChart').innerHTML = chart({ x0: 300, x1: 720, y0: 0, y1: Math.max(20, Math.ceil(mx.d / 20) * 20), xf: fmt, yf: y => Math.round(y) + '′', h: 220, xstep: 60, series: [{ n: 'fără restricție', c: '#0f766e', pts: p0 }, { n: `cu ${cl} bandă(benzi) închise`, c: '#b91c1c', pts: p1 }], vl: cl ? [{ x: from, t: 'început', c: '#b91c1c' }] : [] });
+  $('qOut').innerHTML = `<div class="kpi"><div><b>${f1(mx.d)}′</b><span>timp maxim pe segment (${fmt(mx.t)})</span></div><div><b>${f1(mx.delay)}′</b><span>întârziere din coadă</span></div><div><b>${f1(mx.km)} km</b><span>coadă estimată</span></div><div><b class="mono">${Math.round((seg.lanes - clE) * seg.capLane * wz)}</b><span>capacitate reziduală (veh/h)</span></div></div>`;
+}
+['qSeg', 'qDate', 'qLanes', 'qFrom', 'qWz'].forEach(i => $(i).oninput = renderQueue);
+function renderCase() {
+  const sid = 'OTO>cPOD';
+  if (!NET.edges[sid]) { $('caseCard').innerHTML = `<h3>Caz de referință · 6 noiembrie 2026 · DN1</h3><div class="sub">Cazul este definit pe rețeaua-schelet. Pe graful OSM, restricția se reintroduce pe segmentul DN1 corespunzător (căutare „DN1”).</div>`; return; }
+  const date = '2026-11-06', ctx = E.ctxFor(date, 'senin', false);
+  const rows = [0.95, 0.9, 0.85, 0.8, 0.75].map(wz => { const m = new E.Model(NET, [{ id: 'c', segId: sid, closedLanes: 1, startDate: date, startMin: 360, endDate: null, endMin: 0 }], { workZoneFactor: wz }); let mx = { med: 0 }; for (let t = 360; t <= 720; t += 5) { const s = m.segState(sid, date, t, ctx); if (s.med > mx.med) mx = Object.assign({}, s, { t }); } return Object.assign({ wz }, mx); });
+  $('caseCard').innerHTML = `<h3>Caz de referință · 6 noiembrie 2026 · DN1 3→2 benzi înainte de Centură</h3><div class="sub">Observație: ~7 km parcurși în ~90 min.</div>
+  <table style="margin-top:8px"><tr><th class="n">Factor zonă lucrări</th><th class="n">Capacitate (veh/h)</th><th class="n">Coadă max. (km)</th><th class="n">Timp max. segment</th><th class="n">la ora</th></tr>${rows.map(r => `<tr><td class="n">${r.wz.toFixed(2)}</td><td class="n">${Math.round(2 * NET.edges[sid].capLane * r.wz)}</td><td class="n">${f1(r.qlenKm)}</td><td class="n">${f1(r.med)}′</td><td class="n">${fmt(r.t)}</td></tr>`).join('')}</table>
+  <div class="note">O coadă de ~7 km corespunde unui factor de 0,80–0,85, plauzibil pentru o îngustare suprapusă cu lucrări de asfaltare. Restul până la 90 min vine din propagarea cozii în amonte, nemodelată de coada punctuală (v0.4: CTM pe coridor).</div>`;
+}
+$('bAddObs').onclick = () => { const sid = $('oSeg').value; if (!NET.edges[sid]) return; S.segObs.push({ segId: sid, date: $('oDate').value, t: parseT($('oT').value), dur: +$('oDur').value, weather: $('fWx').value, manual: true }); save(); renderCusum(); };
+function renderCusum() {
+  const m = model(), date = $('oDate').value || todayStr(), sid = $('oSeg').value;
+  const obs = S.segObs.filter(o => o.segId === sid && o.date === date).sort((a, b) => a.t - b.t), cf = o => E.ctxFor(o.date, o.weather || 'senin', false);
+  if (!obs.length) { $('cusumOut').innerHTML = '<div class="sub">Nicio observație pentru segmentul și data alese. Observațiile vin din punctele de control ale deplasărilor sau se introduc manual.</div>'; return; }
+  const tr = E.cusum(m, obs, cf), alarm = tr.some(x => x.alarm);
+  let h = `<table><tr><th class="n">Intrare</th><th class="n">Observat</th><th class="n">Așteptat</th><th class="n">z</th><th class="n">S</th><th>Stare</th></tr>${tr.map(x => `<tr><td class="n">${fmt(x.t)}</td><td class="n">${f1(x.dur)}′</td><td class="n">${f1(x.expected)}′</td><td class="n">${x.z.toFixed(2)}</td><td class="n">${x.S.toFixed(2)}</td><td>${x.alarm ? '<b style="color:var(--bad)">ALARMĂ</b>' : 'normal'}</td></tr>`).join('')}</table>`;
+  if (alarm) {
+    const hyp = E.invertRestriction(NET, S.restrictions.filter(r => r.segId !== sid && NET.edges[r.segId]), obs, cf);
+    if (hyp) h += `<div class="badbox"><b>Anomalie persistentă.</b> Ipoteza cea mai probabilă: <b>${hyp.closed} bandă(benzi) închise</b> de la aprox. <b>${fmt(hyp.start)}</b> (RMS log ${hyp.rmsLog.toFixed(2)}). Poate fi și un accident.<div class="row" style="margin-top:6px"><button class="b2" id="bHyp">Adaugă ca restricție „detectată”</button></div></div>`;
+    $('cusumOut').innerHTML = h;
+    if (hyp) $('bHyp').onclick = () => { S.restrictions.push({ id: 'd' + Date.now(), segId: sid, closedLanes: hyp.closed, startDate: date, startMin: hyp.start, endDate: null, endMin: 0, source: 'detectată', note: 'Ipoteză CUSUM + inversare model coadă; necesită confirmare.' }); save(); renderRestr(); toast('Restricție detectată adăugată'); };
+  } else $('cusumOut').innerHTML = h + '<div class="okbox">Fără anomalie persistentă (k = 0,5; h = 3).</div>';
+}
+
+/* ---------- Validare ---------- */
+function renderVal() {
+  const P = S.trips.filter(t => t.pred && t.source !== 'sintetic'), F = P.filter(t => t.pred.followed);
+  const x = F.filter(t => t.onTime).length, n = F.length, w = E.wilson(x, n), cp = E.cpLower(x, n);
+  const mt = E.metrics(P.map(t => ({ obs: t.dur, med: t.pred.median, q: t.pred.q, tau: t.pred.tau })));
+  const verdict = !n ? '<div class="warnbox">Nu există încă deplasări prospective conforme recomandării.</div>' : cp >= 0.95 ? `<div class="okbox"><b>Punctualitate ≥ 95% demonstrată</b> (limita Clopper–Pearson = ${pct(cp)}).</div>` : `<div class="warnbox">Ținta de 95% <b>nu este încă demonstrată</b>: limita Clopper–Pearson = ${pct(cp)}.</div>`;
+  $('prospCard').innerHTML = `<h3>Validare prospectivă <small>(predicții arhivate înainte de plecare, date reale)</small></h3><div class="kpi"><div><b>${x}/${n}</b><span>sosiri la timp</span></div><div><b>${n ? pct(x / n) : '–'}</b><span>rată observată</span></div><div><b>${n ? pct(w[0]) + '–' + pct(w[1]) : '–'}</b><span>IC Wilson 95%</span></div><div><b>${mt ? f1(mt.medAE) + '′' : '–'}</b><span>eroare abs. mediană</span></div><div><b>${mt ? pct(mt.covRate) : '–'}</b><span>acoperire (${mt ? mt.n : 0})</span></div></div>${verdict}<div class="note">Pentru o garanție la nivel regional, punctualitatea se raportează și pe straturi (lungime, zonă de origine). Un 95% agregat poate ascunde un strat cu 85%.</div>`;
+  const fs = [0, 1, 2, 3, 5, 10];
+  $('nreqCard').innerHTML = `<h3>Câte deplasări sunt necesare pentru a demonstra 95%? <small>(Clopper–Pearson 95%)</small></h3><table><tr><th class="n">Întârzieri</th>${fs.map(f => `<th class="n">${f}</th>`).join('')}</tr><tr><td class="n">Deplasări</td>${fs.map(f => `<td class="n"><b>${E.nRequired(0.95, f)}</b></td>`).join('')}</tr></table><div class="note">La scară regională, pragul se aplică pe fiecare strat raportat: cu 3 clase de lungime × 2 zone, pilotul are nevoie de ordinul a 6 × 150–200 = 900–1 200 de deplasări prospective în luna de test, adică în jur de 50 de participanți activi.</div>`;
+  renderFreeze(); renderCost();
+}
+$('bBT').onclick = () => {
+  const trips = ($('btSyn').checked ? S.trips : S.trips.filter(t => t.source !== 'sintetic'));
+  $('btOut').innerHTML = '<div class="sub">Calculez…</div>';
+  setTimeout(() => {
+    const r = E.backtest(model(), trips, S.segObs, { tau: 0.95 });
+    if (r.error) { $('btOut').innerHTML = `<div class="warnbox">${r.error}</div>`; return; }
+    const syn = trips.some(t => t.source === 'sintetic');
+    $('btOut').innerHTML = `${syn ? '<div class="warnbox">Rezultatele includ date sintetice: verifică mecanismele, nu performanța reală.</div>' : ''}<div class="sub">Ajustare ${r.nFit} · calibrare ${r.nCal} · test ${r.nTest} (${r.from} → ${r.to}) · segmente cu corecții învățate: ${r.edgesLearned}</div>
+    <table style="margin-top:6px"><tr><th>Model</th><th class="n">Eroare abs. mediană</th><th class="n">Eroare abs. medie</th><th class="n">Acoperire Q95</th><th class="n">IC Wilson</th><th class="n">Limită CP</th><th class="n">Pinball</th></tr>${Object.entries(r.models).map(([k, v]) => `<tr><td>${k}</td><td class="n">${f1(v.medAE)}′</td><td class="n">${f1(v.meanAE)}′</td><td class="n">${pct(v.covRate)}</td><td class="n">${pct(v.wilson[0])}–${pct(v.wilson[1])}</td><td class="n">${pct(v.cpLow)}</td><td class="n">${v.pinball.toFixed(2)}</td></tr>`).join('')}</table>
+    <h3 style="margin-top:14px">Model final pe straturi</h3><table><tr><th>Strat</th><th class="n">Deplasări test</th><th class="n">Eroare abs. mediană</th><th class="n">Acoperire</th><th class="n">Limită CP</th><th>Verdict</th></tr>${r.strat.map(s => `<tr><td>${s.k}</td><td class="n">${s.n}</td><td class="n">${f1(s.medAE)}′</td><td class="n">${pct(s.covRate)}</td><td class="n">${pct(s.cpLow)}</td><td>${s.n < 59 ? '<span class="tag">date insuficiente</span>' : s.cpLow >= 0.95 ? '<span class="tag r">demonstrat</span>' : '<span class="tag d">nedemonstrat</span>'}</td></tr>`).join('')}</table>`;
+  }, 30);
+};
+function renderFreeze() {
+  const L = learned(0.95);
+  $('freezeCard').innerHTML = `<h3>Înghețarea versiunii de model <small>(luna 6)</small></h3>${S.frozen ? `<div class="okbox">Model înghețat <span class="mono">${S.frozen.version}</span>: ${S.frozen.trainedOn} deplasări, calibrare ${S.frozen.conf.pooled.n}.</div><button class="b2" id="bUnf">Dezgheață</button>` : `<div class="sub">Versiunea curentă: <span class="mono">${L ? L.version : 'a-priori'}</span>${L ? `, ${L.trainedOn} deplasări` : ''}.</div><div class="row" style="margin-top:8px"><button class="b" id="bFrz" ${L ? '' : 'disabled'}>Îngheață versiunea curentă</button></div>`}<div class="note">Fiecare predicție arhivată poartă amprenta versiunii (rețea, restricții, set de antrenare, τ).</div>`;
+  if ($('bFrz')) $('bFrz').onclick = () => { S.frozen = JSON.parse(JSON.stringify(learned(0.95))); save(); renderFreeze(); toast('Model înghețat'); };
+  if ($('bUnf')) $('bUnf').onclick = () => { S.frozen = null; save(); renderFreeze(); };
+}
+function renderCost() { $('costCard').innerHTML = `<h3>Politica de cost zero</h3><div class="kpi"><div><b>${S.extCalls}</b><span>apeluri API externe</span></div><div><b>0,00 €</b><span>interogări</span></div><div><b>0,00 €</b><span>găzduire statică</span></div><div><b>0,00 €</b><span>graf OSM (GitHub Actions)</span></div></div><div class="note">Pagina nu conține cod de rețea către servicii externe. Singura încărcare opțională este graph.json de pe aceeași origine (GitHub Pages), generat lunar din OpenStreetMap.</div>`; }
+
+/* ---------- Rețea & date ---------- */
+function renderNetInfo() {
+  const meta = NET.meta || {}, cls = {}; for (const e of Object.values(NET.edges)) cls[e.cls] = (cls[e.cls] || 0) + e.len;
+  $('netInfo').innerHTML = `<h3>Rețeaua curentă</h3><div class="kpi"><div><b>${Object.keys(NET.nodes).length}</b><span>noduri</span></div><div><b>${Object.keys(NET.edges).length}</b><span>muchii orientate</span></div><div><b>${(NET.places || []).length || '–'}</b><span>localități / cartiere</span></div><div><b>${Math.round(Object.values(cls).reduce((a, b) => a + b, 0))} km</b><span>lungime (pe sensuri)</span></div></div>
+  <table style="margin-top:8px"><tr><th>Clasă</th><th class="n">km</th><th class="n">Benzi</th><th class="n">Cap./bandă</th><th class="n">v₀</th></tr>${Object.entries(E.CLS).filter(([k]) => cls[k]).map(([k, c]) => `<tr><td>${c.label}</td><td class="n">${Math.round(cls[k])}</td><td class="n">${c.lanes}</td><td class="n">${c.capLane}</td><td class="n">${c.v0}</td></tr>`).join('')}</table>
+  <div class="${isOSM() ? 'okbox' : 'warnbox'}">Sursa: <b>${esc(meta.source || '?')}</b>${meta.built ? ' · construit ' + esc(meta.built) : ''}${meta.licence ? ' · ' + esc(meta.licence) : ''}.${isOSM() ? '' : ' Geometria este schematică (65 de noduri). Pentru rețeaua reală se rulează importatorul OSM inclus și se încarcă graph.json aici sau lângă pagină, pe GitHub Pages.'}</div>
+  <div class="row">${S.netCustom ? '<button class="b2" id="bNetReset">Revino la rețeaua-schelet</button>' : ''}</div>`;
+  if ($('bNetReset')) $('bNetReset').onclick = () => { S.netCustom = null; S.edgeEdits = {}; save(); rebuildNet(); renderAll(); toast('Rețeaua-schelet restaurată'); };
+}
+const SEGF = [['len', 'L (km)', 0.01], ['lanes', 'Benzi', 1], ['capLane', 'Cap./bandă', 50], ['v0', 'v₀', 1], ['alpha', 'α', 0.05], ['am', 'x AM', 0.01], ['pm', 'x PM', 0.01]];
+function renderSegTable() {
+  const q = ($('segFind').value || '').toLowerCase(), ids = Object.keys(NET.edges).filter(e => !q || edgeLabel(e).toLowerCase().includes(q));
+  $('segCount').textContent = `${ids.length} segmente${ids.length > 100 ? ' (afișate primele 100)' : ''}`;
+  $('segTable').innerHTML = `<table><tr><th>Segment</th><th>Clasă</th>${SEGF.map(f => `<th class="n">${f[1]}</th>`).join('')}<th>Blocaj</th></tr>${ids.slice(0, 100).map(id => { const s = NET.edges[id]; return `<tr><td>${esc(edgeLabel(id))}</td><td>${s.cls}</td>${SEGF.map(f => `<td><input type="number" step="${f[2]}" data-s="${esc(id)}" data-f="${f[0]}" value="${s[f[0]]}" style="width:72px"></td>`).join('')}<td><input type="checkbox" data-s="${esc(id)}" data-f="bottleneck" ${s.bottleneck ? 'checked' : ''} style="width:auto"></td></tr>`; }).join('')}</table>`;
+}
+$('segFind').oninput = renderSegTable;
+$('bSegSave').onclick = () => { $('segTable').querySelectorAll('[data-s]').forEach(i => { const id = i.dataset.s, f = i.dataset.f, v = i.type === 'checkbox' ? i.checked : +i.value; if (NET.edges[id][f] !== v) { (S.edgeEdits[id] = S.edgeEdits[id] || {})[f] = v; } }); save(); rebuildNet(); toast('Parametri salvați'); runRec(); };
+$('bSynAdd').onclick = () => { toast('Generez date sintetice regionale…'); setTimeout(() => { S.trips = S.trips.filter(t => t.source !== 'sintetic').concat(E.synthetic(NET).trips); save(); renderTrips(); runRec(); toast('Set sintetic: ' + S.trips.filter(t => t.source === 'sintetic').length + ' deplasări'); }, 30); };
+$('bSynDel').onclick = () => { S.trips = S.trips.filter(t => t.source !== 'sintetic'); save(); renderTrips(); runRec(); };
+async function copyText(t, msg) { $('ioText').value = t; try { await navigator.clipboard.writeText(t); toast(msg + ' – copiat în clipboard'); } catch (e) { toast(msg + ' – textul este în caseta de import'); } }
+$('bExp').onclick = () => copyText(JSON.stringify({ format: 'mpred-pilot', version: E.VERSION, exportedAt: new Date().toISOString(), network: NET.meta, trips: S.trips.filter(t => t.source !== 'sintetic'), segObs: S.segObs, restrictions: S.restrictions, edgeEdits: S.edgeEdits, frozen: S.frozen }, null, 1), 'Export JSON');
+$('bPackOut').onclick = () => { const L = S.frozen || learned(0.95); if (!L) { toast('Nu există încă date pentru o actualizare'); return; } const today = todayStr(); copyText(JSON.stringify({ format: 'mpred-model', version: L.version, exportedAt: new Date().toISOString(), tau: L.tau, lr: L.lr, conf: L.conf, trainedOn: L.trainedOn, restrictions: S.restrictions.filter(r => !r.disabled && (!r.endDate || r.endDate >= today)), edgeEdits: S.edgeEdits, graph: S.netCustom || null }), 'Cod de actualizare pentru participanți'); };
+$('bCsv').onclick = () => copyText('id,data,plecare,durata_min,origine,destinatie,km,vreme,sursa,pred_mediana,pred_q,tau,la_timp,versiune_model\n' + S.trips.map(t => [t.id, t.date, fmt(t.dep), t.dur, '"' + nodeName(t.orig) + '"', '"' + nodeName(t.dest) + '"', t.path && t.path.every(e => NET.edges[e]) ? E.pathLen(NET, t.path).toFixed(2) : '', t.weather, t.source, t.pred ? t.pred.median.toFixed(1) : '', t.pred ? t.pred.q.toFixed(1) : '', t.pred ? t.pred.tau : '', t.pred ? (t.onTime ? 1 : 0) : '', t.pred ? t.pred.version : ''].join(',')).join('\n'), 'Export CSV');
+$('ioFile').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { $('ioText').value = r.result; toast('Fișier citit – apăsați „Importă”'); }; r.readAsText(f); };
+$('bImp').onclick = () => {
+  try {
+    const d = JSON.parse($('ioText').value);
+    if (d.nodes && d.edges) { const err = E.validateNet(d); if (err.length) throw new Error(err.slice(0, 3).join('; ')); S.netCustom = d; S.edgeEdits = {}; save(); rebuildNet(); renderAll(); toast(`Graf încărcat: ${Object.keys(d.nodes).length} noduri, ${Object.keys(d.edges).length} muchii`); return; }
+    if (d.format !== 'mpred-pilot') throw new Error('format necunoscut');
+    const ids = new Set(S.trips.map(t => t.id)); S.trips = S.trips.concat((d.trips || []).filter(t => !ids.has(t.id))); S.segObs = S.segObs.concat(d.segObs || []);
+    if (d.restrictions) { const rid = new Set(S.restrictions.map(r => r.id)); S.restrictions = S.restrictions.concat(d.restrictions.filter(r => !rid.has(r.id))); }
+    if (d.edgeEdits) Object.assign(S.edgeEdits, d.edgeEdits); save(); rebuildNet(); renderAll(); toast('Import reușit');
+  } catch (e) { toast('Import eșuat: ' + e.message); }
+};
+let _arm = 0; $('bReset').onclick = () => { if (Date.now() - _arm > 3000) { _arm = Date.now(); toast('Apăsați din nou în 3 s pentru a confirma'); return; } S = freshState(); save(); rebuildNet(); renderAll(); toast('Date resetate'); };
+
+/* ---------- Metodologie ---------- */
+$('metBody').innerHTML = `<h3>Metodologie v0.3 – pilot regional (detalii în specificația tehnică)</h3>
+<h4>1. Rețea</h4><p>Graf orientat G = (V, E). În prototip: rețea-schelet de ${E.SKELETON.nodes.length} noduri (35 în București, 18 localități din Ilfov, 12 noduri pe Centură) și ${E.SKELETON.links.length * 2} muchii. În producție: graful OpenStreetMap (autostrăzi → drumuri terțiare) pentru caseta 44,25–44,72 N, 25,80–26,40 E, generat lunar de importatorul inclus.</p>
+<p>Atributele a priori derivă din clasa drumului și din orientarea radială (cos θ față de direcția spre centru): x<sub>AM</sub> = baza + 0,25·max(0, cos θ) − 0,12·max(0, −cos θ), simetric seara.</p>
+<h4>2. Model fizic, coadă, incertitudine</h4><div class="eq">t_e = t_liber·[1 + α·(q/C′)^β] + N/C′        N(t+Δt) = max(0, N + (q − C′)Δt)
+ln T_e = ln m_e(t_e) + σ_e·(ρ·Z_zi + √(1−ρ²)·ε_e)</div>
+<h4>3. Rutare</h4><p>Dijkstra dependent de timp (FIFO) pe medianele modelului, la ora de plecare reprezentativă; până la 3 alternative prin penalizarea ×1,6 a segmentelor deja folosite, cu suprapunere în lungime sub 75%.</p>
+<h4>4. Învățare pe segmente</h4><p>Nicio pereche O/D nu are suficiente date proprii la scară regională, de aceea corecțiile se învață pe segmente și se transferă tuturor traseelor care le folosesc. Reziduul logaritmic al fiecărei deplasări se distribuie segmentelor proporțional cu ponderea lor în durată (backfitting, 3 iterații), pe două niveluri: segment și segment × zi lucrătoare/liberă × perioadă (noapte, AM, zi, PM, seară), cu contracție n₀ = ${E.PARAMS.n0}. Timpii de punct de control intră direct, cu pondere 1.</p>
+<div class="eq">ln T̂_traseu = ln Σ_e m_e·exp(b_e + b_e,clasă)</div>
+<h4>5. Calibrare conformă Mondrian</h4><p>Marja q̂ se estimează separat pe clase de lungime (sub 10 km, 10–25 km, peste 25 km); o clasă cu mai puțin de ${E.PARAMS.minCal} deplasări folosește setul agregat, iar sub acest prag general se aplică +10% și mesajul „necalibrat”. Pentru fiecare recomandare se afișează fracția din traseu cu date suficiente.</p>
+<h4>6. URRD și validare</h4><p>Identice cu v0.2, aplicate pe orice segment al grafului. Validarea raportează suplimentar acoperirea pe straturi (lungime, zonă de origine), deoarece garanția conformă este marginală, nu pe fiecare zonă.</p>`;
+
+/* ---------- Navigare & inițializare ---------- */
+function show(t) { document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === 't-' + t)); if (t === 'val') renderVal(); if (t === 'urrd') { renderQueue(); renderCusum(); } if (t === 'net') { renderNetInfo(); renderSegTable(); } if (t === 'rec') drawMap(); }
+$('nav').onclick = e => { if (e.target.dataset.t) show(e.target.dataset.t); };
+$('bRec').onclick = runRec;
+$('bSwap').onclick = () => { const o = $('fO').value; $('fO').value = $('fD').value; $('fD').value = o; runRec(); };
+['fO', 'fD', 'fDate', 'fWx', 'fVac', 'fTau', 'fTa', 'fBuf'].forEach(i => $(i).onchange = runRec);
+function renderAll() { fillSelects(); renderPills(); renderTrips(); renderLive(); renderRestr(); renderCase(); renderQueue(); renderCusum(); renderNetInfo(); renderSegTable(); runRec(); }
+async function boot() {
+  try { const r = await fetch('graph.json', { cache: 'no-store' }); if (r.ok) { const g = await r.json(); if (g.nodes && g.edges && !E.validateNet(g).length) window.__OSM_GRAPH__ = g; } } catch (e) { }
+  rebuildNet(); renderAll();
+}
+boot();
+</script>
+</body>
+</html>

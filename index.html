@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pleacă la timp – avertizare de ambuteiaj</title>
+<meta name="theme-color" content="#1b1f24">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pleacă la timp">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f2efe9;--card:#fff;--ink:#1b1f24;--mute:#6b7177;--line:#e5e0d6;--g:#15803d;--gbg:#e8f6ec;--y:#b45309;--ybg:#fff4e0;--r:#b91c1c;--rbg:#fdeceb;--blue:#1d4ed8;--soft:#f7f5f1}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.42 "Nunito Sans",system-ui,sans-serif}
+.app{max-width:520px;margin:0 auto;padding:16px 16px calc(84px + env(safe-area-inset-bottom))}
+header{display:flex;justify-content:space-between;align-items:center;margin:4px 2px 14px}
+header h1{font-size:22px;font-weight:900;margin:0;letter-spacing:-.01em}
+header .now{font-weight:800;color:var(--mute)}
+.screen{display:none}.screen.on{display:block}
+.card{background:var(--card);border-radius:22px;padding:18px;margin-bottom:14px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
+.kicker{font-size:13.5px;font-weight:800;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.level{display:inline-flex;align-items:center;gap:8px;border-radius:22px;padding:7px 13px;font-weight:900;font-size:15px;margin:10px 0 6px}
+.level.g{background:var(--gbg);color:var(--g)}.level.y{background:var(--ybg);color:var(--y)}.level.r{background:var(--rbg);color:var(--r)}
+.msg{font-size:20px;font-weight:800;line-height:1.3;margin:6px 0 4px}
+.why{font-size:15px;color:var(--mute);margin-top:4px}
+.big{font-size:46px;font-weight:900;letter-spacing:-.03em;line-height:1}
+.opts{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.opt{border-radius:18px;padding:14px;border:2px solid var(--line);background:#fff;display:flex;gap:12px;align-items:center}
+.opt.best{border-color:var(--g);background:var(--gbg)}
+.opt .t{font-size:30px;font-weight:900;min-width:92px;letter-spacing:-.02em}
+.opt b{display:block;font-size:16px}.opt span{font-size:14px;color:var(--mute)}
+.band{margin-top:16px}
+.band .bar{display:flex;gap:2px;height:30px}
+.band .bar div{flex:1;border-radius:5px;cursor:pointer;position:relative}
+.band .bar div.sel{outline:3px solid var(--ink);outline-offset:1px}
+.band .ticks{display:flex;justify-content:space-between;font-size:12px;color:var(--mute);font-weight:700;margin-top:4px}
+.band .info{font-size:14.5px;margin-top:8px;min-height:22px;font-weight:700}
+.legend{display:flex;gap:12px;font-size:12.5px;color:var(--mute);margin-top:6px;flex-wrap:wrap}.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px}
+details{margin-top:12px}summary{font-weight:800;color:var(--blue);cursor:pointer;list-style:none;padding:6px 0}summary::-webkit-details-marker{display:none}
+.alertline{display:flex;gap:10px;align-items:center;background:var(--soft);border-radius:14px;padding:10px 12px;margin-top:12px;font-size:14.5px}
+.week .row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--soft)}
+.week .row:last-child{border:none}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px;vertical-align:-1px}
+.btn{display:block;width:100%;border:none;border-radius:18px;padding:17px;font:900 18px "Nunito Sans";cursor:pointer;margin-top:12px}
+.btn.go{background:var(--g);color:#fff}.btn.dark{background:var(--ink);color:#fff}.btn.ghost{background:var(--soft);color:var(--ink)}.btn.red{background:var(--rbg);color:var(--r)}
+.field{background:var(--soft);border-radius:14px;padding:10px 12px;margin-bottom:10px}
+.field small{display:block;font-size:12.5px;color:var(--mute);font-weight:700}
+.field select,.field input{width:100%;border:none;background:transparent;font:700 16px "Nunito Sans";color:var(--ink);outline:none}
+.days{display:flex;gap:6px;margin:4px 0 10px}.days button{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:8px 0;font:800 13px "Nunito Sans";cursor:pointer;color:var(--ink)}.days button.on{border-color:var(--ink);background:var(--ink);color:#fff}
+.seg{display:flex;background:var(--soft);border-radius:14px;padding:4px;gap:4px;margin:6px 0 12px}.seg button{flex:1;border:none;background:none;border-radius:11px;padding:9px 0;font:800 14px "Nunito Sans";cursor:pointer;color:var(--mute)}.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.rep{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+.repb{background:#fff;border:2px solid var(--line);border-radius:16px;padding:12px 4px;font:800 13px "Nunito Sans";cursor:pointer;color:var(--ink)}.repb .e{font-size:24px;display:block;margin-bottom:3px}
+.muted{color:var(--mute);font-size:14px}
+.item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--soft)}.item small{display:block;color:var(--mute)}
+.tag{font-weight:900;font-size:13px;border-radius:10px;padding:4px 9px}.tag.ok{background:var(--gbg);color:var(--g)}.tag.no{background:var(--rbg);color:var(--r)}.tag.na{background:var(--soft);color:var(--mute)}
+textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:10px;font:13px ui-monospace,monospace}
+.tabs{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:9}
+.tabs div{display:flex;max-width:520px;width:100%}
+.tabs button{flex:1;border:none;background:none;padding:10px 0 12px;font:800 12.5px "Nunito Sans";color:var(--mute);cursor:pointer}.tabs button .e{display:block;font-size:22px}.tabs button.on{color:var(--ink)}
+.overlay{position:fixed;inset:0;background:rgba(27,31,36,.55);display:none;align-items:flex-end;justify-content:center;z-index:20}.overlay.on{display:flex}
+.modal{background:#fff;border-radius:24px 24px 0 0;max-width:520px;width:100%;padding:22px 20px calc(22px + env(safe-area-inset-bottom));max-height:94vh;overflow:auto}
+.chk{display:flex;gap:10px;align-items:flex-start;margin:12px 0;font-size:15px}.chk input{width:22px;height:22px;flex:none}
+.banner{position:sticky;top:8px;z-index:8;background:var(--ink);color:#fff;border-radius:18px;padding:14px 16px;margin-bottom:14px;display:none;font-weight:800}.banner.on{display:block}
+.install{background:#fff;border:2px dashed var(--line);border-radius:18px;padding:14px;margin-bottom:14px;font-size:14.5px;display:none}.install.on{display:block}.install b{display:block;font-size:16px;margin-bottom:4px}
+#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:800;opacity:0;transition:opacity .25s;pointer-events:none;z-index:30;max-width:90%;text-align:center}
+</style>
+</head>
+<body>
+<div class="app">
+  <header><h1>Pleacă la timp</h1><span class="now" id="clock"></span></header>
+  <div class="banner" id="banner"></div>
+  <div class="install" id="install"></div>
+  <div class="screen on" id="s-home"></div>
+  <div class="screen" id="s-week"></div>
+  <div class="screen" id="s-trip"></div>
+  <div class="screen" id="s-set"></div>
+</div>
+<nav class="tabs"><div>
+  <button data-s="home" class="on"><span class="e">🔔</span>Avertizări</button>
+  <button data-s="week"><span class="e">📅</span>Săptămâna</button>
+  <button data-s="trip"><span class="e">🚗</span>Am plecat</button>
+  <button data-s="set"><span class="e">⚙️</span>Setări</button>
+</div></nav>
+<div class="overlay" id="welcome"><div class="modal" id="welcomeBody"></div></div>
+<div id="toast"></div>
+<script src="engine.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const fmt = m => { m = Math.round(m); const d = ((m % 1440) + 1440) % 1440; return String(Math.floor(d / 60)).padStart(2, '0') + ':' + String(d % 60).padStart(2, '0'); };
+const parseT = s => { const [h, m] = (s || '00:00').split(':').map(Number); return h * 60 + m; };
+const dstr = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const dayStr = k => { const d = new Date(); d.setDate(d.getDate() + k); return dstr(d); };
+const todayStr = () => dayStr(0);
+const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+const mins = x => Math.max(0, Math.round(x)) + ' min';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const WD = ['duminică', 'luni', 'marți', 'miercuri', 'joi', 'vineri', 'sâmbătă'];
+const wday = date => new Date(date + 'T12:00:00Z').getUTCDay();
+const dayLabel = date => date === todayStr() ? 'azi' : date === dayStr(1) ? 'mâine, ' + WD[wday(date)] : WD[wday(date)] + ', ' + +date.slice(8) + '.' + date.slice(5, 7);
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.opacity = 1; clearTimeout(toast._t); toast._t = setTimeout(() => el.style.opacity = 0, 2800); }
+
+/* ---------- Stare ---------- */
+const KEY = 'pleaca_la_timp_v2';
+function fresh() { return { consent: false, home: null, work: null, habits: [], lead: 30, evening: true, eveningAt: '21:00', trips: [], segObs: [], reports: [], live: null, pack: null, net: null, pid: 'P-' + Math.random().toString(36).slice(2, 8).toUpperCase(), seen: {} }; }
+let S = fresh();
+try { const r = localStorage.getItem(KEY); if (r) S = Object.assign(fresh(), JSON.parse(r)); } catch (e) { }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { try { localStorage.setItem(KEY, JSON.stringify(Object.assign({}, S, { net: null }))); } catch (e2) { } } }
+
+let NET, M, M0;
+const DEFAULT_RESTR = [{ id: 'r-20261106-dn1', segId: 'OTO>cPOD', closedLanes: 1, startDate: '2026-11-06', startMin: 360, endDate: null, endMin: 0, source: 'raportată', note: 'o bandă închisă pe DN1, înainte de Centură' }];
+function rebuild() {
+  NET = JSON.parse(JSON.stringify(S.net || window.__OSM_GRAPH__ || E.buildSkeleton()));
+  if (S.pack && S.pack.edgeEdits) for (const [k, v] of Object.entries(S.pack.edgeEdits)) if (NET.edges[k]) Object.assign(NET.edges[k], v);
+  const restr = ((S.pack && S.pack.restrictions) || DEFAULT_RESTR).concat(S.reports.filter(r => r.closedLanes)).filter(r => NET.edges[r.segId]);
+  M = new E.Model(NET, restr);      // ce știm pentru ziua respectivă
+  M0 = new E.Model(NET, []);        // o zi obișnuită, fără restricții – pentru „neobișnuit”
+  CACHE = {};
+}
+const LR = () => (S.pack && S.pack.lr ? S.pack : null);
+const pname = id => NET.nodes[id] ? (NET.nodes[id].place || NET.nodes[id].name) : '?';
+const weatherFor = date => (S.pack && S.pack.weather && S.pack.weather[date]) || 'senin';
+
+function placeOptions() {
+  let list = NET.places && NET.places.length >= 2 ? NET.places.map(p => [p.node, p.name, NET.nodes[p.node] && NET.nodes[p.node].zone === 'B' ? 'București' : 'Ilfov']) : Object.entries(NET.nodes).filter(([, n]) => n.zone !== 'C').map(([i, n]) => [i, n.name, n.zone === 'B' ? 'București' : 'Ilfov']);
+  const g = {}; list.forEach(x => (g[x[2]] = g[x[2]] || []).push(x));
+  return Object.entries(g).map(([k, a]) => `<optgroup label="${k}">${a.sort((x, y) => x[1].localeCompare(y[1], 'ro')).map(([i, n]) => `<option value="${i}">${esc(n)}</option>`).join('')}</optgroup>`).join('');
+}
+
+/* ---------- Prognoza unui drum: minute pierdute pe loc la fiecare oră de plecare ---------- */
+let CACHE = {};
+function slotEval(m, o, d, date, t0, ctx, withQ) {
+  const path = m.route(o, d, date, t0, ctx); if (!path) return null;
+  const w = m.walk(path, date, t0, ctx), L = LR(), eb = Math.exp(E.pathShift(L && L.lr, w.parts, date));
+  const free = path.reduce((s, e) => s + NET.edges[e].len / NET.edges[e].v0 * 60, 0);
+  const med = w.total * eb; let q = null;
+  if (withQ) { const km = E.pathLen(NET, path), p = m.predictPath(path, date, t0, ctx, 200, 0.95); q = p.q * eb * Math.exp(E.qhatFor(L && L.conf, km).qhat); }
+  // locul unde se pierde cel mai mult timp (doar denumirea drumului – fără hartă)
+  let worst = null; for (const p of w.parts) { const e = NET.edges[p.eid], loss = p.med - e.len / e.v0 * 60; if (!worst || loss > worst.loss) worst = { loss, eid: p.eid, t: p.t }; }
+  return { t0, path, med, q, free, idle: Math.max(0, med - free), worst };
+}
+function forecast(h, date) {
+  const key = h.id + '|' + date + '|' + h.ta + '|' + h.usual + '|' + (S.pack ? S.pack.version : '') + '|' + S.reports.length;
+  if (CACHE[key]) return CACHE[key];
+  const ctx = E.ctxFor(date, weatherFor(date), false), ctx0 = E.ctxFor(date, 'senin', false), ta = parseT(h.ta), usual = parseT(h.usual), deadline = ta - 5;
+  const from = Math.min(usual - 60, ta - 150), to = Math.max(usual + 60, ta + 30), slots = [];
+  for (let t = Math.round(from / 10) * 10; t <= to; t += 10) { const s = slotEval(M, h.o, h.d, date, t, ctx, true); if (s) slots.push(s); }
+  if (!slots.length) return (CACHE[key] = null);
+  const near = t => slots.reduce((a, b) => Math.abs(b.t0 - t) < Math.abs(a.t0 - t) ? b : a);
+  const cur = slotEval(M, h.o, h.d, date, usual, ctx, true), typ = slotEval(M0, h.o, h.d, date, usual, ctx0, false);
+  const feas = slots.filter(s => s.t0 + s.q <= deadline);
+  // cea mai bună oră: la timp (cu marja de siguranță) și cu cât mai puțin timp pe loc; la egalitate, cea mai târzie
+  const pool = feas.filter(s => s.t0 <= usual && s.t0 >= usual - 120);
+  // cost = minute pe loc + 0,35 × minutele de așteptare la destinație (a sosi prea devreme are și el un cost)
+  const cost = s => s.idle + 0.35 * Math.max(0, deadline - (s.t0 + s.med));
+  let early = null; for (const s of pool) if (!early || cost(s) < cost(early) - 0.5 || (Math.abs(cost(s) - cost(early)) <= 0.5 && s.t0 > early.t0)) early = s;
+  if (!early && feas.length) early = feas[feas.length - 1];
+  const calm = slots.filter(s => s.t0 > usual && s.idle < 10)[0] || null;          // mai târziu, când se liniștește
+  const curIdle = slotEval(M, h.o, h.d, date, usual, ctx, false).idle;
+  const lateBy = Math.max(0, cur.t0 + cur.q - deadline);
+  const extra = cur.idle - typ.idle;
+  const level = cur.idle >= 25 || lateBy >= 10 ? 'r' : cur.idle >= 10 || lateBy > 0 ? 'y' : 'g';
+  // fereastra în care se formează coloana pe locul cel mai problematic
+  let jam = null;
+  if (cur.worst && cur.worst.loss > 3) { const eid = cur.worst.eid, e = NET.edges[eid], ff = e.len / e.v0 * 60; let a = null, b = null; for (let t = 300; t <= 720; t += 5) { const st = M.segState(eid, date, t, ctx); if (st.med > ff + 5) { if (a === null) a = t; b = t; } } if (a !== null) jam = { name: e.name, a, b }; }
+  const causes = [];
+  for (const p of cur.path) for (const r of M.activeRestr(p, E.dayIndex(date) * 1440 + usual + 20).list) causes.push((r.source === 'raportată' && r.note && r.note.startsWith('Raport') ? 'un raport de la alți participanți: ' : '') + (r.note && !r.note.startsWith('Raport') ? r.note : 'o bandă închisă pe ' + NET.edges[r.segId].name));
+  const wx = weatherFor(date); if (wx !== 'senin') causes.push('vremea (' + E.WEATHER[wx].label.toLowerCase() + ')');
+  const res = { date, slots, cur, typ, early, calm, lateBy, extra, level, jam, causes: [...new Set(causes)], ta, usual, deadline, near };
+  return (CACHE[key] = res);
+}
+const LV = { g: ['Zi liniștită', '🟢'], y: ['Aglomerat', '🟡'], r: ['Ambuteiaj anunțat', '🔴'] };
+const slotColor = s => s.idle < 10 ? '#4caf6e' : s.idle < 25 ? '#f0a83a' : '#d9534f';
+
+/* ---------- Ecranul „Avertizări” ---------- */
+function nextOccurrences() {
+  const out = [], now = nowMin();
+  for (let k = 0; k < 8 && out.length < 3; k++) {
+    const date = dayStr(k), wd = wday(date);
+    for (const h of S.habits) { if (!h.days.includes(wd)) continue; if (k === 0 && parseT(h.ta) < now) continue; if (E.dayType(date) === 'D' && !h.holidays) continue; out.push({ h, date }); }
+  }
+  return out.slice(0, 3);
+}
+function card(h, date, idx) {
+  const f = forecast(h, date); if (!f) return `<div class="card">Nu găsesc un drum între ${esc(pname(h.o))} și ${esc(pname(h.d))}.</div>`;
+  const today = date === todayStr(), now = nowMin(), lv = LV[f.level];
+  let msg, why = '';
+  if (f.level === 'g') msg = `Poți pleca liniștit la ora obișnuită, <b>${fmt(f.usual)}</b>. Stai pe loc cel mult câteva minute.`;
+  else msg = `Dacă pleci la <b>${fmt(f.usual)}</b>, ca de obicei, stai aproximativ <b>${mins(f.cur.idle)}</b> pe loc${f.lateBy > 0 ? ` și riști să întârzii până la <b>${mins(f.lateBy)}</b>` : ''}.`;
+  if (f.jam) why += `Coloana se formează pe <b>${esc(f.jam.name)}</b>, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}. `;
+  if (f.extra >= 8) why += `Este <b>neobișnuit</b>: cu ${mins(f.extra)} mai mult decât într-o ${WD[wday(date)]} obișnuită${f.causes.length ? ', din cauza: ' + f.causes.map(esc).join('; ') : ''}.`;
+  else if (f.level !== 'g') why += `Este aglomerația obișnuită pentru ${WD[wday(date)]} la această oră.`;
+  const opts = [];
+  const gain = f.early ? f.cur.idle - f.early.idle : 0;
+  if (f.early && f.early.t0 < f.usual - 4 && (gain >= 5 || f.lateBy > 0)) opts.push({ best: true, t: f.early.t0, b: gain >= 5 ? 'Pleacă mai devreme' : 'Pleacă puțin mai devreme', s: (gain >= 5 ? `stai doar ~${mins(f.early.idle)} pe loc (cu ${mins(gain)} mai puțin)` : 'ajungi sigur la timp') + ` · ajungi în jur de ${fmt(f.early.t0 + f.early.med)}` });
+  opts.push({ best: !opts.length && f.level === 'g', t: f.usual, b: 'La ora obișnuită', s: `stai ~${mins(f.cur.idle)} pe loc · ajungi în jur de ${fmt(f.usual + f.cur.med)}${f.lateBy > 0 ? ' · risc de întârziere' : ''}` });
+  if (f.calm && f.level !== 'g' && f.cur.idle - f.calm.idle >= 5) opts.push({ best: false, t: f.calm.t0, b: 'Mai târziu, dacă poți', s: `stai doar ~${mins(f.calm.idle)} pe loc · ajungi în jur de ${fmt(f.calm.t0 + f.calm.med)}${f.calm.t0 + f.calm.med > f.ta ? ' (după ora-țintă)' : ''}` });
+  if (!f.early && f.level === 'r') opts.unshift({ best: true, t: f.slots[0].t0, b: 'Pleacă cât mai devreme', s: 'nicio oră din intervalul analizat nu garantează sosirea la timp' });
+  const leaveAt = opts.find(o => o.best) ? opts.find(o => o.best).t : f.usual;
+  const alertAt = leaveAt - S.lead;
+  const ticks = []; for (let t = Math.ceil(f.slots[0].t0 / 30) * 30; t <= f.slots[f.slots.length - 1].t0; t += 60) ticks.push(fmt(t));
+  return `<div class="card" data-card="${idx}">
+    <div class="kicker">${esc(h.name)} · ${dayLabel(date)} · sosire până la ${h.ta}</div>
+    <div class="level ${f.level}">${lv[1]} ${lv[0]}</div>
+    <div class="msg">${msg}</div>
+    ${why ? `<div class="why">${why}</div>` : ''}
+    <div class="opts">${opts.map(o => `<div class="opt ${o.best ? 'best' : ''}"><div class="t">${fmt(o.t)}</div><div><b>${o.best ? '✓ ' : ''}${o.b}</b><span>${o.s}</span></div></div>`).join('')}</div>
+    <div class="alertline">🔔 <span>${today && alertAt < now ? 'Ora de alertă a trecut.' : `Te anunțăm ${today ? 'azi' : 'în ' + dayLabel(date).split(',')[0]} la <b>${fmt(alertAt)}</b>${S.evening && !today ? ` și cu o seară înainte, la <b>${S.eveningAt}</b>` : ''}.`}</span></div>
+    <details><summary>Vezi toate orele de plecare</summary>
+      <div class="band"><div class="bar">${f.slots.map((s, i) => `<div data-i="${i}" style="background:${slotColor(s)}" title="${fmt(s.t0)}"></div>`).join('')}</div>
+      <div class="ticks">${ticks.map(t => `<span>${t}</span>`).join('')}</div>
+      <div class="info" id="info-${idx}">Atinge o oră ca să vezi cât stai pe loc.</div>
+      <div class="legend"><span><i style="background:#4caf6e"></i>sub 10 min pe loc</span><span><i style="background:#f0a83a"></i>10–25 min</span><span><i style="background:#d9534f"></i>peste 25 min</span></div></div>
+    </details>
+  </div>`;
+}
+function bindCards(list) {
+  document.querySelectorAll('[data-card]').forEach(c => {
+    const { h, date } = list[+c.dataset.card], f = forecast(h, date);
+    c.querySelectorAll('.bar div').forEach(b => b.onclick = () => {
+      c.querySelectorAll('.bar div').forEach(x => x.classList.remove('sel')); b.classList.add('sel');
+      const s = f.slots[+b.dataset.i], late = s.t0 + s.q > f.deadline;
+      $('info-' + c.dataset.card).innerHTML = `Plecare <b>${fmt(s.t0)}</b> → ~${mins(s.idle)} pe loc, ajungi în jur de <b>${fmt(s.t0 + s.med)}</b>${late ? ' · <span style="color:var(--r)">risc de întârziere</span>' : ' · la timp'}`;
+    });
+  });
+}
+function renderHome() {
+  if (!S.habits.length) { $('s-home').innerHTML = `<div class="card"><div class="msg">Spune-ne ce drumuri faci de obicei.</div><button class="btn dark" onclick="show('set')">Adaugă drumurile mele</button></div>`; return; }
+  const list = nextOccurrences();
+  let h = list.map((x, i) => card(x.h, x.date, i)).join('');
+  h += `<div class="card"><div class="kicker">Un drum ocazional</div>
+    <div class="field" style="margin-top:8px"><small>De unde</small><select id="aO">${placeOptions()}</select></div>
+    <div class="field"><small>Unde</small><select id="aD">${placeOptions()}</select></div>
+    <div class="row" style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="aTa" value="10:00"></div><div class="field" style="flex:1"><small>Ziua</small><select id="aDay"><option value="0">Azi</option><option value="1">Mâine</option><option value="2">Poimâine</option></select></div></div>
+    <button class="btn ghost" id="aGo">Verifică</button><div id="aOut"></div></div>
+    <p class="muted" style="text-align:center">Aplicația nu îți arată drumul. Îți spune <b>când</b> să pleci ca să nu stai în coloană.</p>`;
+  $('s-home').innerHTML = h; bindCards(list);
+  if (S.home) $('aO').value = S.home; if (S.work) $('aD').value = S.work;
+  $('aGo').onclick = () => {
+    const ta = $('aTa').value, date = dayStr(+$('aDay').value), adhoc = { id: 'adhoc', name: 'Drum ocazional', o: $('aO').value, d: $('aD').value, ta, usual: fmt(parseT(ta) - 60), days: [] };
+    if (adhoc.o === adhoc.d) { toast('Alege două locuri diferite'); return; }
+    const f = forecast(adhoc, date); if (!f) { $('aOut').innerHTML = '<p class="muted">Nu găsesc un drum.</p>'; return; }
+    const best = f.early || f.slots[0];
+    $('aOut').innerHTML = `<div class="opt best" style="margin-top:12px"><div class="t">${fmt(best.t0)}</div><div><b>✓ Pleacă până la această oră</b><span>stai ~${mins(best.idle)} pe loc · ajungi în jur de ${fmt(best.t0 + best.med)}</span></div></div>${f.jam ? `<p class="why">Coloana se formează pe <b>${esc(f.jam.name)}</b>, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}.</p>` : ''}`;
+  };
+}
+
+/* ---------- Săptămâna ---------- */
+function renderWeek() {
+  let h = '';
+  for (const hb of S.habits) {
+    h += `<div class="card week"><div class="kicker">${esc(hb.name)} · sosire până la ${hb.ta}</div>`;
+    for (let k = 0; k < 7; k++) {
+      const date = dayStr(k); if (!hb.days.includes(wday(date)) || E.dayType(date) === 'D') continue;
+      const f = forecast(hb, date); if (!f) continue;
+      const best = f.level === 'g' ? f.usual : (f.early ? f.early.t0 : f.slots[0].t0);
+      h += `<div class="row"><span><span class="dot" style="background:${f.level === 'g' ? '#4caf6e' : f.level === 'y' ? '#f0a83a' : '#d9534f'}"></span><b>${dayLabel(date)}</b>${f.extra >= 8 ? ' · <span style="color:var(--r);font-weight:800">neobișnuit</span>' : ''}</span><span><b>${fmt(best)}</b> <span class="muted">· ~${mins(f.level === 'g' ? f.cur.idle : (f.early || f.cur).idle)} pe loc</span></span></div>`;
+    }
+    h += `</div>`;
+  }
+  $('s-week').innerHTML = (h || '<div class="card muted">Adaugă un drum obișnuit în Setări.</div>') + '<p class="muted" style="text-align:center">Prognoza pentru zilele următoare se actualizează când coordonatorul trimite date noi sau când apar restricții raportate.</p>';
+}
+
+/* ---------- Am plecat / am ajuns (colectarea datelor, cât mai simplu) ---------- */
+function renderTrip() {
+  const L = S.live;
+  if (!L) {
+    $('s-trip').innerHTML = `<div class="card"><div class="msg">Pleci acum?</div><p class="muted">Apasă un buton când pleci și când ajungi. Atât. Așa aplicația învață și avertizările devin mai precise pentru toți.</p>
+      ${S.habits.map((h, i) => `<button class="btn dark" data-h="${i}">Am plecat · ${esc(h.name)}</button>`).join('')}</div>
+      <div class="card"><div class="kicker">Drumurile mele</div>${histHTML()}</div>`;
+    $('s-trip').querySelectorAll('[data-h]').forEach(b => b.onclick = () => depart(S.habits[+b.dataset.h]));
+    bindSend(); return;
+  }
+  const el = Math.round(nowMin() - L.dep);
+  $('s-trip').innerHTML = `<div class="card"><div class="kicker">Pe drum · ${esc(L.name)}</div><div class="big" style="margin-top:8px">${mins(el)}</div><p class="muted">de la plecare (${fmt(L.dep)}). Spor la drum!</p>
+    <div class="rep">${[['🐢', 'Coadă', 'coada'], ['💥', 'Accident', 'accident'], ['🚧', 'Bandă închisă', 'banda'], ['👷', 'Lucrări', 'lucrari']].map(([e, t, k]) => `<button class="repb" data-r="${k}"><span class="e">${e}</span>${t}</button>`).join('')}</div>
+    <p class="muted">Raportează doar dacă ești pasager sau oprit în siguranță. Raportul ajunge la ceilalți participanți prin actualizarea următoare.</p>
+    <button class="btn go" id="bArr">Am ajuns</button><button class="btn ghost" id="bCan">Anulează</button></div>`;
+  $('s-trip').querySelectorAll('[data-r]').forEach(b => b.onclick = () => reportNow(b.dataset.r));
+  $('bArr').onclick = arrive; $('bCan').onclick = () => { S.live = null; save(); renderTrip(); };
+}
+function depart(h) {
+  const date = todayStr(), dep = nowMin(), ctx = E.ctxFor(date, weatherFor(date), false), s = slotEval(M, h.o, h.d, date, dep, ctx, true);
+  if (!s) { toast('Nu găsesc un drum'); return; }
+  const f = forecast(h, date), rec = f && (f.early ? f.early.t0 : f.usual);
+  S.live = { id: S.pid + '-' + Date.now(), name: h.name, orig: h.o, dest: h.d, path: s.path, date, dep, weather: weatherFor(date),
+    pred: { madeAt: new Date().toISOString(), median: s.med, q: s.q, tau: 0.95, deadline: parseT(h.ta) - 5, ta: parseT(h.ta), recT0: rec, version: LR() ? LR().version : 'a-priori', followed: rec != null && dep <= rec + 2 } };
+  save(); renderTrip(); toast('Drum bun!');
+}
+function reportNow(kind) {
+  const L = S.live, t = nowMin(), ctx = E.ctxFor(L.date, L.weather, false), w = M.walk(L.path, L.date, L.dep, ctx);
+  let eid = L.path[0]; for (const p of w.parts) if (p.t <= t) eid = p.eid; // segmentul estimat pe care se află acum
+  const e = NET.edges[eid], closes = kind !== 'coada';
+  S.reports.push({ id: 'rep-' + S.pid + '-' + Date.now(), kind, segId: eid, closedLanes: closes && e.lanes > 1 ? 1 : 0, startDate: L.date, startMin: t, endDate: L.date, endMin: Math.min(t + (kind === 'accident' ? 90 : 240), 1439), source: 'raportată', note: 'Raport participant: ' + kind + ' pe ' + e.name });
+  save(); rebuild(); toast('Mulțumim! Am notat: ' + e.name);
+}
+function arrive() {
+  const L = S.live, arr = nowMin(); let dur = arr - L.dep; if (dur <= 0) dur += 1440;
+  const onTime = L.dep + dur <= L.pred.deadline;
+  S.trips.push({ id: L.id, date: L.date, dep: L.dep, dur, orig: L.orig, dest: L.dest, path: L.path, weather: L.weather, vacation: false, source: 'participant', participant: S.pid, pred: L.pred, onTime });
+  S.live = null; save(); renderTrip(); toast(onTime ? 'Ai ajuns la timp! 🎉' : 'Ai ajuns. Mulțumim!');
+}
+function histHTML() {
+  const tr = [...S.trips].reverse().slice(0, 15), f = S.trips.filter(t => t.pred && t.pred.followed), ok = f.filter(t => t.onTime).length;
+  return `${f.length ? `<div class="msg">${ok} din ${f.length} la timp</div><p class="muted">când ai plecat la ora recomandată</p>` : '<p class="muted">Încă niciun drum înregistrat.</p>'}
+  ${tr.map(t => `<div class="item"><div><b>${esc(pname(t.orig))} → ${esc(pname(t.dest))}</b><small>${t.date} · ${fmt(t.dep)} · ${mins(t.dur)}</small></div><span class="tag ${!t.pred ? 'na' : t.onTime ? 'ok' : 'no'}">${!t.pred ? '—' : t.onTime ? 'La timp' : 'Întârziere'}</span></div>`).join('')}
+  <button class="btn ghost" id="bSend">Trimite datele coordonatorului</button><textarea id="sendTxt" rows="3" style="display:none;margin-top:8px"></textarea>
+  <p class="muted">Se copiază un text pe care îl trimiți pe e-mail sau WhatsApp. Conține doar codul tău (${S.pid}), orele și drumurile, fără nume.</p>`;
+}
+function bindSend() {
+  if (!$('bSend')) return;
+  $('bSend').onclick = async () => { const txt = JSON.stringify({ format: 'mpred-pilot', version: E.VERSION, participant: S.pid, exportedAt: new Date().toISOString(), trips: S.trips, segObs: S.segObs, restrictions: S.reports.filter(r => r.closedLanes) }); const ta = $('sendTxt'); ta.style.display = 'block'; ta.value = txt; try { await navigator.clipboard.writeText(txt); toast('Copiat! Lipește-l într-un mesaj către coordonator.'); } catch (e) { ta.select(); toast('Selectează textul și copiază-l.'); } };
+}
+
+/* ---------- Setări ---------- */
+function habitForm(h, i) {
+  return `<div class="card" data-hf="${i}"><div class="kicker">${esc(h.name)}</div>
+    <div class="field" style="margin-top:8px"><small>De unde</small><select data-k="o">${placeOptions()}</select></div>
+    <div class="field"><small>Unde</small><select data-k="d">${placeOptions()}</select></div>
+    <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" data-k="ta" value="${h.ta}"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" data-k="usual" value="${h.usual}"></div></div>
+    <div class="days">${[1, 2, 3, 4, 5, 6, 0].map(d => `<button data-d="${d}" class="${h.days.includes(d) ? 'on' : ''}">${WD[d].slice(0, 2)}</button>`).join('')}</div></div>`;
+}
+function renderSet() {
+  $('s-set').innerHTML = `${S.habits.map(habitForm).join('')}
+    <div class="card"><div class="kicker">Când să te anunțăm</div>
+      <p class="muted" style="margin:8px 0 4px">Cu cât timp înainte de ora la care trebuie să pleci</p>
+      <div class="seg" id="leadSeg">${[15, 30, 45, 60].map(v => `<button data-v="${v}" class="${S.lead === v ? 'on' : ''}">${v} min</button>`).join('')}</div>
+      <label class="chk"><input type="checkbox" id="evOn" ${S.evening ? 'checked' : ''}><span>Și cu o seară înainte, dacă a doua zi e aglomerat, la ora <input type="time" id="evAt" value="${S.eveningAt}" style="border:none;font:800 15px 'Nunito Sans'"></span></label>
+      <button class="btn dark" id="bSave">Salvează</button></div>
+    <div class="card"><div class="kicker">Actualizare de la coordonator</div><p class="muted">Lipește codul primit. Conține ce a învățat aplicația din drumurile tuturor participanților și restricțiile cunoscute.</p>
+      <textarea id="packTxt" rows="3" placeholder="Lipește codul aici"></textarea><input type="file" id="packFile" accept=".json" style="margin-top:6px">
+      <button class="btn ghost" id="bPack">Actualizează</button><p class="muted">${S.pack ? 'Ultima actualizare: ' + esc((S.pack.exportedAt || '').slice(0, 10)) : 'Nicio actualizare încă.'}</p></div>
+    <div class="card"><div class="kicker">Datele mele</div><p class="muted">Codul tău de participant: <b>${S.pid}</b>. Datele stau pe acest telefon și pleacă doar când le trimiți tu.</p><button class="btn red" id="bWipe">Șterge toate datele</button></div>`;
+  document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; c.querySelector('[data-k=o]').value = h.o; c.querySelector('[data-k=d]').value = h.d; c.querySelectorAll('[data-d]').forEach(b => b.onclick = () => b.classList.toggle('on')); });
+  $('leadSeg').querySelectorAll('button').forEach(b => b.onclick = () => { $('leadSeg').querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); });
+  $('bSave').onclick = () => {
+    document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; h.o = c.querySelector('[data-k=o]').value; h.d = c.querySelector('[data-k=d]').value; h.ta = c.querySelector('[data-k=ta]').value; h.usual = c.querySelector('[data-k=usual]').value; h.days = [...c.querySelectorAll('[data-d].on')].map(b => +b.dataset.d); });
+    S.lead = +($('leadSeg').querySelector('.on') || { dataset: { v: 30 } }).dataset.v; S.evening = $('evOn').checked; S.eveningAt = $('evAt').value || '21:00';
+    save(); CACHE = {}; toast('Salvat'); show('home');
+  };
+  $('packFile').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { $('packTxt').value = r.result; }; r.readAsText(f); };
+  $('bPack').onclick = () => { try { const p = JSON.parse($('packTxt').value); if (p.format !== 'mpred-model') throw 0; S.pack = p; if (p.graph) S.net = p.graph; save(); rebuild(); toast('Aplicația a fost actualizată ✓'); show('home'); } catch (e) { toast('Codul nu este valid'); } };
+  let arm = 0; $('bWipe').onclick = () => { if (Date.now() - arm > 3000) { arm = Date.now(); toast('Apasă din nou pentru a confirma'); return; } const pid = S.pid; S = fresh(); S.pid = pid; save(); rebuild(); welcome(); };
+}
+
+/* ---------- Bun venit ---------- */
+function welcome() {
+  const o = placeOptions();
+  $('welcomeBody').innerHTML = `<h2 style="margin:0 0 6px;font-size:24px;font-weight:900">Află de ambuteiaj înainte să fii în el.</h2>
+  <p>Aplicația <b>nu îți arată drumul</b>. Te anunță din timp, de obicei cu o seară înainte, când urmează un ambuteiaj pe drumul tău. Îți spune la ce oră să pleci ca să stai cât mai puțin pe loc și să ajungi la timp.</p>
+  <div class="field"><small>Unde locuiești? (localitate / cartier)</small><select id="wH"><option value="">— alege —</option>${o}</select></div>
+  <div class="field"><small>Unde mergi de obicei?</small><select id="wW"><option value="">— alege —</option>${o}</select></div>
+  <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="wTa" value="09:00"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" id="wU" value="08:00"></div></div>
+  <label class="chk"><input type="checkbox" id="wC"><span>Sunt de acord ca orele și drumurile mele, fără numele meu, să fie folosite în pilotul de cercetare UNSTPB pentru îmbunătățirea avertizărilor. Pot retrage acordul oricând, ștergând datele.</span></label>
+  <button class="btn go" id="wGo" disabled>Încep</button>`;
+  $('welcome').classList.add('on');
+  const chk = () => $('wGo').disabled = !($('wC').checked && $('wH').value && $('wW').value && $('wH').value !== $('wW').value);
+  ['wC', 'wH', 'wW'].forEach(i => $(i).onchange = chk);
+  $('wGo').onclick = () => {
+    const H = $('wH').value, W = $('wW').value, ta = $('wTa').value || '09:00', u = $('wU').value || '08:00';
+    S.consent = true; S.home = H; S.work = W;
+    S.habits = [{ id: 'h1', name: 'Spre serviciu', o: H, d: W, ta, usual: u, days: [1, 2, 3, 4, 5] }, { id: 'h2', name: 'Spre casă', o: W, d: H, ta: '18:30', usual: '17:30', days: [1, 2, 3, 4, 5] }];
+    save(); $('welcome').classList.remove('on'); show('home');
+  };
+}
+
+/* ---------- Alerte în pagină (în aplicația instalată devin notificări) ---------- */
+function checkAlerts() {
+  $('clock').textContent = fmt(nowMin());
+  if (!S.consent || !S.habits.length) return;
+  const now = nowMin(), today = todayStr(), tomorrow = dayStr(1);
+  for (const h of S.habits) {
+    if (h.days.includes(wday(today))) { const f = forecast(h, today); if (f) { const leave = f.level === 'g' ? f.usual : (f.early ? f.early.t0 : f.slots[0].t0), at = leave - S.lead, key = h.id + today + 'm'; if (now >= at && now < leave + 5 && !S.seen[key]) { banner(`🔔 ${h.name}: pleacă la ${fmt(leave)}${f.level !== 'g' ? ' – ' + LV[f.level][0].toLowerCase() : ''}.`); S.seen[key] = 1; save(); } } }
+    if (S.evening && h.days.includes(wday(tomorrow)) && now >= parseT(S.eveningAt)) { const f = forecast(h, tomorrow), key = h.id + tomorrow + 'e'; if (f && f.level !== 'g' && !S.seen[key]) { banner(`🌙 Mâine, ${h.name.toLowerCase()}: ${LV[f.level][0].toLowerCase()}. Pleacă la ${fmt(f.early ? f.early.t0 : f.slots[0].t0)} în loc de ${h.usual}.`); S.seen[key] = 1; save(); } }
+  }
+}
+function banner(t) { const b = $('banner'); b.textContent = t; b.classList.add('on'); try { navigator.vibrate && navigator.vibrate(200); } catch (e) { } b.onclick = () => b.classList.remove('on'); }
+
+function show(s) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.s === s));
+  document.querySelectorAll('.screen').forEach(x => x.classList.toggle('on', x.id === 's-' + s));
+  if (s === 'home') renderHome(); if (s === 'week') renderWeek(); if (s === 'trip') renderTrip(); if (s === 'set') renderSet();
+  scrollTo(0, 0);
+}
+document.querySelector('.tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.s); };
+
+/* ---------- Aplicație instalabilă (PWA) ---------- */
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+let deferredPrompt = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; showInstall(); });
+function showInstall() {
+  if (standalone || S.installDismissed) return;
+  const el = $('install');
+  el.innerHTML = isIOS
+    ? '<b>📲 Adaugă aplicația pe ecranul principal</b>Pe iPhone, avertizările funcționează doar așa: apasă <b style="display:inline">Partajează</b> (pătratul cu săgeată) → <b style="display:inline">Adaugă pe ecranul principal</b>, apoi deschide aplicația de pe noua iconiță. <div style="margin-top:8px"><button class="link" id="instX" style="background:none;border:none;color:var(--mute);font-weight:800">Mai târziu</button></div>'
+    : '<b>📲 Instalează aplicația</b>Ca să primești avertizările și cu aplicația închisă.<button class="btn dark" id="instGo" style="margin-top:10px">Instalează</button><button class="link" id="instX" style="background:none;border:none;color:var(--mute);font-weight:800;margin-top:6px">Mai târziu</button>';
+  el.classList.add('on');
+  if ($('instGo')) $('instGo').onclick = async () => { if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; el.classList.remove('on'); };
+  $('instX').onclick = () => { S.installDismissed = true; save(); el.classList.remove('on'); };
+}
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
+if (isIOS && !standalone) setTimeout(showInstall, 1500);
+
+(async function boot() {
+  try { const r = await fetch('graph.json', { cache: 'no-store' }); if (r.ok) { const g = await r.json(); if (g.nodes && g.edges && !E.validateNet(g).length) window.__OSM_GRAPH__ = g; } } catch (e) { }
+  rebuild();
+  if (!S.consent) welcome(); else show(S.live ? 'trip' : 'home');
+  checkAlerts(); setInterval(() => { checkAlerts(); if (S.live && $('s-trip').classList.contains('on')) renderTrip(); }, 30000);
+})();
+</script>
+</body>
+</html>
