@@ -111,3 +111,10 @@ grant execute on function delete_my_data() to authenticated;
 
 create index if not exists trips_date_idx on trips (trip_date);
 create index if not exists reports_date_idx on reports (start_date);
+
+-- Explicit privileges (the project is created with "Automatically expose new tables" OFF).
+-- Anonymous sign-ins get the `authenticated` role; RLS policies above restrict every row to its owner.
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on participants, habits, trips, segment_observations, reports, push_subscriptions to authenticated;
+grant select on model_packs to authenticated;
+-- sent_alerts: no client access (service role only)
