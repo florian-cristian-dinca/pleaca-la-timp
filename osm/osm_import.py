@@ -35,6 +35,21 @@ HIGHWAY_RANK = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary']
 LINK = {'motorway_link': 'motorway', 'trunk_link': 'trunk', 'primary_link': 'primary',
         'secondary_link': 'secondary', 'tertiary_link': 'tertiary'}
 PLACE_TYPES = {'city', 'town', 'village', 'suburb', 'quarter', 'neighbourhood'}
+# effective free-flow speed incl. average signal / junction delay (km/h) - prior, calibrated on observed trips
+EFFECTIVE_V0 = {'A': 95, 'C': 60, 'N': 60, 'J': 45, 'M': 32, 'B': 26}
+# destinations that OSM maps as areas (campuses, stations, airports, malls, hospitals)
+POI_TAGS = {'amenity': {'university', 'college', 'hospital'}, 'railway': {'station'}, 'aeroway': {'aerodrome'}, 'shop': {'mall'}}
+# key pilot destinations, always added (approximate coordinates, snapped to the nearest graph node)
+MANUAL_POIS = [
+    ('Universitatea POLITEHNICA (Regie)', 44.4388, 26.0515),
+    ('Aeroportul Henri Coandă (Otopeni)', 44.5711, 26.0850),
+    ('Aeroportul Băneasa', 44.5032, 26.1021),
+    ('Gara de Nord', 44.4466, 26.0751),
+    ('Piața Victoriei', 44.4525, 26.0860),
+    ('Piața Unirii', 44.4268, 26.1025),
+    ('Piața Universității', 44.4355, 26.1025),
+    ('Piața Romană', 44.4466, 26.0975),
+]
 
 
 def haversine(a, b):
@@ -94,11 +109,23 @@ class Collector(osmium.SimpleHandler):
         return s <= lat <= n and w <= lon <= e
 
     def node(self, n):
+        for k, vals in POI_TAGS.items():
+            if n.tags.get(k) in vals and 'name' in n.tags and n.location.valid() and self.inside(n.location.lat, n.location.lon):
+                self.places.append(dict(name=n.tags['name'], kind='poi', lat=n.location.lat, lon=n.location.lon))
         t = n.tags.get('place')
         if t in PLACE_TYPES and 'name' in n.tags and n.location.valid() and self.inside(n.location.lat, n.location.lon):
             self.places.append(dict(name=n.tags['name'], kind=t, lat=n.location.lat, lon=n.location.lon))
 
     def way(self, w):
+        for k, vals in POI_TAGS.items():
+            if w.tags.get(k) in vals and 'name' in w.tags and w.is_closed():
+                try:
+                    lats = [nd.location.lat for nd in w.nodes]; lons = [nd.location.lon for nd in w.nodes]
+                except Exception:
+                    lats = []
+                if lats and self.inside(sum(lats) / len(lats), sum(lons) / len(lons)):
+                    self.places.append(dict(name=w.tags['name'], kind='poi', lat=sum(lats) / len(lats), lon=sum(lons) / len(lons)))
+                break
         hw = w.tags.get('highway')
         base = LINK.get(hw, hw)
         if base not in HIGHWAY_RANK or HIGHWAY_RANK.index(base) > self.min_rank:
@@ -175,14 +202,14 @@ def build(ways, places):
                 lanes = max(1, min(lanes, 5))
                 cos = radial_cos(loc[u], loc[v])
                 cin, cout = max(0, cos), max(0, -cos)
-                v0 = (speed * 0.9) if speed else c['v0']
+                v0 = min(speed * 0.9, EFFECTIVE_V0[cls]) if speed else EFFECTIVE_V0[cls]
                 eid = f'{u}>{v}'
                 if eid in edges and edges[eid]['len'] <= length:
                     continue
                 ru, rv = haversine(loc[u], CENTER), haversine(loc[v], CENTER)
                 edges[eid] = dict(
                     **{'from': str(u), 'to': str(v)},
-                    name=tags.get('name') or tags.get('ref') or tags.get('highway'),
+                    name=tags.get('name') or tags.get('ref') or '',
                     cls=cls, lanes=lanes, capLane=c['capLane'], v0=round(v0, 1), alpha=c['alpha'], beta=c['beta'],
                     len=round(max(length, 0.01), 3),
                     am=round(min(0.95, max(0.35, c['base'] + 0.25 * cin - 0.12 * cout)), 3),
@@ -264,8 +291,12 @@ def build(ways, places):
                 return bestk, bestd
         return None, None
 
-    plist = []
+    plist, seen = [], set()
+    places = places + [dict(name=n, kind='poi', lat=la, lon=lo) for n, la, lo in MANUAL_POIS]
     for p in places:
+        if p['name'] in seen:
+            continue
+        seen.add(p['name'])
         k, d = nearest(p['lat'], p['lon'])
         if k and d < 2.5:
             nodes[k].setdefault('place', p['name'])

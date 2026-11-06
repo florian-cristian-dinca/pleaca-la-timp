@@ -91,9 +91,9 @@ E.CLS = {
   A: { label: 'autostradă', lanes: 2, capLane: 1900, v0: 100, alpha: 0.5, beta: 4, base: 0.60 },
   C: { label: 'Centura (DNCB)', lanes: 2, capLane: 1500, v0: 60, alpha: 0.8, beta: 4, base: 0.68 },
   N: { label: 'drum național / penetrație', lanes: 2, capLane: 1500, v0: 60, alpha: 0.8, beta: 4, base: 0.66 },
-  J: { label: 'drum județean / local', lanes: 1, capLane: 950, v0: 50, alpha: 0.9, beta: 4, base: 0.62 },
-  M: { label: 'bulevard principal (semaforizat)', lanes: 3, capLane: 850, v0: 45, alpha: 1.2, beta: 4, base: 0.72 },
-  B: { label: 'bulevard / stradă colectoare', lanes: 2, capLane: 800, v0: 40, alpha: 1.3, beta: 4, base: 0.70 }
+  J: { label: 'drum județean / local', lanes: 1, capLane: 950, v0: 45, alpha: 0.9, beta: 4, base: 0.62 },
+  M: { label: 'bulevard principal (semaforizat)', lanes: 3, capLane: 850, v0: 32, alpha: 1.2, beta: 4, base: 0.72 },
+  B: { label: 'bulevard / stradă colectoare', lanes: 2, capLane: 800, v0: 26, alpha: 1.3, beta: 4, base: 0.70 }
 };
 
 /* ---------- Rețeaua-schelet București–Ilfov (schematică; înlocuibilă cu graph.json din OSM) ---------- */
