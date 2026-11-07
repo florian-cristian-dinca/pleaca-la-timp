@@ -84,6 +84,8 @@
       // speed (km/h): GPS value when available, otherwise from consecutive fixes
       let v = fix.speed != null && fix.speed >= 0 ? fix.speed * 3.6 : (prev && dt > 0.03 ? moved / dt * 60 : null);
       if (v != null && v < 250) { st.v = st.v == null ? v : 0.6 * v + 0.4 * st.v; st.vAt = fix.t; }
+      // distanța parcursă, din GPS: adun doar pașii mai mari decât precizia (fără „zgomotul” de pe loc)
+      if (fix.acc <= 50) { if (!st.anchor) st.anchor = { lat: fix.lat, lon: fix.lon }; else { const d = E.haversine(st.anchor, fix); if (d >= Math.max(0.02, fix.acc / 1000)) { st.dist = (st.dist || 0) + d; st.anchor = { lat: fix.lat, lon: fix.lon }; } } }
       const r = Math.min(0.09, Math.max(0.035, fix.acc / 1000 * 1.5));
       let best = null;
       // the current edge and the ones right after it stay candidates over a wider radius (continuity)
@@ -109,7 +111,8 @@
       if (eid === st.eid) { if (p.s > st.s) { st.km += p.s - st.s; st.s = p.s; st.sAt = fix.t; } return res; }
       // edge change: interpolate the crossing times along the distance driven since the last matched position
       const cur = NET.edges[st.eid], conn = best.conn;
-      if (conn) {
+      const Dc = conn ? (cur.len - st.s) + conn.reduce((x, e) => x + NET.edges[e].len, 0) + p.s : 0;
+      if (conn && Dc <= 1.8 * Math.max(moved, E.haversine(posOn(st.eid, st.s), fix)) + 0.15) {
         const seq = [st.eid].concat(conn), D = (cur.len - st.s) + conn.reduce((s, e) => s + NET.edges[e].len, 0) + p.s, T = fix.t - st.sAt, rate = D > 0 ? T / D : 0;
         let t = st.sAt + (cur.len - st.s) * rate;                             // end of the current edge
         if (st.entry != null && t > st.entry) res.obs.push({ segId: st.eid, t: st.entry, dur: t - st.entry, interp: false });
@@ -117,7 +120,8 @@
         st.km += D; st.entry = t;
       } else { st.entry = null; st.gaps = (st.gaps || 0) + 1;}
       st.driven.push(eid); st.eid = eid; st.s = p.s; st.sAt = fix.t; res.changed = true;
-      res.obs = res.obs.filter(o => o.dur > 0.02 && NET.edges[o.segId].len / o.dur * 60 < 160);
+      const VMAX = { A: 150, C: 130, N: 120, J: 100, M: 90, B: 80 };  // peste aceste viteze, potrivirea e greșită
+      res.obs = res.obs.filter(o => o.dur > 0.02 && NET.edges[o.segId].len / o.dur * 60 <= (VMAX[NET.edges[o.segId].cls] || 100));
       return res;
     }
     // position to draw: on the matched edge, or the raw fix if not matched

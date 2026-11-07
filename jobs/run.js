@@ -17,17 +17,20 @@ function localNow() {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Bucharest', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map(x => [x.type, x.value]));
   return { date: `${p.year}-${p.month}-${p.day}`, min: +p.hour * 60 + +p.minute };
 }
+const VMAX = { A: 150, C: 130, N: 120, J: 100, M: 90, B: 80 };   // implausible speeds = bad GPS matching
 const addDays = (d, k) => E.dateFromIndex(E.dayIndex(d) + k);
 const wday = d => new Date(d + 'T12:00:00Z').getUTCDay();
 const toMin = t => PLT.parseT(String(t).slice(0, 5));
-async function all(table, q = x => x) { const { data, error } = await q(db.from(table).select('*')); if (error) throw new Error(table + ': ' + error.message); return data || []; }
+async function all(table, q = x => x) { // PostgREST returns at most 1000 rows per request: page through
+  const out = []; for (let i = 0; ; i += 1000) { const { data, error } = await q(db.from(table).select('*')).range(i, i + 999); if (error) throw new Error(table + ': ' + error.message); out.push(...(data || [])); if (!data || data.length < 1000) return out; }
+}
 
 (async () => {
   const now = localNow(), today = now.date, tomorrow = addDays(today, 1), since = addDays(today, -200);
   const [parts, habits, trips, segs, reports, subs, packs] = await Promise.all([
     all('participants'), all('habits'), all('trips', q => q.gte('trip_date', since)), all('segment_observations', q => q.gte('obs_date', since)),
     all('reports', q => q.gte('start_date', addDays(today, -2))), all('push_subscriptions'),
-    all('model_packs', q => q.order('created_at', { ascending: false }).limit(1))
+    db.from('model_packs').select('*').neq('version', 'live').order('created_at', { ascending: false }).limit(1).then(r => { if (r.error) throw new Error('model_packs: ' + r.error.message); return r.data || []; })
   ]);
   const sent = new Set((await all('sent_alerts', q => q.gte('sent_at', new Date(Date.now() - 3 * 864e5).toISOString()))).map(r => r.participant + '|' + r.alert_key));
 
@@ -35,10 +38,23 @@ async function all(table, q = x => x) { const { data, error } = await q(db.from(
   const restr = reports.filter(r => r.closed_lanes > 0 && graph.edges[r.seg_id] && (!r.end_date || r.end_date >= today))
     .map(r => ({ id: r.id, segId: r.seg_id, closedLanes: r.closed_lanes, startDate: r.start_date, startMin: r.start_min, endDate: r.end_date, endMin: r.end_min || 0, source: 'raportată', note: 'Raport participant: ' + r.kind + (graph.edges[r.seg_id].name ? ' pe ' + graph.edges[r.seg_id].name : '') }));
 
+  // 1b) live traffic for the app: median speed per road segment in the last 45 min (only where ≥ 2 participants
+  //     measured it, so nobody's own trip can be read from it) and the reports still active today (all kinds)
+  {
+    const rec = segs.filter(s => s.obs_date === today && s.entry_min >= now.min - 45 && s.entry_min <= now.min + 2 && graph.edges[s.seg_id] && graph.edges[s.seg_id].len / s.dur_min * 60 <= (VMAX[graph.edges[s.seg_id].cls] || 100));
+    const by = {}; for (const s of rec) { const b = by[s.seg_id] || (by[s.seg_id] = { v: [], p: new Set() }); b.v.push(graph.edges[s.seg_id].len / s.dur_min * 60); b.p.add(s.participant); }
+    const edges = {}; for (const [k, b] of Object.entries(by)) if (b.p.size >= 2) { b.v.sort((x, y) => x - y); edges[k] = [Math.round(b.v[Math.floor(b.v.length / 2)]), b.v.length]; }
+    const ACT = { coada: 60, accident: 90, politie: 45, pericol: 60, banda: 240, lucrari: 480 };
+    const notices = reports.filter(r => graph.edges[r.seg_id] && r.start_date === today && r.start_min <= now.min && now.min < (r.end_date === today && r.end_min != null ? r.end_min : r.start_min + (ACT[r.kind] || 60)))
+      .map(r => ({ segId: r.seg_id, kind: r.kind, startMin: r.start_min, closedLanes: r.closed_lanes }));
+    const { error } = await db.from('model_packs').upsert({ version: 'live', pack: { format: 'mpred-live', date: today, at: now.min, edges, notices } });
+    if (error) console.log('live: ' + error.message); else console.log(`live: ${Object.keys(edges).length} segments, ${notices.length} reports`);
+  }
+
   // 2) retrain when the data changed (or once a day at 03:xx)
   const model = new E.Model(graph, restr), model0 = new E.Model(graph, []);
   const T = trips.filter(t => t.path && t.path.every(e => graph.edges[e]) && !(t.pred && t.pred.offRoute) && t.dur_min >= 2 && E.pathLen(graph, t.path) / t.dur_min * 60 <= 130).map(t => ({ id: t.id, date: t.trip_date, dep: t.dep_min, dur: t.dur_min, orig: t.origin_node, dest: t.dest_node, path: t.path, weather: t.weather || 'senin' }));
-  const S = segs.filter(s => graph.edges[s.seg_id] && s.dur_min > 0.02 && graph.edges[s.seg_id].len / s.dur_min * 60 <= 160).map(s => ({ segId: s.seg_id, date: s.obs_date, t: s.entry_min, dur: s.dur_min, weather: s.weather }));
+  const S = segs.filter(s => graph.edges[s.seg_id] && s.dur_min > 0.02 && graph.edges[s.seg_id].len / s.dur_min * 60 <= (VMAX[graph.edges[s.seg_id].cls] || 100)).map(s => ({ segId: s.seg_id, date: s.obs_date, t: s.entry_min, dur: s.dur_min, weather: s.weather }));
   let pack = packs[0] ? packs[0].pack : null;
   const sig = E.hash(JSON.stringify([T.length, S.length, restr.map(r => r.id), graph.meta.built]));
   if (!pack || pack.sig !== sig || (now.min >= 180 && now.min < 190)) {

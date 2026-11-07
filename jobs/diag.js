@@ -7,7 +7,7 @@ const { createClient } = require('@supabase/supabase-js');
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) { console.log('missing secrets'); process.exit(0); }
 const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 (async () => {
-  const q = async t => { const { data, error } = await db.from(t).select('*'); if (error) throw new Error(t + ': ' + error.message); return data || []; };
+  const q = async t => { const out = []; for (let i = 0; ; i += 1000) { const { data, error } = await db.from(t).select('*').range(i, i + 999); if (error) throw new Error(t + ': ' + error.message); out.push(...(data || [])); if (!data || data.length < 1000) return out; } };
   const [trips, segs] = await Promise.all([q('trips'), q('segment_observations')]);
   const m0 = new E.Model(graph, []);
   console.log(`trips: ${trips.length}, segment observations: ${segs.length}`);

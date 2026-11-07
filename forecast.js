@@ -2,10 +2,41 @@
 (function (root) {
 'use strict';
 const LV = { g: ['Drum liniștit', '🟢'], y: ['Aglomerat', '🟡'], r: ['Ambuteiaj anunțat', '🔴'] };
-const KIND_TXT = { banda: 'o bandă închisă', lucrari: 'lucrări', accident: 'un accident', coada: 'o coadă' };
+const KIND_TXT = { banda: 'o bandă închisă', lucrari: 'lucrări', accident: 'un accident', coada: 'o coadă', pericol: 'un obstacol pe carosabil', politie: 'un control al poliției' };
 const slotColor = s => s.idle < 10 ? '#4caf6e' : s.idle < 25 ? '#f0a83a' : '#d9534f';
 const parseT = s => { const [h, m] = (s || '00:00').split(':').map(Number); return h * 60 + m; };
 const fmt = m => { m = Math.round(m); const d = ((m % 1440) + 1440) % 1440; return String(Math.floor(d / 60)).padStart(2, '0') + ':' + String(d % 60).padStart(2, '0'); };
+/* „sensul spre X”: localitatea spre care merge un tronson orientat (pentru a nu confunda sensurile de mers) */
+const DIRCACHE = new Map();
+function dirName(E, NET, eid) {
+  if (DIRCACHE.has(eid)) return DIRCACHE.get(eid);
+  const e = NET.edges[eid]; if (!e) return '';
+  const a = NET.nodes[e.from]; let b = NET.nodes[e.to], len = e.len, cur = e, guard = 0;
+  const A = NET.__adj || (NET.__adj = E.adjacency(NET));
+  while (len < 1 && guard++ < 40) { // prelungesc pe același drum, ca direcția să nu depindă de un tronson scurt
+    const nx = (A[cur.to] || []).map(k => NET.edges[k]).find(x => x.name && x.name === e.name && x.to !== cur.from);
+    if (!nx) break; cur = nx; len += nx.len; b = NET.nodes[nx.to];
+  }
+  const kx = Math.cos(a.lat * Math.PI / 180), brg = Math.atan2((b.lon - a.lon) * kx, b.lat - a.lat);
+  const deg = (brg * 180 / Math.PI + 360) % 360, card = 'sensul spre ' + ['nord', 'nord-est', 'est', 'sud-est', 'sud', 'sud-vest', 'vest', 'nord-vest'][Math.round(deg / 45) % 8];
+  const C = { lat: 44.4268, lon: 26.1025 }, dA = E.haversine(a, C), dB = E.haversine(b, C), span = E.haversine(a, b);
+  let out = card;
+  if (dA < 10) { if (dB - dA < -0.5 * span) out = 'sensul spre centru'; else if (dB - dA > 0.5 * span) out = 'sensul dinspre centru'; }
+  else if (dB - dA < -0.5 * span) out = 'sensul spre București';
+  else {
+    let best = null;
+    for (const p of NET.places || []) {
+      if (!['city', 'town', 'village'].includes(p.kind)) continue;
+      const n = NET.nodes[p.node]; if (!n) continue;
+      const d = E.haversine(a, n); if (d < 3 || d > 30) continue;
+      let da = Math.abs(Math.atan2((n.lon - a.lon) * kx, n.lat - a.lat) - brg) % (2 * Math.PI); if (da > Math.PI) da = 2 * Math.PI - da;
+      if (da > 0.4) continue;
+      const sc = da * 4 - d / 10 - (p.kind === 'city' || p.kind === 'town' ? 1.5 : 0); if (!best || sc < best.sc) best = { sc, name: p.name };
+    }
+    if (best) out = 'sensul spre ' + best.name;
+  }
+  DIRCACHE.set(eid, out); return out;
+}
 function createForecaster(o) {
   const E = o.E, NET = o.net, M = o.model, M0 = o.model0, version = o.version || '';
   const LR = () => (o.pack && o.pack.lr ? o.pack : null);
@@ -70,14 +101,15 @@ function createForecaster(o) {
     const causes = [];
     for (const p of cur.path) for (const r of M.activeRestr(p, E.dayIndex(date) * 1440 + usual + 20).list) {
       const m = /^Raport participant: (\w+)/.exec(r.note || ''), road = NET.edges[r.segId] && NET.edges[r.segId].name;
-      causes.push(m ? `${KIND_TXT[m[1]] || 'o problemă'}${road ? ' pe ' + road : ''} (semnalare de la participanți)` : (r.note || ('o bandă închisă' + (road ? ' pe ' + road : ''))));
+      const dir = dirName(E, NET, r.segId);
+      causes.push(m ? `${KIND_TXT[m[1]] || 'o problemă'}${road ? ' pe ' + road : ''}, ${dir} (semnalare de la participanți)` : (r.note || ('o bandă închisă' + (road ? ' pe ' + road : ''))) + (m ? '' : ', ' + dir));
     }
     const wx = weatherFor(date); if (wx !== 'senin') causes.push('vremea: ' + E.WEATHER[wx].label.toLowerCase());
     const res = { date, slots, cur, typ, early, calm, lateBy, extra, level, jam, causes: [...new Set(causes)], ta, usual, deadline, near };
     return (CACHE[key] = res);
   }
   const LV = { g: ['Drum liniștit', '🟢'], y: ['Aglomerat', '🟡'], r: ['Ambuteiaj anunțat', '🔴'] };
-const KIND_TXT = { banda: 'o bandă închisă', lucrari: 'lucrări', accident: 'un accident', coada: 'o coadă' };
+const KIND_TXT = { banda: 'o bandă închisă', lucrari: 'lucrări', accident: 'un accident', coada: 'o coadă', pericol: 'un obstacol pe carosabil', politie: 'un control al poliției' };
   const slotColor = s => s.idle < 10 ? '#4caf6e' : s.idle < 25 ? '#f0a83a' : '#d9534f';
 
   /* ---------- Ecranul „Avertizări” ---------- */
@@ -114,6 +146,6 @@ function urgent(f, h, live) {
   const text = `Dacă plecați la ora stabilită, ${fmt(usual)}, ajungeți cu aproximativ ${minTxt(late)} întârziere! Plecați la ${fmt(leave)}.${cause}`;
   return { late, leave, text, title: `⚠️ Ambuteiaj grav pe drumul dumneavoastră (${h.name.toLowerCase()})` };
 }
-const api = { createForecaster, decision, urgent, minTxt, LV, slotColor, fmt, parseT };
+const api = { dirName, createForecaster, decision, urgent, minTxt, LV, slotColor, fmt, parseT };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.PLT = api;
 })(typeof self !== 'undefined' ? self : this);

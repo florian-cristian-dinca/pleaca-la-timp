@@ -55,7 +55,7 @@ create table if not exists segment_observations (
 create table if not exists reports (
   id text primary key,
   participant uuid not null default auth.uid() references participants(id) on delete cascade,
-  kind text not null check (kind in ('coada','accident','banda','lucrari')),
+  kind text not null,
   seg_id text not null,
   closed_lanes smallint not null default 0,
   start_date date not null, start_min smallint not null,
@@ -92,6 +92,10 @@ alter table trips enable row level security;
 alter table segment_observations enable row level security;
 alter table reports enable row level security;
 alter table push_subscriptions enable row level security;
+-- report kinds (idempotent: also upgrades an older database)
+alter table reports drop constraint if exists reports_kind_check;
+alter table reports add constraint reports_kind_check check (kind in ('coada','accident','banda','lucrari','politie','pericol'));
+
 alter table model_packs enable row level security;
 alter table sent_alerts enable row level security;
 
