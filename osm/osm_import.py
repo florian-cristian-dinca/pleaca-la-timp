@@ -38,7 +38,37 @@ PLACE_TYPES = {'city', 'town', 'village', 'suburb', 'quarter', 'neighbourhood'}
 # effective free-flow speed incl. average signal / junction delay (km/h) - prior, calibrated on observed trips
 EFFECTIVE_V0 = {'A': 95, 'C': 60, 'N': 60, 'J': 45, 'M': 32, 'B': 26}
 # destinations that OSM maps as areas (campuses, stations, airports, malls, hospitals)
-POI_TAGS = {'amenity': {'university', 'college', 'hospital'}, 'railway': {'station'}, 'aeroway': {'aerodrome'}, 'shop': {'mall'}}
+POI_TAGS = {'amenity': {'university', 'college', 'hospital'}, 'railway': {'station'}, 'aeroway': {'aerodrome'}, 'shop': {'mall'}}  # (legacy)
+
+
+def poi_cat(t):
+    """Destination category of an OSM object, or None. Hospitals, clinics, malls, fuel, shops, schools, stations…"""
+    a, sh, hc = t.get('amenity'), t.get('shop'), t.get('healthcare')
+    if a == 'hospital' or hc == 'hospital':
+        return 'hospital'
+    if a == 'clinic' or hc in ('clinic', 'centre'):
+        return 'clinic'
+    if sh == 'mall':
+        return 'mall'
+    if a == 'fuel':
+        return 'fuel'
+    if sh in ('supermarket', 'wholesale') or sh == 'doityourself':
+        return 'shop'
+    if a in ('university', 'college'):
+        return 'university'
+    if a == 'school':
+        return 'school'
+    if t.get('railway') == 'station' or (t.get('station') == 'subway' and t.get('public_transport') == 'station'):
+        return 'station'
+    if t.get('aeroway') == 'aerodrome' and (t.get('iata') or 'Aeroport' in t.get('name', '')):
+        return 'airport'
+    if a == 'townhall':
+        return 'townhall'
+    return None
+
+
+def poi_name(t):
+    return t.get('name') or t.get('brand') or t.get('operator')
 # key pilot destinations, always added (approximate coordinates, snapped to the nearest graph node)
 MANUAL_POIS = [
     ('Universitatea POLITEHNICA (Regie)', 44.4388, 26.0515),
@@ -109,23 +139,29 @@ class Collector(osmium.SimpleHandler):
         return s <= lat <= n and w <= lon <= e
 
     def node(self, n):
-        for k, vals in POI_TAGS.items():
-            if n.tags.get(k) in vals and 'name' in n.tags and n.location.valid() and self.inside(n.location.lat, n.location.lon):
-                self.places.append(dict(name=n.tags['name'], kind='poi', lat=n.location.lat, lon=n.location.lon))
+        c = poi_cat(n.tags)
+        if c and poi_name(n.tags) and n.location.valid() and self.inside(n.location.lat, n.location.lon):
+            self.places.append(dict(name=poi_name(n.tags), kind='poi', cat=c, lat=n.location.lat, lon=n.location.lon))
         t = n.tags.get('place')
         if t in PLACE_TYPES and 'name' in n.tags and n.location.valid() and self.inside(n.location.lat, n.location.lon):
             self.places.append(dict(name=n.tags['name'], kind=t, lat=n.location.lat, lon=n.location.lon))
 
+    def area(self, a):
+        # buildings / campuses mapped as closed ways or multipolygons
+        c = poi_cat(a.tags)
+        if not c or not poi_name(a.tags):
+            return
+        try:
+            ring = next(iter(a.outer_rings()))
+            pts = [(nd.lat, nd.lon) for nd in ring]
+        except Exception:
+            return
+        if pts:
+            la, lo = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
+            if self.inside(la, lo):
+                self.places.append(dict(name=poi_name(a.tags), kind='poi', cat=c, lat=la, lon=lo))
+
     def way(self, w):
-        for k, vals in POI_TAGS.items():
-            if w.tags.get(k) in vals and 'name' in w.tags and w.is_closed():
-                try:
-                    lats = [nd.location.lat for nd in w.nodes]; lons = [nd.location.lon for nd in w.nodes]
-                except Exception:
-                    lats = []
-                if lats and self.inside(sum(lats) / len(lats), sum(lons) / len(lons)):
-                    self.places.append(dict(name=w.tags['name'], kind='poi', lat=sum(lats) / len(lats), lon=sum(lons) / len(lons)))
-                break
         hw = w.tags.get('highway')
         base = LINK.get(hw, hw)
         if base not in HIGHWAY_RANK or HIGHWAY_RANK.index(base) > self.min_rank:
@@ -324,15 +360,39 @@ def build(ways, places):
         return None, None
 
     plist, seen = [], set()
-    places = places + [dict(name=n, kind='poi', lat=la, lon=lo) for n, la, lo in MANUAL_POIS]
+    places = places + [dict(name=n, kind='poi', cat='landmark', lat=la, lon=lo) for n, la, lo in MANUAL_POIS]
+    towns = [p for p in places if p['kind'] in ('city', 'town', 'village', 'suburb', 'quarter', 'neighbourhood')]
+    tgrid = defaultdict(list)
+    for p in towns:
+        tgrid[(round(p['lat'] * 20), round(p['lon'] * 20))].append(p)
+
+    def near_town(lat, lon):
+        gi, gj, best, bd = round(lat * 20), round(lon * 20), None, 1e9
+        for i in range(gi - 2, gi + 3):
+            for j in range(gj - 2, gj + 3):
+                for p in tgrid.get((i, j), []):
+                    d = haversine((lat, lon), (p['lat'], p['lon']))
+                    if d < bd:
+                        best, bd = p, d
+        return best['name'] if best and bd < 6 else None
+
     for p in places:
-        if p['name'] in seen:
+        poi = p['kind'] == 'poi'
+        key = (p['name'], round(p['lat'], 3), round(p['lon'], 3)) if poi else p['name']
+        if key in seen:
             continue
-        seen.add(p['name'])
+        seen.add(key)
         k, d = nearest(p['lat'], p['lon'])
-        if k and d < 2.5:
-            nodes[k].setdefault('place', p['name'])
-            plist.append(dict(name=p['name'], kind=p['kind'], node=k, distKm=round(d, 2)))
+        if k and d < (1.5 if poi else 2.5):
+            if not poi:
+                nodes[k].setdefault('place', p['name'])
+            q = dict(name=p['name'], kind=p['kind'], node=k, distKm=round(d, 2))
+            if poi:
+                q['cat'] = p.get('cat', 'landmark')
+                nt = near_town(p['lat'], p['lon'])
+                if nt and nt != p['name']:
+                    q['near'] = nt
+            plist.append(q)
     return nodes, edges, plist
 
 
