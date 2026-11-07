@@ -1,6 +1,7 @@
 -- Pleacă la timp – Supabase schema (safe to run again: every statement is idempotent) (Postgres, EU region recommended: Frankfurt)
 -- Participants sign in anonymously (Supabase anonymous sign-ins); every row is owned by auth.uid().
 -- The scheduled forecast job uses the service-role key (GitHub secret) and bypasses RLS.
+-- Family group (optional feature): run supabase/family.sql once, after this file.
 
 create table if not exists participants (
   id uuid primary key default auth.uid() references auth.users(id) on delete cascade,

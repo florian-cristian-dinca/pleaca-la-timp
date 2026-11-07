@@ -144,11 +144,13 @@ textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px
   <div class="screen" id="s-map"></div>
   <div class="screen" id="s-week"></div>
   <div class="screen" id="s-trip"></div>
+  <div class="screen" id="s-fam"></div>
   <div class="screen" id="s-set"></div>
 </div>
 <nav class="tabs"><div>
   <button data-s="home" class="on"><span class="e">🔔</span>Avertizări</button>
   <button data-s="trip"><span class="e">🚗</span>Am plecat</button>
+  <button data-s="fam"><span class="e">👪</span>Familie</button>
   <button data-s="set"><span class="e">⚙️</span>Setări</button>
 </div></nav>
 <div class="overlay" id="welcome"><div class="modal" id="welcomeBody"></div></div>
@@ -331,8 +333,9 @@ async function flush() {
     const s = await session(); if (!s) return;
     const { c, uid } = s;
     while (S.outbox.length) {
+      if (S.minor && !S.famApproved && S.outbox[0].op !== 'participant') break; // copil: nimic altceva până la acordul părintelui
       const { op, payload } = S.outbox[0]; let r = { error: null };
-      if (op === 'participant') r = await c.from('participants').upsert({ id: uid, pid: S.pid, consent_version: PLT_CONFIG.consentVersion, consent_at: new Date(S.consentAt || Date.now()).toISOString(), lead_min: S.lead, evening_alert: S.evening, evening_at: S.eveningAt });
+      if (op === 'participant') r = await c.from('participants').upsert({ id: uid, pid: S.pid, consent_version: PLT_CONFIG.consentVersion + (S.minor ? '-minor' : ''), consent_at: new Date(S.consentAt || Date.now()).toISOString(), lead_min: S.lead, evening_alert: S.evening, evening_at: S.eveningAt });
       else if (op === 'habits') { r = await c.from('habits').delete().eq('participant', uid); if (!r.error) r = await c.from('habits').insert(S.habits.map(h => ({ name: h.name, origin_node: h.o, dest_node: h.d, arrive_by: h.ta, usual_departure: h.usual, days: h.days }))); }
       else if (op === 'trip') { const t = payload; r = await c.from('trips').upsert({ id: t.id, trip_date: t.date, dep_min: Math.round(t.dep), dur_min: t.dur, origin_node: t.orig, dest_node: t.dest, path: t.path, weather: t.weather, pred: t.pred, on_time: t.onTime, source: 'participant' }); }
       else if (op === 'report') { const x = payload; r = await c.from('reports').upsert({ id: x.id, kind: x.kind, seg_id: x.segId, closed_lanes: x.closedLanes, start_date: x.startDate, start_min: x.startMin, end_date: x.endDate, end_min: x.endMin }); }
@@ -740,7 +743,7 @@ function onFix(pos) {
   if (mm.eid && gpsFresh(L) && t - (L.altAt || L.dep) > 3 && refreshAlts(L, t)) { const hadBetter = L.betterTold; if (L.better && !hadBetter) { L.betterTold = true; toast(`Alternativa ${L.better.i} este acum cu ~${durTxt(L.better.gain)} mai rapidă.`); } save(); renderTrip(); return; }
   const dEnd = E.haversine({ lat: c.latitude, lon: c.longitude }, NET.nodes[L.dest]);
   if (c.accuracy <= 80 && (dEnd < 0.2 || (mm.eid && NET.edges[mm.eid].to === L.dest && mm.s > NET.edges[mm.eid].len - 0.05))) { L.nearEnd = (L.nearEnd || 0) + 1; if (L.nearEnd >= 2) { save(); arrive(true); return; } } else L.nearEnd = 0;
-  save(); drawTrip(); pullTraffic();
+  save(); drawTrip(); pullTraffic(); if (S.fam) famPushPosition(L, liveState(L));
 }
 function startGeo() {
   if (!navigator.geolocation || GEO != null) return;
@@ -876,6 +879,7 @@ function renderTrip() {
     ${L.better ? `<div class="note" style="background:var(--ybg);color:var(--ink)">↪️ Alternativa ${L.better.i} este acum cu ~${durTxt(L.better.gain)} mai rapidă decât drumul pe care sunteți.</div>` : ''}
     <div class="mapwrap"><canvas class="rmap" id="tripMap" style="height:220px"></canvas><div class="mapbtns"><button id="tZin" aria-label="Mărește">+</button><button id="tZout" aria-label="Micșorează">−</button></div></div>
     <p class="muted" id="tripInfo" style="margin:6px 0 0;font-size:13px"></p>
+    ${S.fam && S.fam.me && S.fam.me.approved && S.fam.me.sharing ? '<p class="muted" style="margin:4px 0 0;font-size:13px">👪 Familia vă vede poziția și ora de sosire în timpul acestui drum.</p>' : ''}
     <div class="kicker" style="margin-top:14px">Semnalați pe sensul dumneavoastră de mers</div>
     <div class="rep">${REPORTS.map(([e, t, k]) => `<button class="repb" data-r="${k}"><span class="e">${e}</span>${t}</button>`).join('')}</div>
     <p class="muted" style="margin-top:6px;font-size:13px">Doar pasagerul sau când sunteți oprit în siguranță.</p>
@@ -888,7 +892,7 @@ function renderTrip() {
   $('tZin').onclick = () => { TV.km = Math.max(0.8, TV.km / 1.6); TRIPDRAW = 0; drawTrip(); }; $('tZout').onclick = () => { TV.km = Math.min(40, TV.km * 1.6); TRIPDRAW = 0; drawTrip(); };
   $('bDest').onclick = () => { $('destBox').style.display = 'block'; bindPickers($('destBox')); $('destBox').scrollIntoView({ behavior: 'smooth' }); };
   $('tDestGo').onclick = () => changeDest($('tDest').value);
-  $('bArr').onclick = () => arrive(false); $('bCan').onclick = () => { stopGeo(); S.live = null; save(); renderTrip(); };
+  $('bArr').onclick = () => arrive(false); $('bCan').onclick = () => { stopGeo(); S.live = null; save(); famEndTrip(false); renderTrip(); };
   TRIPDRAW = 0; setTimeout(drawTrip, 30); startGeo(); pullTraffic();
 }
 function startTrip(o, d, name, ta, h) {
@@ -939,7 +943,7 @@ function arrive(auto) {
   const path = driven || L.path, orig = NET.edges[path[0]].from;
   S.trips.push({ id: L.id, date: L.date, dep: L.dep, dur, orig, dest: L.dest, path, weather: L.weather, vacation: false, source: 'participant', participant: S.pid,
     pred: Object.assign({}, L.pred, { offRoute: !driven, gps: !!(L.gps && L.gps.fixes), segments: (L.obs || []).length, driven: !!driven, gaps: mm.gaps || 0, km: Math.round((mm.km || 0) * 10) / 10 }), onTime });
-  S.live = null; save(); enqueue('trip', S.trips[S.trips.length - 1]);
+  S.live = null; save(); enqueue('trip', S.trips[S.trips.length - 1]); famEndTrip(true);
   renderTrip(); toast((auto ? 'Am detectat sosirea. ' : '') + (onTime ? 'Ați ajuns la timp! 🎉' : 'Ați ajuns. Vă mulțumim, aplicația învață din acest drum.'));
 }
 function histHTML() {
@@ -996,16 +1000,24 @@ function welcome() {
   <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="wTa" value="09:00"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" id="wU" value="08:00"></div></div>
   <label class="chk"><input type="checkbox" id="wC"><span>Am cel puțin 18 ani și sunt de acord ca localitățile, orele și drumurile mele, fără numele meu, să fie prelucrate de PRO SMART WORK S.R.L. în acest pilot, pentru calculul și îmbunătățirea avertizărilor. Cât timp sunt pe drum, cu aplicația deschisă, poziția GPS este folosită doar pentru a calcula cât durează fiecare porțiune de drum; traseul GPS nu se păstrează. Pot retrage acordul oricând, ștergând datele din Setări.</span></label>
   <p class="muted" style="margin:6px 0 0"><a href="confidentialitate.html" target="_blank" rel="noopener">Citiți informarea privind datele personale</a></p>
+  <details id="wMinorBox" style="margin-top:8px"><summary>Am sub 18 ani</summary>
+    <p class="muted">Puteți folosi aplicația doar în grupul familiei, cu acordul părintelui sau tutorelui, dat din aplicația lui. Cereți-i codul grupului.</p>
+    <div class="field"><small>Codul grupului familiei</small><input id="wCode" maxlength="8" autocapitalize="characters" placeholder="ex. 3A7F9C2D"></div>
+    <div class="field"><small>Prenumele afișat familiei</small><input id="wName" maxlength="30" placeholder="ex. Andrei"></div>
+    <label class="chk"><input type="checkbox" id="wM"><span>Am sub 18 ani. Părintele sau tutorele meu știe și își dă acordul din aplicația lui. Până atunci, datele mele nu se trimit.</span></label></details>
   <button class="btn go" id="wGo" disabled>Încep</button>`;
   $('welcome').classList.add('on');
   bindPickers($('welcome'));
-  const chk = () => $('wGo').disabled = !($('wC').checked && $('wH').value && $('wW').value && $('wH').value !== $('wW').value);
-  ['wC', 'wH', 'wW'].forEach(i => $(i).onchange = chk);
+  const minorOk = () => $('wM').checked && $('wCode').value.trim().length >= 6 && $('wName').value.trim();
+  const chk = () => { if ($('wM').checked) $('wC').checked = false; $('wGo').disabled = !(($('wC').checked || minorOk()) && $('wH').value && $('wW').value && $('wH').value !== $('wW').value); };
+  ['wC', 'wH', 'wW', 'wM'].forEach(i => $(i).onchange = chk); ['wCode', 'wName'].forEach(i => $(i).oninput = chk);
   $('wGo').onclick = () => {
     const H = $('wH').value, W = $('wW').value, ta = $('wTa').value || '09:00', u = $('wU').value || '08:00';
     S.consent = true; S.home = H; S.work = W;
     S.habits = [{ id: 'h1', name: 'Spre serviciu', o: H, d: W, ta, usual: u, days: [1, 2, 3, 4, 5] }, { id: 'h2', name: 'Spre casă', o: W, d: H, ta: '18:30', usual: '17:30', days: [1, 2, 3, 4, 5] }];
+    const minor = !$('wC').checked && minorOk(); if (minor) { S.minor = true; S.famApproved = false; S.consentVersionNote = 'minor-pending'; }
     S.consentAt = Date.now(); save(); enqueue('participant'); enqueue('habits'); $('welcome').classList.remove('on'); show('home');
+    if (minor) (async () => { try { await flush(); await famCall('join_family', { p_code: $('wCode').value.trim(), p_name: $('wName').value.trim(), p_minor: true }); await pullFamily(); toast('Ați intrat în grupul familiei. Așteptăm acordul părintelui.'); } catch (e) { toast(famErr(e) + ' Puteți încerca din nou la Familie.'); } })();
   };
 }
 
@@ -1022,11 +1034,109 @@ function checkAlerts() {
 }
 function banner(t) { const b = $('banner'); b.textContent = t; b.classList.add('on'); try { navigator.vibrate && navigator.vibrate(200); } catch (e) { } b.onclick = () => b.classList.remove('on'); }
 
+/* ---------- Familie: poziția se vede doar în timpul drumurilor pornite cu „Am plecat” ---------- */
+let FAMPOS = 0;
+const famErr = e => { const m = String(e && e.message || e); return /already_in_family/.test(m) ? 'Sunteți deja într-un grup de familie.' : /bad_code/.test(m) ? 'Codul nu e corect. Verificați-l și încercați din nou.' : /not_allowed/.test(m) ? 'Doar un adult din grup poate da acordul.' : /relation .* does not exist|function .* does not exist|schema cache/.test(m) ? 'Funcția Familie nu e încă activată pe server.' : 'Nu am putut contacta serverul. Verificați conexiunea la internet.'; };
+async function pullFamily() {
+  try {
+    const s = await session(); if (!s) return;
+    const { data: mem, error } = await s.c.from('family_members').select('participant,display_name,minor,approved,sharing,guardian,joined_at,family');
+    if (error) throw error;
+    if (!mem || !mem.length) { S.fam = null; save(); return; }
+    const me = mem.find(m => m.participant === s.uid);
+    const { data: fam } = await s.c.from('families').select('id,code,created_by').limit(1);
+    const { data: pos } = await s.c.from('live_positions').select('*');
+    S.fam = { uid: s.uid, code: fam && fam[0] ? fam[0].code : null, owner: fam && fam[0] ? fam[0].created_by : null, me, members: mem, pos: pos || [], at: Date.now() };
+    const was = S.famApproved; S.famApproved = !!(me && me.approved); save();
+    if (S.minor && S.famApproved && !was) { toast('Părintele dumneavoastră și-a dat acordul. Aplicația funcționează complet.'); flush(); }
+  } catch (e) { console.warn('family', e.message); }
+}
+async function famCall(fn, args) { const s = await session(); if (!s) throw new Error('offline'); const r = await s.c.rpc(fn, args); if (r.error) throw r.error; return r.data; }
+/* în timpul drumului: ultima poziție (nu traseul), cel mult o dată la 15 secunde */
+async function famPushPosition(L, ls) {
+  if (!S.fam || !S.fam.me || !S.fam.me.approved || !S.fam.me.sharing || !L.gps || Date.now() - FAMPOS < 15000) return;
+  FAMPOS = Date.now();
+  try { const s = await session(); if (!s) return;
+    await s.c.from('live_positions').upsert({ participant: s.uid, lat: Math.round(L.gps.lat * 1e5) / 1e5, lon: Math.round(L.gps.lon * 1e5) / 1e5, acc: L.gps.acc, speed_kmh: ls.v != null ? Math.round(ls.v) : null,
+      dest_name: placeName(L.dest), eta_min: Math.round(ls.eta), ta_min: L.ta, status: 'pe drum', day: todayStr(), updated_at: new Date().toISOString() });
+  } catch (e) { }
+}
+async function famEndTrip(arrived) {
+  if (!S.fam || !S.fam.me) return;
+  try { const s = await session(); if (!s) return;
+    if (arrived && S.fam.me.sharing && S.fam.me.approved) await s.c.from('live_positions').update({ status: 'a ajuns', speed_kmh: 0, updated_at: new Date().toISOString() }).eq('participant', s.uid);
+    else await s.c.from('live_positions').delete().eq('participant', s.uid);
+  } catch (e) { }
+}
+function famAgo(ts) { const m = Math.round((Date.now() - new Date(ts).getTime()) / 60000); return m < 1 ? 'acum' : m < 60 ? `acum ${m} min` : `acum ${Math.floor(m / 60)} h`; }
+function drawFamMap(cv, pts) {
+  const r = cv.getBoundingClientRect(); if (!r.width || !pts.length) return;
+  const dpr = devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr;
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
+  let la0 = Math.min(...pts.map(p => p.lat)), la1 = Math.max(...pts.map(p => p.lat)), lo0 = Math.min(...pts.map(p => p.lon)), lo1 = Math.max(...pts.map(p => p.lon));
+  const pad = 0.01; la0 -= pad; la1 += pad; lo0 -= pad * 1.4; lo1 += pad * 1.4;
+  const kx = Math.cos((la0 + la1) / 2 * Math.PI / 180), sx = W / ((lo1 - lo0) * kx), sy = H / (la1 - la0), sc = Math.min(sx, sy);
+  const cx = (lo0 + lo1) / 2, cy = (la0 + la1) / 2, X = lon => W / 2 + (lon - cx) * kx * sc, Y = lat => H / 2 - (lat - cy) * sc;
+  g.fillStyle = '#e9edf1'; g.fillRect(0, 0, W, H); g.lineCap = 'round';
+  const seen = new Set();
+  for (const eid of trk().inBox(la0, la1, lo0, lo1)) { const e = NET.edges[eid], k = e.from < e.to ? e.from + e.to : e.to + e.from; if (seen.has(k)) continue; seen.add(k);
+    g.strokeStyle = '#fff'; g.lineWidth = (['A', 'C', 'N', 'M'].includes(e.cls) ? 3.5 : 1.6) * dpr; g.beginPath(); strokeEdge(g, eid, X, Y, true); g.stroke(); }
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (const p of pts) { const x = X(p.lon), y = Y(p.lat);
+    g.fillStyle = p.me ? '#0b4ea2' : p.status === 'a ajuns' ? '#147a42' : '#c3242f'; g.beginPath(); g.arc(x, y, 17 * dpr, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 3 * dpr; g.stroke();
+    g.fillStyle = '#fff'; g.font = `800 ${14 * dpr}px "Overpass"`; g.fillText((p.name || '?').slice(0, 1).toUpperCase(), x, y + 1); }
+  g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillStyle = 'rgba(31,38,46,.55)'; g.font = `600 ${10 * dpr}px "Overpass"`; g.fillText('© OpenStreetMap contributors', 8 * dpr, H - 8 * dpr);
+}
+function renderFam() {
+  const F = S.fam, el = $('s-fam');
+  if (!F || !F.me) {
+    el.innerHTML = `<div class="card"><div class="msg">Familia pe drum</div><p class="muted">Membrii grupului își văd unii altora poziția, destinația și ora estimată de sosire, <b>doar în timpul drumurilor pornite cu „Am plecat”</b>. Când drumul se încheie, poziția nu mai e afișată.</p>
+      <div class="field"><small>Numele afișat familiei</small><input id="fName" maxlength="30" placeholder="ex. Cristian, Mama, Andrei"></div>
+      <button class="btn dark" id="fNew">Creez grupul familiei</button>
+      <details style="margin-top:12px"><summary>Am primit un cod de la familie</summary>
+        <div class="field"><small>Codul grupului</small><input id="fCode" maxlength="8" autocapitalize="characters" placeholder="ex. 3A7F9C2D"></div>
+        ${S.minor ? '<p class="muted">Aveți sub 18 ani: intrați în grup cu acordul părintelui, dat din aplicația lui.</p>' : '<label class="chk"><input type="checkbox" id="fMinor"><span>Telefonul este al unui copil sub 18 ani. Părintele sau tutorele își dă acordul din aplicația lui, după intrarea în grup.</span></label>'}
+        <button class="btn dark" id="fJoin">Intru în grup</button></details></div>`;
+    $('fNew').onclick = async () => { const n = $('fName').value.trim(); if (!n) { toast('Scrieți numele afișat familiei.'); return; } if (S.minor) { toast('Grupul îl creează un adult; dumneavoastră intrați cu codul primit.'); return; }
+      try { await flush(); await famCall('create_family', { p_name: n }); await pullFamily(); renderFam(); toast('Am creat grupul. Trimiteți codul familiei.'); } catch (e) { toast(famErr(e)); } };
+    $('fJoin').onclick = async () => { const n = $('fName').value.trim(), c = $('fCode').value.trim(), minor = S.minor || ($('fMinor') && $('fMinor').checked);
+      if (!n || c.length < 6) { toast('Scrieți numele afișat și codul grupului.'); return; }
+      try { await flush(); await famCall('join_family', { p_code: c, p_name: n, p_minor: !!minor }); await pullFamily(); renderFam(); toast(minor ? 'Ați intrat în grup. Așteptăm acordul părintelui.' : 'Ați intrat în grupul familiei.'); } catch (e) { toast(famErr(e)); } };
+    return;
+  }
+  const me = F.me, owner = F.owner === F.uid, pos = Object.fromEntries((F.pos || []).map(p => [p.participant, p]));
+  const pending = F.members.filter(m => m.minor && !m.approved);
+  const pts = F.members.map(m => { const p = pos[m.participant]; return p ? { lat: p.lat, lon: p.lon, name: m.display_name, status: p.status, me: m.participant === F.uid } : null; }).filter(Boolean);
+  el.innerHTML = `<div class="card"><div class="kicker">Familia</div>
+      ${!me.approved ? '<div class="alertline" style="background:var(--ybg)">⏳ <span>Așteptăm acordul părintelui sau tutorelui. Până atunci, datele dumneavoastră nu se trimit și poziția nu e afișată.</span></div>' : ''}
+      ${me.approved && !me.minor && pending.map(m => `<div class="alertline" style="background:var(--ybg);display:block"><b>${esc(m.display_name)}</b> (sub 18 ani) vrea să intre în grup.
+        <label class="chk"><input type="checkbox" class="fOk" data-p="${m.participant}"><span>Sunt părintele sau tutorele lui/ei și sunt de acord ca PRO SMART WORK S.R.L. să îi prelucreze datele în acest pilot (drumurile, fără nume, și poziția în timpul drumurilor, vizibilă doar familiei), conform informării privind datele personale.</span></label>
+        <button class="btn go fApprove" data-p="${m.participant}">Îmi dau acordul</button></div>`).join('') || ''}
+      ${F.members.map(m => { const p = pos[m.participant], isMe = m.participant === F.uid;
+        const st = !m.approved ? 'așteaptă acordul părintelui' : !m.sharing ? 'partajarea e oprită' : p ? (p.status === 'a ajuns' ? `a ajuns la ${esc(p.dest_name || 'destinație')}, ${famAgo(p.updated_at)}` : `pe drum spre ${esc(p.dest_name || '?')}, sosire ~${fmt(Math.round(p.eta_min))}${p.speed_kmh != null ? `, ${Math.round(p.speed_kmh)} km/h` : ''} · ${famAgo(p.updated_at)}`) : 'nu e pe drum acum';
+        return `<div class="next" style="cursor:default"><i class="lamp" style="margin:0;background:${p && m.sharing && m.approved ? (p.status === 'a ajuns' ? 'var(--gl)' : 'var(--rl)') : '#c4ccd4'}"></i><div><b>${esc(m.display_name)}${isMe ? ' (dumneavoastră)' : ''}${m.minor ? ', sub 18 ani' : ''}</b><span>${st}</span></div></div>`; }).join('')}
+      ${pts.length ? '<canvas class="rmap" id="famMap" style="height:260px"></canvas>' : ''}
+      <p class="muted" style="font-size:13px">Pozițiile se actualizează la 15 secunde în timpul unui drum. Serverul păstrează doar ultima poziție, iar după 3 ore o șterge.</p></div>
+    <div class="card"><div class="kicker">Codul grupului</div><div style="font-size:30px;font-weight:900;letter-spacing:.08em;margin:4px 0">${esc(F.code || '—')}</div>
+      <p class="muted">Trimiteți codul membrilor familiei. Fiecare îl introduce în aplicație, la Familie.</p><button class="btn ghost" id="fShare">Trimiteți codul</button></div>
+    <div class="card"><label class="chk"><input type="checkbox" id="fShareOn" ${me.sharing ? 'checked' : ''}><span>Familia îmi vede poziția în timpul drumurilor</span></label>
+      <button class="btn red" id="fLeave">Ieșiți din grup</button>${owner ? '<p class="muted" style="font-size:13px">Ați creat grupul: dacă ieșiți, grupul se închide pentru toți.</p>' : ''}</div>`;
+  if (pts.length) setTimeout(() => drawFamMap($('famMap'), pts), 30);
+  el.querySelectorAll('.fApprove').forEach(b => b.onclick = async () => { const cb = el.querySelector(`.fOk[data-p="${b.dataset.p}"]`); if (!cb.checked) { toast('Bifați acordul înainte.'); return; }
+    try { await famCall('approve_minor', { p_participant: b.dataset.p }); await pullFamily(); renderFam(); toast('Acordul a fost înregistrat.'); } catch (e) { toast(famErr(e)); } });
+  $('fShare').onclick = () => { const t = `Intră în grupul familiei din aplicația „Pleacă la timp”: Familie → „Am primit un cod”, codul ${F.code}. ${location.origin + location.pathname}`;
+    if (navigator.share) navigator.share({ text: t }).catch(() => { }); else { navigator.clipboard && navigator.clipboard.writeText(t); toast('Am copiat mesajul cu codul.'); } };
+  $('fShareOn').onchange = async () => { try { const s = await session(); const on = $('fShareOn').checked; await s.c.from('family_members').update({ sharing: on }).eq('participant', s.uid); if (!on) await s.c.from('live_positions').delete().eq('participant', s.uid); await pullFamily(); renderFam(); toast(on ? 'Familia vă vede poziția în timpul drumurilor.' : 'Am oprit partajarea poziției.'); } catch (e) { toast(famErr(e)); } };
+  $('fLeave').onclick = async () => { if (!confirmTwice($('fLeave'), 'Apăsați din nou pentru a ieși din grup.')) return;
+    try { const s = await session(); await s.c.from('live_positions').delete().eq('participant', s.uid); if (owner) await s.c.from('families').delete().eq('created_by', s.uid); else await s.c.from('family_members').delete().eq('participant', s.uid); S.fam = null; save(); renderFam(); toast('Ați ieșit din grupul familiei.'); } catch (e) { toast(famErr(e)); } };
+}
+function confirmTwice(btn, msg) { if (btn.dataset.armed) return true; btn.dataset.armed = 1; btn.textContent = msg; setTimeout(() => { delete btn.dataset.armed; }, 4000); return false; }
+
 function show(s) {
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.s === s));
   document.querySelectorAll('.screen').forEach(x => x.classList.toggle('on', x.id === 's-' + s));
   if (s !== 'map') stopMapGeo();
-  if (s === 'home') renderHome(); if (s === 'map') renderMap(); if (s === 'week') renderWeek(); if (s === 'trip') renderTrip(); if (s === 'set') renderSet();
+  if (s === 'home') renderHome(); if (s === 'map') renderMap(); if (s === 'week') renderWeek(); if (s === 'trip') renderTrip(); if (s === 'set') renderSet(); if (s === 'fam') { renderFam(); pullFamily().then(() => { if ($('s-fam').classList.contains('on')) renderFam(); }); }
   scrollTo(0, 0);
 }
 document.querySelector('.tabs').onclick = e => { const b = e.target.closest('button'); if (b) show(b.dataset.s); };
@@ -1057,6 +1167,7 @@ if (isIOS && !standalone) setTimeout(showInstall, 1500);
   flush(); pullPack(); setInterval(pullPack, 15 * 60000);
   speakFromUrl();
   pullTraffic(true); setInterval(() => pullTraffic(), 300000);
+  if (S.consent) pullFamily(); setInterval(() => { if (!S.consent) return; if ($('s-fam').classList.contains('on')) pullFamily().then(() => { if ($('s-fam').classList.contains('on') && !document.activeElement.closest('#s-fam input')) renderFam(); }); else if (Date.now() - ((S.fam && S.fam.at) || 0) > 120000) pullFamily(); }, 20000);
   checkAlerts(); setInterval(checkAlerts, 30000); setInterval(() => { if (S.live && $('s-trip').classList.contains('on')) drawTrip(); if ($('s-map').classList.contains('on')) { LMT = 0; drawLiveMap(); } }, 5000); setInterval(() => { if ($('s-map').classList.contains('on')) $('mapPanel').innerHTML = mapPanel(); }, 60000);
 })();
 </script>
