@@ -6,6 +6,30 @@ const KIND_TXT = { banda: 'o bandă închisă', lucrari: 'lucrări', accident: '
 const slotColor = s => s.idle < 10 ? '#4caf6e' : s.idle < 25 ? '#f0a83a' : '#d9534f';
 const parseT = s => { const [h, m] = (s || '00:00').split(':').map(Number); return h * 60 + m; };
 const fmt = m => { m = Math.round(m); const d = ((m % 1440) + 1440) % 1440; return String(Math.floor(d / 60)).padStart(2, '0') + ':' + String(d % 60).padStart(2, '0'); };
+/* vremea pe ore (Open-Meteo, prin server): categorie pentru model + cuvânt pentru om */
+const WX_SEV = { senin: 0, ploaie: 1, ceata: 2, torential: 3, ninsoare: 4 };
+const WX_ICON = { ceata: '🌫️', ploaie: '🌧️', torential: '⛈️', ninsoare: '❄️' };
+function wxCode(code, prec, snow, vis, temp) { // → [categorie model, descriere]
+  if ([66, 67, 56, 57].includes(code) || (temp <= 0.5 && prec >= 0.1 && !(snow > 0))) return ['ninsoare', 'polei'];
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86 || snow >= 0.1) return ['ninsoare', 'ninsoare'];
+  if (code >= 95) return ['torential', 'furtună'];
+  if (code === 65 || code === 82 || prec >= 7) return ['torential', 'ploaie torențială'];
+  if (code === 45 || code === 48 || (vis != null && vis < 1000)) return ['ceata', 'ceață'];
+  if ((code >= 61 && code <= 64) || code === 80 || code === 81 || prec >= 0.5) return ['ploaie', 'ploaie'];
+  if (code >= 51 && code <= 55) return ['ploaie', 'burniță'];
+  return ['senin', ''];
+}
+const hh = h => String(h % 24).padStart(2, '0') + ':00';
+/* cea mai dificilă vreme într-un interval (minute) al unei zile: { cat, word, txt } sau null */
+function wxSpan(W, date, a, b) {
+  const d = W && W[date]; if (!d || !d.h) return null;
+  let worst = null, h0 = null, h1 = null;
+  for (let h = Math.max(0, Math.floor(a / 60)); h <= Math.min(23, Math.floor(b / 60)); h++) { const c = d.h[h]; if (!c || c === 'senin') continue; if (!worst || WX_SEV[c] > WX_SEV[worst.cat]) worst = { cat: c, word: d.d[h] }; }
+  if (!worst) return null;
+  for (let h = 0; h < 24; h++) if (d.h[h] === worst.cat) { if (h0 == null) h0 = h; h1 = h; }
+  worst.txt = `${worst.word} între ${hh(h0)} și ${hh(h1 + 1)}`; worst.icon = WX_ICON[worst.cat] || '🌦️'; return worst;
+}
+function wxAt(W, date, t) { const d = W && W[date]; return d && d.h ? d.h[Math.min(23, Math.max(0, Math.floor(t / 60)))] || 'senin' : null; }
 /* „sensul spre X”: localitatea spre care merge un tronson orientat (pentru a nu confunda sensurile de mers) */
 const DIRCACHE = new Map();
 function dirName(E, NET, eid) {
@@ -73,7 +97,7 @@ function createForecaster(o) {
   function forecast(h, date, light) {
     const key = (light ? 'L|' : '') + h.id + '|' + h.o + h.d + '|' + date + '|' + h.ta + '|' + h.usual + '|' + version;
     if (CACHE[key]) return CACHE[key];
-    const ctx = E.ctxFor(date, weatherFor(date), false), ctx0 = E.ctxFor(date, 'senin', false), ta = parseT(h.ta), usual = parseT(h.usual), deadline = ta - (o.bufferMin || 0); // ora aleasă de utilizator, fără rezerve ascunse
+    const ctx = E.ctxFor(date, weatherFor(date, parseT(h.usual)), false), ctx0 = E.ctxFor(date, 'senin', false), ta = parseT(h.ta), usual = parseT(h.usual), deadline = ta - (o.bufferMin || 0); // ora aleasă de utilizator, fără rezerve ascunse
     const from = Math.min(usual - 60, ta - 150), to = Math.max(usual + 60, ta + 30), slots = [];
     const paths = pathsFor(h.o, h.d, date, usual, ctx); if (!paths.length) return (CACHE[key] = null);
     for (let t = Math.round(from / 10) * 10; t <= to; t += 10) { const s = slotEval(M, paths, date, t, ctx, !light); if (s) slots.push(s); }
@@ -105,8 +129,8 @@ function createForecaster(o) {
       const dir = dirName(E, NET, r.segId);
       causes.push(m ? `${KIND_TXT[m[1]] || 'o problemă'}${road ? ' pe ' + road : ''}, ${dir} (semnalare de la participanți)` : (r.note || ('o bandă închisă' + (road ? ' pe ' + road : ''))) + (m ? '' : ', ' + dir));
     }
-    const wx = weatherFor(date); if (wx !== 'senin') causes.push('vremea: ' + E.WEATHER[wx].label.toLowerCase());
-    const res = { date, slots, cur, typ, early, calm, lateBy, extra, level, jam, causes: [...new Set(causes)], ta, usual, deadline, near };
+    const wx = o.weatherSpan ? o.weatherSpan(date, Math.min(usual, early ? early.t0 : usual) - 30, ta) : null; if (wx) causes.push('vremea: ' + wx.txt);
+    const res = { date, slots, cur, typ, early, calm, lateBy, extra, level, jam, causes: [...new Set(causes)], ta, usual, deadline, near, wx };
     return (CACHE[key] = res);
   }
   const LV = { g: ['Drum liniștit', '🟢'], y: ['Aglomerat', '🟡'], r: ['Ambuteiaj anunțat', '🔴'] };
@@ -122,10 +146,11 @@ function decision(f, h) {
   const leave = f.level === 'g' ? f.usual : (f.early ? f.early.t0 : f.slots[0].t0);
   const where = f.jam ? ` Coloana se formează pe ${f.jam.name}, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}.` : '';
   const unusual = f.extra >= 8 ? ` Neobișnuit: cu ${Math.round(f.extra)} min mai mult decât de obicei.` : '';
+  const wx = f.wx ? ` Atenție la vreme: ${f.wx.txt}.` : '';
   return {
     leave, level: f.level,
-    morning: { title: `${h.name}: plecați la ${fmt(leave)}`, body: f.level === 'g' ? 'Drum liniștit, puteți pleca la ora obișnuită.' : `${f.level === 'r' ? 'Ambuteiaj' : 'Aglomerație'} pe drumul dumneavoastră.${where}${unusual}` },
-    evening: { title: `Mâine: ${LV[f.level][0].toLowerCase()} · ${h.name.toLowerCase()}`, body: `Plecați la ${fmt(leave)} în loc de ${h.usual}.${where}${unusual}` }
+    morning: { title: `${h.name}: plecați la ${fmt(leave)}`, body: (f.level === 'g' ? 'Drum liniștit, puteți pleca la ora obișnuită.' : `${f.level === 'r' ? 'Ambuteiaj' : 'Aglomerație'} pe drumul dumneavoastră.${where}${unusual}`) + wx },
+    evening: { title: `Mâine: ${LV[f.level][0].toLowerCase()} · ${h.name.toLowerCase()}`, body: (f.level === 'g' ? `Puteți pleca la ora obișnuită, ${h.usual}.` : `Plecați la ${fmt(leave)} în loc de ${h.usual}.`) + `${where}${unusual}${wx}` }
   };
 }
 
@@ -147,6 +172,6 @@ function urgent(f, h, live) {
   const text = `Dacă plecați la ora stabilită, ${fmt(usual)}, ajungeți cu aproximativ ${minTxt(late)} întârziere! Plecați la ${fmt(leave)}.${cause}`;
   return { late, leave, text, title: `⚠️ Ambuteiaj grav pe drumul dumneavoastră (${h.name.toLowerCase()})` };
 }
-const api = { dirName, createForecaster, decision, urgent, minTxt, LV, slotColor, fmt, parseT };
+const api = { dirName, wxCode, wxSpan, wxAt, WX_SEV, WX_ICON, createForecaster, decision, urgent, minTxt, LV, slotColor, fmt, parseT };
 if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.PLT = api;
 })(typeof self !== 'undefined' ? self : this);

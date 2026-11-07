@@ -17,6 +17,23 @@ function localNow() {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Bucharest', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map(x => [x.type, x.value]));
   return { date: `${p.year}-${p.month}-${p.day}`, min: +p.hour * 60 + +p.minute };
 }
+/* vremea pe ore pentru București + Ilfov (Open-Meteo, 5 puncte). Pentru fiecare oră: cea mai grea categorie întâlnită
+   în cel puțin 2 puncte, altfel cea din centru. Fără cheie, fără date despre participanți. */
+async function fetchWeather() {
+  const P = [[44.43, 26.10], [44.62, 26.05], [44.45, 26.30], [44.28, 26.10], [44.44, 25.90]];
+  const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + P.map(p => p[0]).join(',') + '&longitude=' + P.map(p => p[1]).join(',') +
+    '&hourly=weather_code,precipitation,snowfall,visibility,temperature_2m&timezone=Europe%2FBucharest&forecast_days=3';
+  try {
+    const r = await fetch(url); if (!r.ok) throw new Error('HTTP ' + r.status); let j = await r.json(); if (!Array.isArray(j)) j = [j];
+    const W = {}, H = j[0].hourly;
+    H.time.forEach((ts, i) => {
+      const date = ts.slice(0, 10), h = +ts.slice(11, 13), cats = j.map(x => PLT.wxCode(x.hourly.weather_code[i], x.hourly.precipitation[i], x.hourly.snowfall[i], x.hourly.visibility[i], x.hourly.temperature_2m[i]));
+      let pick = cats[0]; for (const c of cats) if (PLT.WX_SEV[c[0]] > PLT.WX_SEV[pick[0]] && cats.filter(x => x[0] === c[0]).length >= 2) pick = c;
+      const d = W[date] || (W[date] = { h: Array(24).fill('senin'), d: Array(24).fill('') }); d.h[h] = pick[0]; d.d[h] = pick[1];
+    });
+    return W;
+  } catch (e) { console.log('weather: ' + e.message); return null; }
+}
 const VMAX = { A: 150, C: 130, N: 120, J: 100, M: 90, B: 80 };   // implausible speeds = bad GPS matching
 const addDays = (d, k) => E.dateFromIndex(E.dayIndex(d) + k);
 const wday = d => new Date(d + 'T12:00:00Z').getUTCDay();
@@ -38,6 +55,8 @@ async function all(table, q = x => x) { // PostgREST returns at most 1000 rows p
   const restr = reports.filter(r => r.closed_lanes > 0 && graph.edges[r.seg_id] && (!r.end_date || r.end_date >= today))
     .map(r => ({ id: r.id, segId: r.seg_id, closedLanes: r.closed_lanes, startDate: r.start_date, startMin: r.start_min, endDate: r.end_date, endMin: r.end_min || 0, source: 'raportată', note: 'Raport participant: ' + r.kind + (graph.edges[r.seg_id].name ? ' pe ' + graph.edges[r.seg_id].name : '') }));
 
+  const WX = await fetchWeather();
+  if (WX) console.log('weather: ' + Object.entries(WX).map(([d, x]) => d + ' ' + [...new Set(x.d.filter(Boolean))].join('/') ).join('; '));
   // 1b) live traffic for the app: median speed per road segment in the last 45 min (only where ≥ 2 participants
   //     measured it, so nobody's own trip can be read from it) and the reports still active today (all kinds)
   {
@@ -47,7 +66,7 @@ async function all(table, q = x => x) { // PostgREST returns at most 1000 rows p
     const ACT = { coada: 60, accident: 90, politie: 45, pericol: 60, banda: 240, lucrari: 480 };
     const notices = reports.filter(r => graph.edges[r.seg_id] && r.start_date === today && r.start_min <= now.min && now.min < (r.end_date === today && r.end_min != null ? r.end_min : r.start_min + (ACT[r.kind] || 60)))
       .map(r => ({ segId: r.seg_id, kind: r.kind, startMin: r.start_min, closedLanes: r.closed_lanes }));
-    const { error } = await db.from('model_packs').upsert({ version: 'live', pack: { format: 'mpred-live', date: today, at: now.min, edges, notices } });
+    const { error } = await db.from('model_packs').upsert({ version: 'live', pack: { format: 'mpred-live', date: today, at: now.min, edges, notices, weather: WX, weatherSource: 'Open-Meteo.com (CC BY 4.0)' } });
     if (error) console.log('live: ' + error.message); else console.log(`live: ${Object.keys(edges).length} segments, ${notices.length} reports`);
   }
 
@@ -66,7 +85,7 @@ async function all(table, q = x => x) { // PostgREST returns at most 1000 rows p
   }
 
   // 3) forecasts + alerts (only inside the relevant time windows)
-  const fc = PLT.createForecaster({ E, net: graph, model, model0, pack, version: pack.version });
+  const fc = PLT.createForecaster({ E, net: graph, model, model0, pack, version: pack.version, weatherFor: (d, t) => PLT.wxAt(WX, d, t) || 'senin', weatherSpan: (d, a, b) => PLT.wxSpan(WX, d, a, b) });
   // încetinire măsurată acum: timpii pe tronsoane trimiși de participanți în ultimele 75 de minute, față de o zi obișnuită
   const ctxT = E.ctxFor(today, 'senin', false), ratio = {};
   for (const s of S) { if (s.date !== today || s.t < now.min - 75 || s.t > now.min) continue; const ex = model0.segState(s.segId, today, s.t, ctxT).med; if (ex > 0.05) (ratio[s.segId] = ratio[s.segId] || []).push(s.dur / ex); }
@@ -102,7 +121,7 @@ async function all(table, q = x => x) { // PostgREST returns at most 1000 rows p
         const f = fc.forecast(h, tomorrow), d = PLT.decision(f, h);
         const u = PLT.urgent(f, h, null);
         if (u) await send(p.id, `${h.id}|${tomorrow}|e`, { title: '⚠️ Mâine: ' + u.title.replace('⚠️ ', '').toLowerCase(), body: u.text.replace('Dacă plecați', 'Mâine, dacă plecați'), urgent: true });
-        else if (d && f.level !== 'g') await send(p.id, `${h.id}|${tomorrow}|e`, d.evening);
+        else if (d && (f.level !== 'g' || (f.wx && f.wx.cat !== 'ploaie'))) await send(p.id, `${h.id}|${tomorrow}|e`, d.evening);   // aglomerație sau vreme grea (ceață, ploaie torențială, ninsoare, polei)
       }
     }
   }
