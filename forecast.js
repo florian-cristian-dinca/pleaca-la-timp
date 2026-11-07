@@ -13,7 +13,7 @@ function dirName(E, NET, eid) {
   const e = NET.edges[eid]; if (!e) return '';
   const a = NET.nodes[e.from]; let b = NET.nodes[e.to], len = e.len, cur = e, guard = 0;
   const A = NET.__adj || (NET.__adj = E.adjacency(NET));
-  while (len < 1 && guard++ < 40) { // prelungesc pe același drum, ca direcția să nu depindă de un tronson scurt
+  while (len < 2.5 && guard++ < 60) { // prelungesc pe același drum, ca direcția să nu depindă de un tronson scurt
     const nx = (A[cur.to] || []).map(k => NET.edges[k]).find(x => x.name && x.name === e.name && x.to !== cur.from);
     if (!nx) break; cur = nx; len += nx.len; b = NET.nodes[nx.to];
   }
@@ -23,6 +23,7 @@ function dirName(E, NET, eid) {
   let out = card;
   if (dA < 10) { if (dB - dA < -0.5 * span) out = 'sensul spre centru'; else if (dB - dA > 0.5 * span) out = 'sensul dinspre centru'; }
   else if (dB - dA < -0.5 * span) out = 'sensul spre București';
+  else if (/Bucure[șs]ti\s*[-–]\s*([A-ZĂÂÎȘȚ][^\s,]*)/.test(e.name || '') && dB - dA > 0.3 * span) out = 'sensul spre ' + (e.name.match(/Bucure[șs]ti\s*[-–]\s*([A-ZĂÂÎȘȚ][^\s,]*)/)[1]);
   else {
     let best = null;
     for (const p of NET.places || []) {

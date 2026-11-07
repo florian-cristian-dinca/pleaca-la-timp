@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pleacă la timp – avertizare de ambuteiaj</title>
-<meta name="theme-color" content="#1b1f24">
+<meta name="theme-color" content="#0b4ea2">
 <meta name="color-scheme" content="only light">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -13,94 +13,126 @@
 <meta name="apple-mobile-web-app-title" content="Pleacă la timp">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
-<link href="vendor/fonts/nunito-sans.css" rel="stylesheet">
+<link href="vendor/fonts/overpass.css" rel="stylesheet">
 <style>
-:root{color-scheme:only light;--bg:#f2efe9;--card:#fff;--ink:#1b1f24;--mute:#6b7177;--line:#e5e0d6;--g:#15803d;--gbg:#e8f6ec;--y:#b45309;--ybg:#fff4e0;--r:#b91c1c;--rbg:#fdeceb;--blue:#1d4ed8;--soft:#f7f5f1}
+:root{color-scheme:only light;--bg:#e9edf1;--card:#fff;--ink:#1f262e;--mute:#5b6672;--line:#d6dce2;--soft:#f1f4f7;
+  --sign:#0b4ea2;--sign2:#093f84;--g:#147a42;--gl:#1fa35a;--gbg:#e1f3e8;--y:#9a6400;--yl:#f5a800;--ybg:#fff2cc;--r:#c3242f;--rl:#e0313d;--rbg:#fde5e7;
+  --works:#ffd200;--asph:#2b3137;--asph2:#363d44;--blue:#0b4ea2;--font:"Overpass",system-ui,sans-serif}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.42 "Nunito Sans",system-ui,sans-serif}
-.app{max-width:520px;margin:0 auto;padding:16px 16px calc(84px + env(safe-area-inset-bottom))}
-header{display:flex;justify-content:space-between;align-items:center;margin:4px 2px 14px}
-header h1{font-size:22px;font-weight:900;margin:0;letter-spacing:-.01em}
-header .now{font-weight:800;color:var(--mute)}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--font);font-feature-settings:"tnum" 1}
+.app{max-width:520px;margin:0 auto;padding:14px 14px calc(86px + env(safe-area-inset-bottom))}
+header{display:flex;justify-content:space-between;align-items:center;margin:2px 2px 12px}
+header h1{font-size:19px;font-weight:900;margin:0;display:flex;align-items:center;gap:8px}
+header .now{font-weight:800;color:var(--mute);font-size:15px}
 .screen{display:none}.screen.on{display:block}
-.card{background:var(--card);border-radius:22px;padding:18px;margin-bottom:14px;box-shadow:0 1px 0 rgba(0,0,0,.03)}
-.kicker{font-size:13.5px;font-weight:800;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
-.level{display:inline-flex;align-items:center;gap:8px;border-radius:22px;padding:7px 13px;font-weight:900;font-size:15px;margin:10px 0 6px}
+.card{background:var(--card);border-radius:16px;padding:16px;margin-bottom:12px;border:1px solid var(--line)}
+.kicker{font-size:13.5px;font-weight:700;color:var(--mute)}
+:focus-visible{outline:3px solid var(--sign);outline-offset:2px}
+/* panoul „indicator rutier”: ora de plecare pentru următorul drum */
+.sign{background:var(--sign);color:#fff;border-radius:14px;padding:16px 16px 14px;box-shadow:inset 0 0 0 3px var(--sign),inset 0 0 0 5px #fff;position:relative}
+.sign .sh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;font-weight:700;font-size:14.5px;opacity:.92}
+.sign .lead{font-size:15px;font-weight:700;margin-top:10px}
+.sign .tm{font-size:64px;font-weight:900;line-height:.95;letter-spacing:-.02em;margin:2px 0 6px}
+.sign .sub{font-size:15px;font-weight:600}
+.sign .sub b{font-weight:800}
+.semal{display:inline-flex;align-items:center;gap:8px;font-weight:800;white-space:nowrap}.sema{display:inline-flex;gap:4px;background:#1b2228;border-radius:999px;padding:4px 6px;flex:none}
+.sema i{width:13px;height:13px;border-radius:50%;background:#3d464f}
+.sema i.on.r{background:var(--rl);box-shadow:0 0 8px var(--rl)}.sema i.on.y{background:var(--yl);box-shadow:0 0 8px var(--yl)}.sema i.on.g{background:var(--gl);box-shadow:0 0 8px var(--gl)}
+.level{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:5px 11px;font-weight:800;font-size:14px;margin:12px 0 2px}
 .level.g{background:var(--gbg);color:var(--g)}.level.y{background:var(--ybg);color:var(--y)}.level.r{background:var(--rbg);color:var(--r)}
-.msg{font-size:20px;font-weight:800;line-height:1.3;margin:6px 0 4px}
-.why{font-size:15px;color:var(--mute);margin-top:4px}
-.big{font-size:46px;font-weight:900;letter-spacing:-.03em;line-height:1}
-.opts{display:flex;flex-direction:column;gap:10px;margin-top:14px}
-.opt{border-radius:18px;padding:14px;border:2px solid var(--line);background:#fff;display:flex;gap:12px;align-items:center}
-.opt.best{border-color:var(--g);background:var(--gbg)}
-.opt .t{font-size:30px;font-weight:900;min-width:92px;letter-spacing:-.02em}
-.opt b{display:block;font-size:16px}.opt span{font-size:14px;color:var(--mute)}
-.band{margin-top:16px}
+.msg{font-size:19px;font-weight:800;line-height:1.3;margin:6px 0 4px}
+.why{font-size:15px;color:var(--mute);margin-top:6px}
+.big{font-size:44px;font-weight:900;line-height:1}
+.opts{display:flex;flex-direction:column;margin-top:12px;border-top:1px solid var(--line)}
+.opt{padding:11px 2px;border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:center}
+.opt .t{font-size:26px;font-weight:900;min-width:78px}
+.opt.best .t{color:var(--g)}
+.opt b{display:block;font-size:15.5px}.opt span{font-size:14px;color:var(--mute)}
+.band{margin-top:14px}
 .band .bar{display:flex;gap:2px;height:30px}
-.band .bar div{flex:1;border-radius:5px;cursor:pointer;position:relative}
+.band .bar div{flex:1;border-radius:4px;cursor:pointer;position:relative}
 .band .bar div.sel{outline:3px solid var(--ink);outline-offset:1px}
 .band .ticks{display:flex;justify-content:space-between;font-size:12px;color:var(--mute);font-weight:700;margin-top:4px}
 .band .info{font-size:14.5px;margin-top:8px;min-height:22px;font-weight:700}
 .legend{display:flex;gap:12px;font-size:12.5px;color:var(--mute);margin-top:6px;flex-wrap:wrap}.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px}
-details{margin-top:12px}summary{font-weight:800;color:var(--blue);cursor:pointer;list-style:none;padding:6px 0}summary::-webkit-details-marker{display:none}
-.alertline{display:flex;gap:10px;align-items:center;background:var(--soft);border-radius:14px;padding:10px 12px;margin-top:12px;font-size:14.5px}
-.week .row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--soft)}
-.week .row:last-child{border:none}
+details{margin-top:4px;border-top:1px solid var(--line)}summary{font-weight:800;color:var(--sign);cursor:pointer;list-style:none;padding:12px 0 10px;display:flex;justify-content:space-between}summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-size:20px;line-height:1}details[open]>summary::after{content:"–"}
+.alertline{display:flex;gap:10px;align-items:center;background:var(--soft);border-radius:12px;padding:10px 12px;margin-top:12px;font-size:14.5px}
+/* următoarele drumuri, compacte */
+.next{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line);cursor:pointer}.next:last-child{border:none}
+.next .nt{font-size:24px;font-weight:900;min-width:70px}.next b{display:block;font-size:15px}.next span{font-size:13.5px;color:var(--mute)}
+.next .lamp{width:14px;height:14px;border-radius:50%;flex:none;margin-left:auto}
 .dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:8px;vertical-align:-1px}
-.btn{display:block;width:100%;border:none;border-radius:18px;padding:17px;font:900 18px "Nunito Sans";cursor:pointer;margin-top:12px}
-.btn.go{background:var(--g);color:#fff}.btn.dark{background:var(--ink);color:#fff}.btn.ghost{background:var(--soft);color:var(--ink)}.btn.red{background:var(--rbg);color:var(--r)}
-.field{background:var(--soft);border-radius:14px;padding:10px 12px;margin-bottom:10px}
+.btn{display:block;width:100%;border:none;border-radius:12px;padding:15px;font:800 17px var(--font);cursor:pointer;margin-top:10px}
+.btn.go{background:var(--g);color:#fff}.btn.dark{background:var(--sign);color:#fff}.btn.ghost{background:var(--soft);color:var(--ink);border:1px solid var(--line)}.btn.red{background:var(--rbg);color:var(--r)}
+.field{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:9px 12px;margin-bottom:10px}
 .field small{display:block;font-size:12.5px;color:var(--mute);font-weight:700}
-.field select,.field input{width:100%;border:none;background:transparent;font:700 16px "Nunito Sans";color:var(--ink);outline:none}
-.days{display:flex;gap:6px;margin:4px 0 10px}.days button{flex:1;border:2px solid var(--line);background:#fff;border-radius:12px;padding:8px 0;font:800 13px "Nunito Sans";cursor:pointer;color:var(--ink)}.days button.on{border-color:var(--blue);background:var(--blue);color:#fff;box-shadow:0 2px 6px rgba(29,78,216,.35)}.days button:not(.on){color:var(--mute);background:#fff}
-.seg{display:flex;background:var(--soft);border-radius:14px;padding:4px;gap:4px;margin:6px 0 12px}.seg button{flex:1;border:none;background:none;border-radius:11px;padding:9px 0;font:800 14px "Nunito Sans";cursor:pointer;color:var(--mute)}.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.rep{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
-.repb{background:#fff;border:2px solid var(--line);border-radius:16px;padding:12px 4px;font:800 13px "Nunito Sans";cursor:pointer;color:var(--ink)}.repb .e{font-size:24px;display:block;margin-bottom:3px}
+.field select,.field input{width:100%;border:none;background:transparent;font:700 16px var(--font);color:var(--ink);outline:none}
+.days{display:flex;gap:6px;margin:4px 0 10px}.days button{flex:1;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 0;font:800 13px var(--font);cursor:pointer;color:var(--mute)}.days button.on{border-color:var(--sign);background:var(--sign);color:#fff}
+.seg{display:flex;background:var(--soft);border-radius:12px;padding:4px;gap:4px;margin:6px 0 12px}.seg button{flex:1;border:none;background:none;border-radius:9px;padding:9px 0;font:800 14px var(--font);cursor:pointer;color:var(--mute)}.seg button.on{background:#fff;color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.rep{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.repb{background:var(--asph2);border:1px solid #47505a;border-radius:12px;padding:11px 4px 9px;font:800 13px var(--font);cursor:pointer;color:#fff}.repb .e{display:block;font-size:24px;margin-bottom:3px}
+.repb:active{background:#4a535c}
 .muted{color:var(--mute);font-size:14px}
 .item{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--soft)}.item small{display:block;color:var(--mute)}
-.tag{font-weight:900;font-size:13px;border-radius:10px;padding:4px 9px}.tag.ok{background:var(--gbg);color:var(--g)}.tag.no{background:var(--rbg);color:var(--r)}.tag.na{background:var(--soft);color:var(--mute)}
-textarea{width:100%;border:2px solid var(--line);border-radius:12px;padding:10px;font:13px ui-monospace,monospace}
+.tag{font-weight:800;font-size:13px;border-radius:8px;padding:4px 9px}.tag.ok{background:var(--gbg);color:var(--g)}.tag.no{background:var(--rbg);color:var(--r)}.tag.na{background:var(--soft);color:var(--mute)}
+textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font:13px ui-monospace,monospace}
 .tabs{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:9}
 .tabs div{display:flex;max-width:520px;width:100%}
-.tabs button{flex:1;border:none;background:none;padding:10px 0 12px;font:800 12.5px "Nunito Sans";color:var(--mute);cursor:pointer}.tabs button .e{display:block;font-size:22px}.tabs button.on{color:var(--ink)}
-.overlay{position:fixed;inset:0;background:rgba(27,31,36,.55);display:none;align-items:flex-end;justify-content:center;z-index:20}.overlay.on{display:flex}
-.modal{background:#fff;border-radius:24px 24px 0 0;max-width:520px;width:100%;padding:22px 20px calc(22px + env(safe-area-inset-bottom));max-height:94vh;overflow:auto}
-.chk{display:flex;gap:10px;align-items:flex-start;margin:12px 0;font-size:15px}.chk input{width:22px;height:22px;flex:none}
-.banner{position:sticky;top:8px;z-index:8;background:var(--ink);color:#fff;border-radius:18px;padding:14px 16px;margin-bottom:14px;display:none;font-weight:800}.banner.on{display:block}
-.install{background:#fff;border:2px dashed var(--line);border-radius:18px;padding:14px;margin-bottom:14px;font-size:14.5px;display:none}.install.on{display:block}.install b{display:block;font-size:16px;margin-bottom:4px}
-.pk{position:relative}.pkrow{display:flex;gap:6px;align-items:center}.pkq{flex:1;border:none;background:transparent;font:700 16px "Nunito Sans";color:var(--ink);outline:none;min-width:0;padding:2px 0}
-.pkgeo{border:none;background:#fff;border-radius:10px;padding:6px 9px;font-size:16px;cursor:pointer;flex:none}
-.pkl{position:absolute;left:-12px;right:-12px;top:calc(100% + 8px);background:#fff;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.16);z-index:30;overflow:hidden}
+.tabs button{flex:1;border:none;background:none;padding:9px 0 11px;font:800 12.5px var(--font);color:var(--mute);cursor:pointer;position:relative}.tabs button .e{display:block;font-size:21px;filter:grayscale(1);opacity:.7}
+.tabs button.on{color:var(--sign)}.tabs button.on .e{filter:none;opacity:1}.tabs button.on::before{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--sign)}
+.overlay{position:fixed;inset:0;background:rgba(31,38,46,.55);display:none;align-items:flex-end;justify-content:center;z-index:20}.overlay.on{display:flex}
+.modal{background:#fff;border-radius:20px 20px 0 0;max-width:520px;width:100%;padding:22px 20px calc(22px + env(safe-area-inset-bottom));max-height:94vh;overflow:auto}
+.chk{display:flex;gap:10px;align-items:flex-start;margin:12px 0;font-size:14.5px}.chk input{width:22px;height:22px;flex:none;accent-color:var(--sign)}
+.banner{position:sticky;top:8px;z-index:8;background:var(--asph);color:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px;display:none;font-weight:800}.banner.on{display:block}
+.install{background:#fff;border:2px dashed var(--line);border-radius:14px;padding:14px;margin-bottom:12px;font-size:14.5px;display:none}.install.on{display:block}.install b{display:block;font-size:16px;margin-bottom:4px}
+.pk{position:relative}.pkrow{display:flex;gap:6px;align-items:center}.pkq{flex:1;border:none;background:transparent;font:700 16px var(--font);color:var(--ink);outline:none;min-width:0;padding:2px 0}
+.pkgeo{border:1px solid var(--line);background:#fff;border-radius:9px;padding:5px 8px;font-size:16px;cursor:pointer;flex:none}
+.pkl{position:absolute;left:-12px;right:-12px;top:calc(100% + 8px);background:#fff;border-radius:12px;border:1px solid var(--line);box-shadow:0 10px 30px rgba(31,38,46,.18);z-index:30;overflow:hidden}
 .pkl:empty{display:none}.pkl button{display:block;width:100%;text-align:left;border:none;background:#fff;padding:11px 14px;border-bottom:1px solid var(--soft);font:inherit;color:var(--ink);cursor:pointer}
 .pkl button:hover,.pkl button:focus{background:var(--soft)}.pkl b{display:block;font-size:15.5px}.pkl span{font-size:12.5px;color:var(--mute)}.pke{padding:12px 14px;color:var(--mute);font-size:14px}
-.rmap{width:100%;height:300px;border-radius:14px;background:#eef1f4;display:block;margin-top:8px}
+.rmap{width:100%;height:300px;border-radius:12px;background:#eef1f4;display:block;margin-top:4px}
 .ropt{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--soft);cursor:pointer}.ropt:last-child{border:none}
 .ropt i{width:14px;height:14px;border-radius:4px;flex:none;margin-top:4px}.ropt b{display:block}.ropt span{font-size:13.5px;color:var(--mute)}.ropt.sel b{text-decoration:underline}
-.mapwrap{position:relative}#liveMap{width:100%;height:58vh;min-height:320px;border-radius:20px;background:#eef1f4;display:block;touch-action:none}
-.mapbtns{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:8px}.mapbtns button{width:42px;height:42px;border-radius:12px;border:none;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);font:800 20px "Nunito Sans";cursor:pointer;color:var(--ink)}
+.mapwrap{position:relative}#liveMap{width:100%;height:58vh;min-height:320px;border-radius:16px;background:#eef1f4;display:block;touch-action:none}
+.mapbtns{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:8px}.mapbtns button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:#fff;font:800 20px var(--font);cursor:pointer;color:var(--ink)}
 .mlegend{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--mute);margin-top:8px}.mlegend i{display:inline-block;width:14px;height:5px;border-radius:3px;margin-right:4px;vertical-align:middle}
 .alist .item{align-items:flex-start}
-#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-weight:800;opacity:0;transition:opacity .25s;pointer-events:none;z-index:30;max-width:90%;text-align:center}
-  .tvgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-  .tvgrid > div { background: #f3f5f8; border-radius: 12px; padding: 8px 10px; }
-  .tvgrid small { display: block; color: var(--mute); font-size: 12px; font-weight: 700; }
-  .tvgrid b { font-size: 22px; font-weight: 900; }
-  .tvgrid b small { display: inline; font-size: 12px; }
-  .trip .hero { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
-  .trip .hero small { display: block; color: var(--mute); font-weight: 700; font-size: 12.5px; }
-  .trip .hero b { font-size: 40px; font-weight: 900; line-height: 1.05; }
-  .chip { display: inline-block; margin-top: 4px; padding: 3px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 800; }
-  .trip .face { text-align: center; } .trip .face span { display: inline-flex; width: 66px; height: 66px; border-radius: 50%; border: 3px solid; align-items: center; justify-content: center; font-size: 38px; } .trip .face b { display: block; font-size: 13px; margin-top: 2px; }
-  .tvgrid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
-  .tvgrid3 > div { background: #f3f5f8; border-radius: 12px; padding: 7px 8px; }
-  .tvgrid3 small { display: block; color: var(--mute); font-size: 11.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tvgrid3 b { font-size: 19px; font-weight: 900; } .tvgrid3 b small { display: inline; font-size: 11px; }
-  .ahead { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
-  .ahead > div { border-radius: 12px; padding: 8px 6px; text-align: center; } .ahead .fc { font-size: 30px; display: block; } .ahead b { display: block; font-size: 13px; } .ahead small { display: block; font-size: 11.5px; color: var(--ink); opacity: .75; } .ahead i { font-style: normal; font-size: 16px; }
-  .inc { display: flex; gap: 8px; align-items: flex-start; padding: 6px 2px; border-bottom: 1px solid var(--line); font-size: 14px; } .inc > span:first-child { font-size: 20px; }
-  .rep6 { grid-template-columns: repeat(3, 1fr) !important; }
-  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .row2 .btn { margin-top: 0; }
-  details.routes { margin-top: 10px; } details.routes summary { font-weight: 800; cursor: pointer; padding: 6px 0; }
+#toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--asph);color:#fff;padding:10px 16px;border-radius:12px;font-weight:800;opacity:0;transition:opacity .25s;pointer-events:none;z-index:30;max-width:90%;text-align:center}
+.chip{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:13px;font-weight:800}
+/* pe drum: ecran „asfalt”, citibil dintr-o privire */
+.trip{background:var(--asph);color:#fff;border:none;padding:16px 14px}
+.trip .muted,.trip .kicker{color:#aab4be}
+.trip .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.trip .dest{font-weight:700;font-size:15px;color:#d5dce3}
+.trip .eta{font-size:62px;font-weight:900;line-height:.95;margin-top:4px}
+.trip .etal{font-size:13.5px;color:#aab4be;font-weight:700}
+.face{width:74px;height:74px;flex:none;text-align:center}.face svg{width:74px;height:74px;display:block}.face b{display:block;font-size:13px;margin-top:2px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);margin-top:14px;border-top:1px solid #47505a;border-bottom:1px solid #47505a}
+.stats>div{padding:9px 8px 8px;border-right:1px solid #47505a}.stats>div:nth-child(3n){border-right:none}.stats>div:nth-child(n+4){border-top:1px solid #47505a}
+.stats small{display:block;color:#aab4be;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stats b{font-size:22px;font-weight:900}.stats b small{display:inline;font-size:12px;color:#d5dce3}
+.road{display:grid;grid-template-columns:58px 1fr;gap:12px;margin-top:10px;min-height:236px}
+.road .lane{position:relative;border-radius:10px;background:#1d2227;overflow:hidden}
+.road .lane .sec{position:absolute;left:0;right:0}
+.road .lane .sec::before,.road .lane .sec::after{content:"";position:absolute;top:0;bottom:0;width:5px}
+.road .lane .sec::before{left:5px}.road .lane .sec::after{right:5px}
+.road .lane .sec.g::before,.road .lane .sec.g::after{background:var(--gl)}.road .lane .sec.y::before,.road .lane .sec.y::after{background:var(--yl)}.road .lane .sec.r::before,.road .lane .sec.r::after{background:var(--rl)}
+.road .lane .mid{position:absolute;left:50%;top:0;bottom:0;width:3px;margin-left:-1.5px;background:repeating-linear-gradient(to top,#fff 0 12px,transparent 12px 24px);opacity:.75}
+.road .lane .car{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);font-size:22px}
+.road .lane .pin{position:absolute;left:50%;transform:translate(-50%,50%);width:26px;height:26px}
+.road .parts{display:flex;flex-direction:column;min-height:236px}
+.road .part{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #47505a}.road .part:last-child{border:none}
+.road .part svg{width:40px;height:40px;flex:none}.road .part b{display:block;font-size:15px}.road .part span{font-size:13.5px;color:#d5dce3}
+.inc{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #47505a;font-size:14.5px}.inc svg{width:24px;height:24px;flex:none}
+.trip .note{border-radius:10px;padding:9px 11px;margin-top:10px;font-size:14.5px;font-weight:600}
+.trip .rmap{background:#e9edf1;margin-top:12px}
+.trip details{border-color:#47505a}.trip summary{color:#9cc3ff}
+.trip .ropt{border-color:#47505a}.trip .ropt span{color:#aab4be}
+.trip .btn.ghost{background:var(--asph2);color:#fff;border-color:#47505a}
+.trip .mapbtns button{background:#fff}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.row2 .btn{margin-top:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
@@ -323,7 +355,7 @@ async function enablePush() {
 function pushCard() {
   if (S.pushOn && typeof Notification !== 'undefined' && Notification.permission === 'granted') return '';
   if (isIOS && !standalone) return '<div class="card"><div class="msg">🔔 Ca să vă putem anunța, adăugați aplicația pe ecranul principal</div><p class="muted">Partajează → Adaugă pe ecranul principal, apoi deschideți aplicația de pe iconița nouă.</p></div>';
-  if (!pushSupported()) return '<div class="card"><p class="muted">Acest browser nu poate primi notificări. Avertizările apar când deschizi aplicația.</p></div>';
+  if (!pushSupported()) return '<div class="card"><p class="muted">Acest browser nu poate primi notificări. Avertizările apar când deschideți aplicația.</p></div>';
   return '<div class="card"><div class="msg">🔔 Porniți avertizările</div><p class="muted">Așa aflați de ambuteiaj cu o seară înainte și înainte de plecare, chiar dacă aplicația e închisă.</p><button class="btn go" id="bPush">Porniți avertizările</button></div>';
 }
 
@@ -362,22 +394,22 @@ function drawRoutes(cv, opts, sel, date, ctx, car) {
   for (const p of s.w.parts) { const e = NET.edges[p.eid], a = NET.nodes[e.from], b = NET.nodes[e.to], st = M.segState(p.eid, date, p.t, ctx), slow = st.med / (e.len / e.v0 * 60);
     g.strokeStyle = slow > 2 ? '#dc2626' : slow > 1.4 ? '#f59e0b' : RCOL[sel % 3]; g.lineWidth = 5 * dpr; g.beginPath(); strokeEdge(g, p.eid, X, Y, true); g.stroke(); }
   const A = NET.nodes[NET.edges[s.path[0]].from], B = NET.nodes[NET.edges[s.path[s.path.length - 1]].to];
-  for (const [n, c, l] of [[A, '#1d4ed8', 'A'], [B, '#dc2626', 'B']]) { g.fillStyle = c; g.beginPath(); g.arc(X(n.lon), Y(n.lat), 11 * dpr, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = `800 ${12 * dpr}px "Nunito Sans"`; g.textAlign = 'center'; g.fillText(l, X(n.lon), Y(n.lat) + 4 * dpr); }
+  for (const [n, c, l] of [[A, '#1d4ed8', 'A'], [B, '#dc2626', 'B']]) { g.fillStyle = c; g.beginPath(); g.arc(X(n.lon), Y(n.lat), 11 * dpr, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = `800 ${12 * dpr}px "Overpass"`; g.textAlign = 'center'; g.fillText(l, X(n.lon), Y(n.lat) + 4 * dpr); }
   if (car && car.car) { const c = car.car, x = X(c.lon), y = Y(c.lat);
     g.save(); g.translate(x, y); g.fillStyle = car.est ? 'rgba(29,78,216,.25)' : 'rgba(21,128,61,.25)'; g.beginPath(); g.arc(0, 0, 22 * dpr, 0, 7); g.fill();
     g.fillStyle = '#fff'; g.beginPath(); g.arc(0, 0, 15 * dpr, 0, 7); g.fill(); g.strokeStyle = car.est ? '#1d4ed8' : '#15803d'; g.lineWidth = 2.5 * dpr; g.stroke();
     g.font = `${17 * dpr}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; const flip = Math.cos(c.ang) < 0; if (flip) g.scale(-1, 1); g.fillText('🚗', 0, 1 * dpr); g.restore(); g.textBaseline = 'alphabetic'; }
-  g.textAlign = 'left'; g.fillStyle = 'rgba(27,31,36,.5)'; g.font = `600 ${10 * dpr}px "Nunito Sans"`; g.fillText('© OpenStreetMap contributors', 8 * dpr, H - 8 * dpr);
+  g.textAlign = 'left'; g.fillStyle = 'rgba(27,31,36,.5)'; g.font = `600 ${10 * dpr}px "Overpass"`; g.fillText('© OpenStreetMap contributors', 8 * dpr, H - 8 * dpr);
 }
 function bindRoutes(list) {
-  document.querySelectorAll('details.rdet').forEach(d => d.addEventListener('toggle', () => {
+  document.querySelectorAll('details.rdet').forEach(d => { if (d.dataset.bound) return; d.dataset.bound = 1; d.addEventListener('toggle', () => {
     if (!d.open) return; const { h, date } = list[+d.dataset.rd], f = forecast(h, date), dd = PLT.decision(f, h); if (!dd) return;
     const t0 = dd.leave, ctx = E.ctxFor(date, weatherFor(date), false), opts = routeOptions(h, date, t0), cv = $('rmap-' + d.dataset.rd), box = $('rlist-' + d.dataset.rd);
     let sel = 0;
     const paint = () => { drawRoutes(cv, opts, sel, date, ctx); box.innerHTML = stBox(routeStatus(opts[sel].path, date, t0)) + `<p class="muted" style="margin:8px 0 2px">La plecarea de la ${fmt(t0)}:</p>` + opts.map((o, i) => `<div class="ropt ${i === sel ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === 0 ? 'Cea mai rapidă' : 'Alternativa ' + i} · ${mins(o.med)}${i ? ' (+' + (Math.round(o.med) - Math.round(opts[0].med)) + ' min)' : ''}</b><span>${o.km.toFixed(0)} km · ~${mins(o.idle)} pe loc${o.via.length ? ' · prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('') + '<p class="muted">Pe traseul ales: roșu = coloană, portocaliu = aglomerat. Atingeți o rută ca să o vedeți pe hartă.</p>';
       box.querySelectorAll('.ropt').forEach(r => r.onclick = () => { sel = +r.dataset.i; paint(); }); };
     paint();
-  }));
+  }); });
 }
 
 
@@ -434,11 +466,11 @@ function drawLiveMap() {
   g.font = `${18 * dpr}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
   const seen = new Set(); for (const m of marks) { if (seen.has(m.r.id)) continue; seen.add(m.r.id); g.fillStyle = '#fff'; g.beginPath(); g.arc(m.x, m.y, 15 * dpr, 0, 7); g.fill(); g.fillText(CAUSE_ICON[restrKind(m.r)] || '⚠️', m.x, m.y + 1); }
   // nume de localități
-  g.font = `700 ${11 * dpr}px "Nunito Sans"`; g.fillStyle = 'rgba(27,31,36,.6)';
+  g.font = `700 ${11 * dpr}px "Overpass"`; g.fillStyle = 'rgba(27,31,36,.6)';
   for (const p of placesList()) { if (!['city', 'town', 'village', 'suburb'].includes(p.kind)) continue; const n = NET.nodes[p.node], x = X(n.lon), y = Yf(n.lat); if (x > 20 && x < W - 20 && y > 20 && y < H - 20) g.fillText(p.name, x, y - 12 * dpr); }
   const me = mapMe();
   if (me) { const x = X(me.lon), y = Yf(me.lat); g.fillStyle = 'rgba(29,78,216,.18)'; g.beginPath(); g.arc(x, y, 24 * dpr, 0, 7); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 16 * dpr, 0, 7); g.fill(); g.strokeStyle = '#1d4ed8'; g.lineWidth = 2.5 * dpr; g.stroke(); g.font = `${17 * dpr}px sans-serif`; g.fillText(S.live ? '🚗' : '📍', x, y + 1); }
-  g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.font = `600 ${10 * dpr}px "Nunito Sans"`; g.fillStyle = 'rgba(27,31,36,.5)'; g.fillText('© OpenStreetMap contributors · trafic estimat ' + fmt(t), 8 * dpr, H - 8 * dpr);
+  g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.font = `600 ${10 * dpr}px "Overpass"`; g.fillStyle = 'rgba(27,31,36,.5)'; g.fillText('© OpenStreetMap contributors · trafic estimat ' + fmt(t), 8 * dpr, H - 8 * dpr);
   MAPMARKS = marks;
 }
 let MAPMARKS = [];
@@ -527,7 +559,7 @@ function alertText(date, at, level) {
   if (S.evening && !today && level !== 'g') { const prev = E.dateFromIndex(E.dayIndex(date) - 1), eve = prev === todayStr() ? (parseT(S.eveningAt) > now ? 'diseară' : null) : WD[wday(prev)] + ' seara'; if (eve) t += ` și ${eve}, la <b>${S.eveningAt}</b>`; }
   return t + '.';
 }
-function card(h, date, idx) {
+function card(h, date, idx, compact) {
   const f = forecast(h, date); if (f) f_ta = f.ta; if (!f) return `<div class="card">Nu găsesc un drum între ${esc(pname(h.o))} și ${esc(pname(h.d))}.</div>`;
   const today = date === todayStr(), now = nowMin(), lv = LV[f.level];
   let msg, why = '';
@@ -545,15 +577,19 @@ function card(h, date, idx) {
   const leaveAt = opts.find(o => o.best) ? opts.find(o => o.best).t : f.usual;
   const alertAt = leaveAt - S.lead;
   const ticks = []; for (let t = Math.ceil(f.slots[0].t0 / 30) * 30; t <= f.slots[f.slots.length - 1].t0; t += 60) ticks.push(fmt(t));
+  const best = opts.find(o => o.best) || opts[0], bt = best.t, sl = f.early && best.t === f.early.t0 ? f.early : f.calm && best.t === f.calm.t0 ? f.calm : f.cur;
+  const lead = f.level === 'g' ? 'Plecați la ora obișnuită' : bt < f.usual ? 'Plecați mai devreme, la' : 'Plecați la';
+  const dayT = dayLabel(date), cap = dayT.charAt(0).toUpperCase() + dayT.slice(1);
+  if (compact) return `<div class="next" data-expand="${idx}" role="button" tabindex="0"><div class="nt">${fmt(bt)}</div><div><b>${esc(h.name)}, ${dayT}</b><span>${lv[0]}, sosire până la ${h.ta}</span></div><i class="lamp" style="background:var(--${f.level}l)"></i></div>`;
   return `<div class="card" data-card="${idx}">
-    <div class="kicker">${esc(h.name)} · ${dayLabel(date)} · sosire până la ${h.ta}</div>
-    <div class="level ${f.level}">${lv[1]} ${lv[0]}</div>
-    <div class="msg">${msg}</div>
-    ${why ? `<div class="why">${why}</div>` : ''}
+    <div class="sign"><div class="sh"><span>${esc(h.name)}, ${dayT}</span><span class="semal">${lv[0]}<span class="sema" aria-hidden="true"><i class="r ${f.level === 'r' ? 'on' : ''}"></i><i class="y ${f.level === 'y' ? 'on' : ''}"></i><i class="g ${f.level === 'g' ? 'on' : ''}"></i></span></span></div>
+      <div class="lead">${lead}</div><div class="tm">${fmt(bt)}</div>
+      <div class="sub">Sosire în jur de <b>${fmt(bt + sl.med)}</b>, cu ~${mins(sl.idle)} pe loc. Trebuie să ajungeți la ${h.ta}.</div></div>
+    ${why ? `<div class="why" style="margin-top:12px">${why}</div>` : ''}
     <div class="opts">${opts.map(o => `<div class="opt ${o.best ? 'best' : ''}"><div class="t">${fmt(o.t)}</div><div><b>${o.best ? '✓ ' : ''}${o.b}</b><span>${o.s}</span></div></div>`).join('')}</div>
     <div class="alertline">🔔 <span>${alertText(date, alertAt, f.level)}</span></div>
-    <details class="rdet" data-rd="${idx}"><summary>Vedeți drumul și rutele alternative</summary><canvas class="rmap" id="rmap-${idx}"></canvas><div id="rlist-${idx}"></div></details>
-    <details><summary>Vedeți toate orele de plecare</summary>
+    <details class="rdet" data-rd="${idx}"><summary>Ruta și alternativele</summary><canvas class="rmap" id="rmap-${idx}"></canvas><div id="rlist-${idx}"></div></details>
+    <details><summary>Toate orele de plecare</summary>
       <div class="band"><div class="bar">${f.slots.map((s, i) => `<div data-i="${i}" style="background:${slotColor(s)}" title="${fmt(s.t0)}"></div>`).join('')}</div>
       <div class="ticks">${ticks.map(t => `<span>${t}</span>`).join('')}</div>
       <div class="info" id="info-${idx}">Atingeți o oră ca să vedeți cât ați sta pe loc.</div>
@@ -575,14 +611,15 @@ function bindCards(list) {
 function renderHome() {
   if (!S.habits.length) { $('s-home').innerHTML = `<div class="card"><div class="msg">Spuneți-ne ce drumuri faceți de obicei.</div><button class="btn dark" onclick="show('set')">Adăugați drumurile mele</button></div>`; return; }
   const list = nextOccurrences();
-  let h = pushCard() + list.map((x, i) => { try { return card(x.h, x.date, i); } catch (e) { console.error(e); return `<div class="card"><b>${esc(x.h.name)}</b><p class="muted">Nu am putut calcula prognoza pentru acest drum. Verificați locurile în Setări.</p></div>`; } }).join('');
-  h += `<div class="card"><div class="kicker">Un drum ocazional</div>
+  const one = (x, i, c) => { try { return card(x.h, x.date, i, c); } catch (e) { console.error(e); return `<div class="card"><b>${esc(x.h.name)}</b><p class="muted">Nu am putut calcula prognoza pentru acest drum. Verificați locurile în Setări.</p></div>`; } };
+  let h = pushCard() + (list.length ? one(list[0], 0, false) : '') + (list.length > 1 ? `<div class="card"><div class="kicker">Următoarele drumuri</div>${list.slice(1).map((x, i) => `<div data-slot="${i + 1}">${one(x, i + 1, true)}</div>`).join('')}</div>` : '');
+  h += `<div class="card"><details style="border:none;margin:0"><summary style="padding:2px 0">Verificați un drum ocazional</summary>
     <div style="margin-top:8px">${picker('aO', S.home, 'De unde')}</div>
     ${picker('aD', null, 'Unde doriți să ajungeți?', 'Localitate, cartier, universitate, gară…', true)}
     <div class="row" style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="aTa" value="10:00"></div><div class="field" style="flex:1"><small>Ziua</small><select id="aDay"><option value="0">Azi</option><option value="1">Mâine</option><option value="2">Poimâine</option></select></div></div>
-    <button class="btn ghost" id="aGo">Verificați</button><div id="aOut"></div></div>
-    <p class="muted" style="text-align:center">Vă spunem <b>când</b> să plecați și pe ce drum, ca să nu stați în coloană.</p>`;
+    <button class="btn ghost" id="aGo">Verificați</button><div id="aOut"></div></details></div>`;
   $('s-home').innerHTML = h; bindCards(list); bindRoutes(list); if ($('bPush')) $('bPush').onclick = enablePush;
+  document.querySelectorAll('[data-expand]').forEach(el => el.onclick = el.onkeydown = ev => { if (ev.type === 'keydown' && ev.key !== 'Enter') return; const i = +el.dataset.expand, box = el.parentElement; box.outerHTML = `<div style="margin:0 -16px -16px">${one(list[i], i, false)}</div>`; bindCards(list); bindRoutes(list); });
   bindPickers($('s-home'));
   $('aGo').onclick = () => {
     const ta = $('aTa').value, date = dayStr(+$('aDay').value), adhoc = { id: 'adhoc', name: 'Drum ocazional', o: $('aO').value, d: $('aD').value, ta, usual: fmt(parseT(ta) - 60), days: [] };
@@ -715,15 +752,22 @@ function drawTripMap(cv, L, ls) {
     g.strokeStyle = slow > 2 ? '#dc2626' : slow > 1.4 ? '#f59e0b' : '#1d4ed8'; g.lineWidth = 7 * dpr; g.beginPath(); strokeEdge(g, eid, X, Y, true); g.stroke(); }
   g.font = `${18 * dpr}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
   for (const m of marks) { g.fillStyle = '#fff'; g.beginPath(); g.arc(m.x, m.y, 15 * dpr, 0, 7); g.fill(); g.fillText(CAUSE_ICON[restrKind(m.r)] || '⚠️', m.x, m.y + 1); }
-  const B = NET.nodes[L.dest]; if (B) { g.fillStyle = '#dc2626'; g.beginPath(); g.arc(X(B.lon), Y(B.lat), 11 * dpr, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = `800 ${12 * dpr}px "Nunito Sans"`; g.fillText('B', X(B.lon), Y(B.lat) + 1); }
+  const B = NET.nodes[L.dest]; if (B) { g.fillStyle = '#dc2626'; g.beginPath(); g.arc(X(B.lon), Y(B.lat), 11 * dpr, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = `800 ${12 * dpr}px "Overpass"`; g.fillText('B', X(B.lon), Y(B.lat) + 1); }
   if (ls.pos) { const x = X(ls.pos.lon), y = Y(ls.pos.lat), est = !ls.ok, accPx = L.gps && L.gps.acc ? Math.min(60 * dpr, L.gps.acc / 1000 * W / TV.km) : 0;
     if (!est && accPx > 6 * dpr) { g.fillStyle = 'rgba(21,128,61,.12)'; g.beginPath(); g.arc(x, y, accPx, 0, 7); g.fill(); }
     g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 15 * dpr, 0, 7); g.fill(); g.strokeStyle = est ? '#1d4ed8' : '#15803d'; g.lineWidth = 2.5 * dpr; g.stroke();
     g.font = `${17 * dpr}px sans-serif`; g.fillText('🚗', x, y + 1); }
-  g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillStyle = 'rgba(27,31,36,.5)'; g.font = `600 ${10 * dpr}px "Nunito Sans"`; g.fillText('© OpenStreetMap contributors', 8 * dpr, H - 8 * dpr);
+  g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillStyle = 'rgba(27,31,36,.5)'; g.font = `600 ${10 * dpr}px "Overpass"`; g.fillText('© OpenStreetMap contributors', 8 * dpr, H - 8 * dpr);
 }
 /* drumul în față, pe bucăți: 0–2 km, 2–5 km, 5–10 km (cât rămâne), cu fața verde / galbenă / roșie */
-const FACE = { g: ['🙂', 'Liber', '#16a34a', '#dcfce7'], y: ['😐', 'Așa și așa', '#ca8a04', '#fef9c3'], r: ['☹️', 'Aglomerat', '#dc2626', '#fee2e2'] };
+const FACE = { g: ['🙂', 'Liber', '#1fa35a', '#e1f3e8'], y: ['😐', 'Așa și așa', '#f5a800', '#fff2cc'], r: ['☹️', 'Aglomerat', '#e0313d', '#fde5e7'] };
+/* fața: disc de semafor, cu zâmbet (liber), gură dreaptă (așa și așa) sau tristă (aglomerat) */
+function faceSVG(lv) {
+  const c = FACE[lv][2], m = lv === 'g' ? 'M14 27 Q24 36 34 27' : lv === 'y' ? 'M15 30 L33 30' : 'M14 33 Q24 24 34 33';
+  return `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="22" fill="${c}"/><circle cx="24" cy="24" r="22" fill="none" stroke="#1d2227" stroke-width="2.5"/><circle cx="17" cy="19" r="3" fill="#1d2227"/><circle cx="31" cy="19" r="3" fill="#1d2227"/><path d="${m}" stroke="#1d2227" stroke-width="3.4" fill="none" stroke-linecap="round"/></svg>`;
+}
+/* semn de avertizare (triunghi alb cu chenar roșu), cu pictograma semnalării */
+function warnSVG(kind) { return `<svg viewBox="0 0 48 44" aria-hidden="true"><path d="M24 3 L45 40 H3 Z" fill="#fff" stroke="#e0313d" stroke-width="5" stroke-linejoin="round"/><text x="24" y="34" font-size="17" text-anchor="middle">${CAUSE_ICON[kind] || '!'}</text></svg>`; }
 const SEVERE = { accident: 1, banda: 1, lucrari: 1 };
 function noticesOn(eid) { // semnalările active pe acest tronson, în acest sens: ale mele + ale celorlalți (din serverul de trafic)
   const t = nowMin(), out = [], today = todayStr();
@@ -768,13 +812,15 @@ function drawTrip() {
   set('tvT', durTxt(ls.now - L.dep)); set('tvV', ls.v != null ? Math.round(ls.v) + '<small> km/h</small>' : '—');
   set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', kmTxt(ls.remKm));
   const z = zoneSpeed(L, ls); set('tvZ', z ? Math.round(z.v) + '<small> km/h</small>' : '—');
-  set('tvZn', z && z.measured ? 'Trafic în zonă · măsurat' : 'Trafic în zonă · estimat');
+  set('tvZn', z && z.measured ? 'Trafic măsurat aici' : 'Trafic estimat aici');
   const ah = aheadInfo(L, ls), F = FACE[ah.overall];
-  set('tvFace', `<span style="background:${F[3]};border-color:${F[2]}">${F[0]}</span><b style="color:${F[2]}">${F[1]}</b>`);
-  set('tvAhead', ah.ch.map(c => { const f = FACE[c.level]; return `<div style="background:${f[3]}"><span class="fc">${f[0]}</span><b style="color:${f[2]}">${f[1]}</b><small>${c.a === 0 ? 'următorii ' + kmTxt(c.b) : kmTxt(c.a) + ' – ' + kmTxt(c.b)}</small><small>~${Math.round(c.v)} km/h · ${durTxt(c.t)}</small>${c.inc.map(x => `<i title="${x.kind}">${CAUSE_ICON[x.kind] || '⚠️'}</i>`).join('')}</div>`; }).join('') || '<p class="muted">Ați ajuns aproape de destinație.</p>');
-  set('tvInc', ah.incs.slice(0, 4).map(x => { const e = NET.edges[x.eid]; return `<div class="inc"><span>${CAUSE_ICON[x.kind] || '⚠️'}</span><span><b>${KIND_LABEL[x.kind] || 'Problemă'}</b> la ${kmTxt(x.at)}${e.name ? ', pe ' + esc(e.name) : ''} · ${PLT.dirName(E, NET, x.eid)}${x.mine ? ' (semnalarea dumneavoastră)' : ''}</span></div>`; }).join(''));
+  set('tvFace', `${faceSVG(ah.overall)}<b style="color:${F[2]}">${F[1]}</b>`);
+  const span = Math.max(0.5, Math.min(10, ls.remKm));
+  set('tvLane', `<div class="mid"></div>${ah.ch.map(c => `<div class="sec ${c.level}" style="bottom:${c.a / span * 100}%;height:${(c.b - c.a) / span * 100}%"></div>`).join('')}${ah.incs.filter(x => x.at <= span).map(x => `<div class="pin" style="bottom:${x.at / span * 100}%">${warnSVG(x.kind)}</div>`).join('')}<div class="car">🚗</div>`);
+  set('tvParts', ah.ch.length ? ah.ch.map(c => { const f = FACE[c.level]; return `<div class="part" style="flex:${c.b - c.a}">${faceSVG(c.level)}<div><b style="color:${f[2]}">${f[1]}</b><span>${c.a === 0 ? 'Următorii ' + kmTxt(c.b) : 'De la ' + kmTxt(c.a) + ' la ' + kmTxt(c.b)}: ~${Math.round(c.v)} km/h, ${durTxt(c.t)}</span></div></div>`; }).reverse().join('') : '<p class="muted">Ați ajuns aproape de destinație.</p>');
+  set('tvInc', ah.incs.slice(0, 4).map(x => { const e = NET.edges[x.eid]; return `<div class="inc">${warnSVG(x.kind)}<span><b>${KIND_LABEL[x.kind] || 'Problemă'}</b> peste ${kmTxt(x.at)}${e.name ? ', pe ' + esc(e.name) : ''}, ${PLT.dirName(E, NET, x.eid)}${x.mine ? ' (semnalarea dumneavoastră)' : ''}</span></div>`; }).join(''));
   set('tripInfo', (ls.ok ? `📡 GPS ±${L.gps.acc} m` : L.gpsDenied ? '⚠️ Fără acces la locație · poziție estimată' : (L.gps && L.gps.at && Date.now() - L.gps.at < 45000) ? `📡 GPS ±${L.gps.acc} m · caut drumul pe hartă` : '⏳ Caut semnalul GPS · poziție estimată') + (ls.km >= 1 ? ` · traficul de azi: ${ls.factor >= 1.05 ? 'cu ' + Math.round((ls.factor - 1) * 100) + '% mai lent' : ls.factor <= 0.95 ? 'cu ' + Math.round((1 - ls.factor) * 100) + '% mai rapid' : 'ca de obicei'} decât estimarea` : ''));
-  set('tripRoad', ls.road ? `<div class="alertline" style="background:${ls.road.drop >= 0.15 ? 'var(--rbg)' : ls.road.drop >= 0.05 ? 'var(--ybg)' : 'var(--gbg)'}"><span style="font-size:20px">${ls.road.drop >= 0.15 ? '🐢' : '✅'}</span><span>${ls.road.name ? 'Pe ' + esc(ls.road.name) : 'Pe ultima porțiune'} mergeți cu ${Math.round(ls.road.v)} km/h; de obicei ~${Math.round(ls.road.vTyp)} km/h${ls.road.drop >= 0.05 ? ` (cu ${Math.round(ls.road.drop * 100)}% mai încet)` : ''}.</span></div>` : '');
+  set('tripRoad', ls.road ? `<div class="note" style="background:${ls.road.drop >= 0.15 ? 'var(--rbg)' : ls.road.drop >= 0.05 ? 'var(--ybg)' : 'var(--gbg)'};color:var(--ink)"><span>${ls.road.drop >= 0.15 ? '🐢 ' : ''}${ls.road.name ? 'Pe ' + esc(ls.road.name) : 'Pe ultima porțiune'} mergeți cu ${Math.round(ls.road.v)} km/h; de obicei ~${Math.round(ls.road.vTyp)} km/h${ls.road.drop >= 0.05 ? ` (cu ${Math.round(ls.road.drop * 100)}% mai încet)` : ''}.</span></div>` : '');
 }
 const KIND_LABEL = { coada: 'Aglomerat', accident: 'Accident', politie: 'Poliție', banda: 'Bandă închisă', lucrari: 'Lucrări', pericol: 'Obstacol', restr: 'Restricție' };
 const REPORTS = [['🐢', 'Aglomerat', 'coada'], ['💥', 'Accident', 'accident'], ['👮', 'Poliție', 'politie'], ['🚧', 'Bandă închisă', 'banda'], ['👷', 'Lucrări', 'lucrari'], ['⚠️', 'Obstacol', 'pericol']];
@@ -796,22 +842,24 @@ function renderTrip() {
   const ctx = E.ctxFor(L.date, L.weather, false), now = tMinNow();
   const kk = Math.max(0, L.path.indexOf(L.mm && L.mm.eid)), cur0 = L.path.slice(kk), alts0 = (L.alts || [L.path]).map((p, i) => i === (L.sel || 0) ? cur0 : p);
   const opts = alts0.map(path => { const w = M.walk(path, L.date, now, ctx), byName = {}; for (const e of path) { const x = NET.edges[e]; if (x.name) byName[x.name] = (byName[x.name] || 0) + x.len; } return { path, med: w.total, km: E.pathLen(NET, path), via: Object.entries(byName).sort((a, b) => b[1] - a[1]).slice(0, 2).map(x => x[0]) }; });
-  $('s-trip').innerHTML = `<div class="card trip"><div class="kicker">Pe drum · spre ${esc(placeName(L.dest))}</div>
-    <div class="hero"><div><small>Sosire estimată</small><b id="tvE">—</b><div id="tvS"></div></div><div class="face" id="tvFace"></div></div>
-    <div class="tvgrid3">
+  $('s-trip').innerHTML = `<div class="card trip">
+    <div class="top"><div><div class="dest">Spre ${esc(placeName(L.dest))}</div><div class="etal" style="margin-top:8px">Sosire estimată</div><div class="eta" id="tvE">—</div><div id="tvS"></div></div><div class="face" id="tvFace"></div></div>
+    <div class="stats">
       <div><small>Timp pe drum</small><b id="tvT">—</b></div><div><small>Viteza acum</small><b id="tvV">—</b></div><div><small>Viteza medie</small><b id="tvA">—</b></div>
       <div><small>Parcurs</small><b id="tvD">—</b></div><div><small>Mai aveți</small><b id="tvR">—</b></div><div><small id="tvZn">Trafic în zonă</small><b id="tvZ">—</b></div></div>
-    <div class="kicker" style="margin-top:12px">Drumul în față</div><div class="ahead" id="tvAhead"></div><div id="tvInc"></div><div id="tripRoad"></div>
-    ${L.better ? `<div class="alertline" style="background:var(--ybg)"><span style="font-size:20px">↪️</span><span>Alternativa ${L.better.i} este acum cu ~${durTxt(L.better.gain)} mai rapidă decât drumul pe care sunteți.</span></div>` : ''}
-    <div class="mapwrap" style="margin-top:8px"><canvas class="rmap" id="tripMap" style="height:230px"></canvas><div class="mapbtns"><button id="tZin" aria-label="Mărește">+</button><button id="tZout" aria-label="Micșorează">−</button></div></div>
-    <p class="muted" id="tripInfo" style="margin:6px 0 0"></p>
-    <div class="kicker" style="margin-top:12px">Semnalați pe drumul dumneavoastră</div>
-    <div class="rep rep6">${REPORTS.map(([e, t, k]) => `<button class="repb" data-r="${k}"><span class="e">${e}</span>${t}</button>`).join('')}</div>
-    <p class="muted" style="margin-top:4px">Doar pasagerul sau când sunteți oprit în siguranță. Semnalarea se aplică numai sensului dumneavoastră de mers.</p>
-    <details class="routes"><summary>Rute de aici până la destinație (${opts.length})</summary>${opts.map((o, i) => `<div class="ropt ${i === (L.sel || 0) ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === (L.sel || 0) ? '✓ ' : ''}${i === 0 ? (L.altAt ? 'Drumul pe care sunteți' : 'Ruta recomandată') : 'Alternativa ' + i} · ~${durTxt(o.med)}</b><span>${kmTxt(o.km)}${o.via.length ? ' · prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('')}</details>
+    <div class="kicker" style="margin-top:14px">Drumul în față</div>
+    <div class="road"><div class="lane" id="tvLane"></div><div class="parts" id="tvParts"></div></div>
+    <div id="tvInc"></div><div id="tripRoad"></div>
+    ${L.better ? `<div class="note" style="background:var(--ybg);color:var(--ink)">↪️ Alternativa ${L.better.i} este acum cu ~${durTxt(L.better.gain)} mai rapidă decât drumul pe care sunteți.</div>` : ''}
+    <div class="mapwrap"><canvas class="rmap" id="tripMap" style="height:220px"></canvas><div class="mapbtns"><button id="tZin" aria-label="Mărește">+</button><button id="tZout" aria-label="Micșorează">−</button></div></div>
+    <p class="muted" id="tripInfo" style="margin:6px 0 0;font-size:13px"></p>
+    <div class="kicker" style="margin-top:14px">Semnalați pe sensul dumneavoastră de mers</div>
+    <div class="rep">${REPORTS.map(([e, t, k]) => `<button class="repb" data-r="${k}"><span class="e">${e}</span>${t}</button>`).join('')}</div>
+    <p class="muted" style="margin-top:6px;font-size:13px">Doar pasagerul sau când sunteți oprit în siguranță.</p>
+    <details class="routes"><summary>Rute de aici până la destinație (${opts.length})</summary>${opts.map((o, i) => `<div class="ropt ${i === (L.sel || 0) ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === (L.sel || 0) ? '✓ ' : ''}${i === 0 ? (L.altAt ? 'Drumul pe care sunteți' : 'Ruta recomandată') : 'Alternativa ' + i}, ~${durTxt(o.med)}</b><span>${kmTxt(o.km)}${o.via.length ? ', prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('')}</details>
     <button class="btn go" id="bArr">Am ajuns</button>
-    <div class="row2"><button class="btn ghost" id="bDest">Altă destinație</button><button class="btn ghost" id="bCan">Anulați drumul</button></div>${tripDestForm()}
-    <p class="muted">Țineți aplicația deschisă pe ecran: cu ecranul blocat, telefonul oprește GPS-ul pentru aplicațiile web.</p></div>`;
+    <div class="row2" style="margin-top:8px"><button class="btn ghost" id="bDest">Altă destinație</button><button class="btn ghost" id="bCan">Anulați drumul</button></div>${tripDestForm()}
+    <p class="muted" style="font-size:13px">Țineți aplicația deschisă pe ecran: cu ecranul blocat, telefonul oprește GPS-ul pentru aplicațiile web.</p></div>`;
   $('s-trip').querySelectorAll('.ropt').forEach(r => r.onclick = () => { const i = +r.dataset.i; if (i === (L.sel || 0)) return; L.sel = i; L.path = L.alts[i]; save(); renderTrip(); });
   $('s-trip').querySelectorAll('[data-r]').forEach(b => b.onclick = () => reportNow(b.dataset.r));
   $('tZin').onclick = () => { TV.km = Math.max(0.8, TV.km / 1.6); TRIPDRAW = 0; drawTrip(); }; $('tZout').onclick = () => { TV.km = Math.min(40, TV.km * 1.6); TRIPDRAW = 0; drawTrip(); };
