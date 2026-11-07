@@ -1091,16 +1091,19 @@ function renderFam() {
   const F = S.fam, el = $('s-fam');
   if (!F || !F.me) {
     el.innerHTML = `<div class="card"><div class="msg">Familia pe drum</div><p class="muted">Membrii grupului își văd unii altora poziția, destinația și ora estimată de sosire, <b>doar în timpul drumurilor pornite cu „Am plecat”</b>. Când drumul se încheie, poziția nu mai e afișată.</p>
-      <div class="field"><small>Numele afișat familiei</small><input id="fName" maxlength="30" placeholder="ex. Cristian, Mama, Andrei"></div>
+      <label class="field" for="fName" style="display:block"><small>Scrieți aici numele pe care îl vede familia</small><input id="fName" maxlength="30" placeholder="Atingeți aici și scrieți, ex. Cristian" autocomplete="given-name"></label>
       <button class="btn dark" id="fNew">Creez grupul familiei</button>
       <details style="margin-top:12px"><summary>Am primit un cod de la familie</summary>
-        <div class="field"><small>Codul grupului</small><input id="fCode" maxlength="8" autocapitalize="characters" placeholder="ex. 3A7F9C2D"></div>
+        <label class="field" for="fCode" style="display:block"><small>Codul grupului</small><input id="fCode" maxlength="8" autocapitalize="characters" placeholder="Atingeți aici și scrieți codul"></label>
         ${S.minor ? '<p class="muted">Aveți sub 18 ani: intrați în grup cu acordul părintelui, dat din aplicația lui.</p>' : '<label class="chk"><input type="checkbox" id="fMinor"><span>Telefonul este al unui copil sub 18 ani. Părintele sau tutorele își dă acordul din aplicația lui, după intrarea în grup.</span></label>'}
         <button class="btn dark" id="fJoin">Intru în grup</button></details></div>`;
-    $('fNew').onclick = async () => { const n = $('fName').value.trim(); if (!n) { toast('Scrieți numele afișat familiei.'); return; } if (S.minor) { toast('Grupul îl creează un adult; dumneavoastră intrați cu codul primit.'); return; }
+    if (renderFam.keep) { $('fName').value = renderFam.keep.n || ''; $('fCode').value = renderFam.keep.c || ''; }
+    $('fName').oninput = $('fCode').oninput = () => { renderFam.keep = { n: $('fName').value, c: $('fCode').value }; };
+    const need = (id, msg) => { const el = $(id); el.closest('.field').style.outline = '2px solid var(--r)'; el.focus(); toast(msg); };
+    $('fNew').onclick = async () => { const n = $('fName').value.trim(); if (!n) { need('fName', 'Scrieți întâi numele, în câmpul de deasupra butonului.'); return; } if (S.minor) { toast('Grupul îl creează un adult; dumneavoastră intrați cu codul primit.'); return; }
       try { await flush(); await famCall('create_family', { p_name: n }); await pullFamily(); renderFam(); toast('Am creat grupul. Trimiteți codul familiei.'); } catch (e) { toast(famErr(e)); } };
     $('fJoin').onclick = async () => { const n = $('fName').value.trim(), c = $('fCode').value.trim(), minor = S.minor || ($('fMinor') && $('fMinor').checked);
-      if (!n || c.length < 6) { toast('Scrieți numele afișat și codul grupului.'); return; }
+      if (!n) { need('fName', 'Scrieți întâi numele, în câmpul de sus.'); return; } if (c.length < 6) { need('fCode', 'Scrieți codul grupului, de 8 caractere.'); return; }
       try { await flush(); await famCall('join_family', { p_code: c, p_name: n, p_minor: !!minor }); await pullFamily(); renderFam(); toast(minor ? 'Ați intrat în grup. Așteptăm acordul părintelui.' : 'Ați intrat în grupul familiei.'); } catch (e) { toast(famErr(e)); } };
     return;
   }
