@@ -22,14 +22,15 @@ function localNow() {
 async function fetchWeather() {
   const P = [[44.43, 26.10], [44.62, 26.05], [44.45, 26.30], [44.28, 26.10], [44.44, 25.90]];
   const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + P.map(p => p[0]).join(',') + '&longitude=' + P.map(p => p[1]).join(',') +
-    '&hourly=weather_code,precipitation,snowfall,visibility,temperature_2m&timezone=Europe%2FBucharest&forecast_days=3';
+    '&hourly=weather_code,precipitation,snowfall,visibility,temperature_2m,relative_humidity_2m&timezone=Europe%2FBucharest&forecast_days=3';
   try {
     const r = await fetch(url); if (!r.ok) throw new Error('HTTP ' + r.status); let j = await r.json(); if (!Array.isArray(j)) j = [j];
     const W = {}, H = j[0].hourly;
     H.time.forEach((ts, i) => {
       const date = ts.slice(0, 10), h = +ts.slice(11, 13), cats = j.map(x => PLT.wxCode(x.hourly.weather_code[i], x.hourly.precipitation[i], x.hourly.snowfall[i], x.hourly.visibility[i], x.hourly.temperature_2m[i]));
       let pick = cats[0]; for (const c of cats) if (PLT.WX_SEV[c[0]] > PLT.WX_SEV[pick[0]] && cats.filter(x => x[0] === c[0]).length >= 2) pick = c;
-      const d = W[date] || (W[date] = { h: Array(24).fill('senin'), d: Array(24).fill('') }); d.h[h] = pick[0]; d.d[h] = pick[1];
+      const d = W[date] || (W[date] = { h: Array(24).fill('senin'), d: Array(24).fill(''), t: Array(24).fill(null), rh: Array(24).fill(null) }); d.h[h] = pick[0]; d.d[h] = pick[1];
+      d.t[h] = Math.min(...j.map(x => x.hourly.temperature_2m[i])); d.rh[h] = Math.max(...j.map(x => x.hourly.relative_humidity_2m[i]));   // cel mai rece / cel mai umed punct
     });
     return W;
   } catch (e) { console.log('weather: ' + e.message); return null; }

@@ -704,6 +704,66 @@ function renderWeek() {
 /* ---------- Am plecat / am ajuns (colectarea datelor, cât mai simplu) ---------- */
 /* ---------- Pe drum: alegerea traseului, mașina pe hartă (GPS), înregistrarea timpilor pe tronsoane ---------- */
 let GEO = null, WAKE = null, TRIPDRAW = 0;
+/* ---------- Mașina: consum, cost și CO₂ (estimare) ---------- */
+// factori CO₂ la ardere (IPCC 2006, valori implicite): benzină 69,3 t/TJ × 44,3 MJ/kg × 0,745 kg/L = 2,29 kg/L;
+// motorină 74,1 × 43,0 × 0,832 = 2,65 kg/L; GPL 63,1 × 47,3 × 0,54 = 1,61 kg/L. Electric: 0,170 kg/kWh (România 2025, eticheta ANRE).
+const CARS = {
+  benzina: { label: 'Benzină', unit: 'L', cons: 7.0, price: 10.0, ef: 2.29, idle: 0.8, curve: 'ice' },
+  motorina: { label: 'Motorină', unit: 'L', cons: 6.0, price: 10.9, ef: 2.65, idle: 0.6, curve: 'ice' },
+  gpl: { label: 'GPL', unit: 'L', cons: 9.0, price: 4.3, ef: 1.61, idle: 1.0, curve: 'ice' },
+  hibrid: { label: 'Hibrid (benzină)', unit: 'L', cons: 4.8, price: 10.0, ef: 2.29, idle: 0.15, curve: 'hyb' },
+  electric: { label: 'Electric', unit: 'kWh', cons: 17, price: 1.3, ef: 0.170, idle: 0.5, curve: 'ev' }
+};
+const car = () => { const c = S.car || {}; const d = CARS[c.fuel || 'benzina']; return Object.assign({}, d, { fuel: c.fuel || 'benzina', cons: c.cons || d.cons, price: c.price || d.price }); };
+// consumul pe km față de consumul mediu, în funcție de viteză (oraș lent > drum > autostradă)
+function fuelFactor(v, curve) { v = Math.max(8, Math.min(150, v || 0)); return curve === 'ev' ? 0.85 + 6e-5 * v * v : curve === 'hyb' ? 0.9 + 4e-5 * v * v : 16.17 / v + 0.6347 + 1.674e-5 * v * v; }
+function fuelTick(L, t) { // după fiecare poziție: combustibilul pe distanța nouă și la staționare
+  const mm = L.mm || {}, C = car(), d = mm.dist || 0, dd = Math.max(0, d - (L.fDist || 0)), dt = L.fT ? Math.max(0, Math.min(2, t - L.fT)) : 0;
+  if (dt > 0) { const v = dd > 0 ? dd / dt * 60 : 0;
+    if (dd > 0) L.fuel = (L.fuel || 0) + C.cons / 100 * dd * fuelFactor(v, C.curve);
+    if ((mm.v != null ? mm.v : v) < 4 && t - L.dep > 1) { L.idle = (L.idle || 0) + dt; const fi = C.idle / 60 * dt; L.fuel = (L.fuel || 0) + fi; L.fuelIdle = (L.fuelIdle || 0) + fi; } }
+  L.fDist = d; L.fT = t;
+}
+const n1 = x => (Math.round(x * 10) / 10).toString().replace('.', ',');
+function fuelTxt(L) { const C = car(), f = L.fuel || 0; if (f < 0.05) return ''; return `${C.fuel === 'electric' ? '🔌' : '⛽'} ${n1(f)} ${C.unit}, ~${Math.round(f * C.price)} lei, ${n1(f * C.ef)} kg CO₂${(L.fuelIdle || 0) >= 0.05 ? ` (din care ${n1(L.fuelIdle)} ${C.unit} la staționare)` : ''}`; }
+/* ---------- Limita de viteză ---------- */
+function limitSign(ms, over) { return `<svg viewBox="0 0 40 40" style="width:34px;height:34px;vertical-align:middle;margin-left:6px" aria-label="Limită ${ms} km/h"><circle cx="20" cy="20" r="18" fill="#fff" stroke="#e0313d" stroke-width="5"/><text x="20" y="25.5" font-size="${ms >= 100 ? 13 : 15}" font-weight="900" text-anchor="middle" fill="#1d2227" font-family="Overpass,sans-serif">${ms}</text></svg>`; }
+/* ---------- Ce urmează pe drum: treceri la nivel cu calea ferată și școli ---------- */
+function schoolTime(date, t) { const d = new Date(date + 'T12:00:00'), wd = d.getDay(), m = d.getMonth() + 1; return wd >= 1 && wd <= 5 && !(m === 7 || m === 8) && t >= 420 && t <= 1170; }
+function hazardsOnPath(path) {
+  const key = path.length + ':' + path[0] + ':' + path[path.length - 1]; if (hazardsOnPath.k === key) return hazardsOnPath.v;
+  const T = trk(), set = new Set(path), cum = new Map(); let c = 0; for (const e of path) { cum.set(e, c); c += NET.edges[e].len; }
+  const out = [], put = (lat, lon, kind, r, name) => { let best = null; for (const eid of T.near(lat, lon)) { if (!set.has(eid)) continue; const p = T.projEdge(eid, lat, lon); if (p.d <= r && (!best || p.d < best.d)) best = { d: p.d, at: cum.get(eid) + p.s }; } if (best && !out.some(o => o.kind === kind && Math.abs(o.at - best.at) < 0.15)) out.push({ kind, at: best.at, name }); };
+  for (const [la, lo] of (NET.hazards && NET.hazards.lx) || []) put(la, lo, 'lx', 0.04);
+  for (const p of placesList()) if (p.cat === 'school' && p.lat != null) put(p.lat, p.lon, 'school', 0.15, p.name);
+  out.sort((a, b) => a.at - b.at); hazardsOnPath.k = key; hazardsOnPath.v = out; return out;
+}
+/* ---------- Azi față de de obicei, bilanțul săptămânii ---------- */
+function usualDur(o, d) { const v = S.trips.filter(t => t.orig === o && t.dest === d && t.dur >= 2).map(t => t.dur).sort((a, b) => a - b); return v.length >= 2 ? v[Math.floor(v.length / 2)] : null; }
+function weekStart() { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; }
+function weekHTML() {
+  const ws = weekStart(), tr = S.trips.filter(t => new Date(t.date + 'T12:00:00') >= ws && t.dur >= 2);
+  if (!tr.length) return '';
+  const tot = tr.reduce((s, t) => s + t.dur, 0), idle = tr.reduce((s, t) => s + ((t.pred && t.pred.idle) || 0), 0), saved = tr.reduce((s, t) => s + ((t.pred && t.pred.saved) || 0), 0);
+  const fuel = tr.reduce((s, t) => s + ((t.pred && t.pred.fuel) || 0), 0), C = car();
+  return `<div class="card"><div class="kicker">Săptămâna aceasta</div><div class="tvgrid" style="margin-top:8px">
+    <div><small>Drumuri</small><b>${tr.length}</b></div><div><small>Timp la volan</small><b>${durTxt(tot)}</b></div>
+    <div><small>Stat în coloană</small><b>${durTxt(idle)}</b></div><div><small>Câștigat plecând la ora recomandată</small><b>${durTxt(saved)}</b></div></div>
+    ${fuel >= 0.1 ? `<p class="muted" style="margin:8px 0 0">${C.fuel === 'electric' ? '🔌' : '⛽'} ${n1(fuel)} ${C.unit}, ~${Math.round(fuel * C.price)} lei, ${n1(fuel * C.ef)} kg CO₂ (estimare).</p>` : ''}</div>`;
+}
+function lastTripHTML() { const r = S.lastSummary; if (!r || Date.now() - r.at > 6 * 3600e3) return '';
+  return `<div class="card"><div class="kicker">Ultimul drum: ${esc(r.name)}</div><div class="msg" style="font-size:18px">${durTxt(r.dur)}${r.usual ? ` · de obicei ${durTxt(r.usual)} (${r.dur - r.usual >= 0 ? '+' : '−'}${durTxt(Math.abs(r.dur - r.usual))})` : ''}</div>
+    <p class="muted" style="margin:4px 0 0">${r.idle >= 1 ? `Ați stat ~${durTxt(r.idle)} în coloană. ` : 'Fără opriri lungi în coloană. '}${r.fuel ? r.fuel : ''}</p></div>`; }
+function carSettingsHTML() { const C = car();
+  return `<div class="card"><div class="kicker">Mașina dumneavoastră</div><p class="muted">Pentru estimarea consumului, a costului și a emisiilor de CO₂ la fiecare drum.</p>
+    <div class="field"><small>Combustibil</small><select id="cFuel">${Object.entries(CARS).map(([k, v]) => `<option value="${k}" ${k === C.fuel ? 'selected' : ''}>${v.label}</option>`).join('')}</select></div>
+    <div class="field"><small>Consum mediu (${C.unit}/100 km)</small><input id="cCons" type="number" step="0.1" min="1" max="40" value="${C.cons}"></div>
+    <div class="field"><small>Preț (lei/${C.unit})</small><input id="cPrice" type="number" step="0.01" min="0.1" max="30" value="${C.price}"></div>
+    <p class="muted" style="font-size:12.5px">CO₂ la ardere: benzină 2,29 kg/L, motorină 2,65 kg/L, GPL 1,61 kg/L (factori impliciți IPCC 2006); electric 0,17 kg/kWh (mixul național 2025, eticheta ANRE). Consumul pe fiecare porțiune ține cont de viteză și de staționare.</p></div>`; }
+function bindCarSettings() { const upd = () => { const f = $('cFuel').value, same = (S.car || {}).fuel === f;
+  S.car = { fuel: f, cons: same ? +$('cCons').value || CARS[f].cons : CARS[f].cons, price: same ? +$('cPrice').value || CARS[f].price : CARS[f].price }; save(); if (!same) renderSet(); };
+  ['cFuel', 'cCons', 'cPrice'].forEach(i => $(i) && ($(i).onchange = upd)); }
+
 /* ---------- Pe drum: potrivirea GPS pe toată rețeaua (track.js), viteza, distanța rămasă, sosirea estimată ---------- */
 let TRK = null;
 function trk() { if (!TRK || TRK.net !== NET) { TRK = PLTTrack.createTracker(E, NET); TRK.net = NET; } return TRK; }
@@ -771,10 +831,10 @@ function onFix(pos) {
   if (L.habitO && !L.originChecked && c.accuracy <= 100) { L.originChecked = true;
     if (E.haversine({ lat: c.latitude, lon: c.longitude }, NET.nodes[L.habitO]) > 1.5 && L.ta != null) { L.ta = null; L.pred.deadline = null; toast('Nu plecați din locul obișnuit: nu mai calculez rezerva față de ora drumului obișnuit.'); } }
   L.mm = L.mm || {};
-  if (L.local) { trk().update(L.mm, { lat: c.latitude, lon: c.longitude, acc: c.accuracy, t: tMinNow(), speed: c.speed }, null);
+  if (L.local) { trk().update(L.mm, { lat: c.latitude, lon: c.longitude, acc: c.accuracy, t: tMinNow(), speed: c.speed }, null); fuelTick(L, tMinNow());
     if (c.accuracy <= 80 && E.haversine({ lat: c.latitude, lon: c.longitude }, L.destPt) < 0.08) { L.nearEnd = (L.nearEnd || 0) + 1; if (L.nearEnd >= 2) { save(); arrive(true); return; } } else L.nearEnd = 0;
     save(); drawTrip(); if (S.fam) famPushPosition(L, liveState(L)); return; }
-  const r = trk().update(L.mm, { lat: c.latitude, lon: c.longitude, acc: c.accuracy, t, speed: c.speed }, new Set(L.path));
+  const r = trk().update(L.mm, { lat: c.latitude, lon: c.longitude, acc: c.accuracy, t, speed: c.speed }, new Set(L.path)); fuelTick(L, t);
   if (r.obs.length) { // timpii pe tronsoane pleacă imediat (alertele altor participanți folosesc ultimele 75 de minute)
     const o = r.obs.map(x => ({ segId: x.segId, date: L.date, t: Math.round(x.t * 10) / 10, dur: Math.round(x.dur * 100) / 100, weather: L.weather, interp: x.interp }));
     L.obs = (L.obs || []).concat(o); S.segObs = (S.segObs || []).concat(o); enqueue('segobs', o);
@@ -785,7 +845,8 @@ function onFix(pos) {
   }
   if (mm.eid && gpsFresh(L) && t - (L.altAt || L.dep) > 3 && refreshAlts(L, t)) { const hadBetter = L.betterTold; if (L.better && !hadBetter) { L.betterTold = true; toast(`Alternativa ${L.better.i} este acum cu ~${durTxt(L.better.gain)} mai rapidă.`); } save(); renderTrip(); return; }
   const dEnd = E.haversine({ lat: c.latitude, lon: c.longitude }, L.destPt || NET.nodes[L.dest]);
-  if (c.accuracy <= 80 && (dEnd < 0.15 || (!L.destPt && mm.eid && NET.edges[mm.eid].to === L.dest && mm.s > NET.edges[mm.eid].len - 0.05))) { L.nearEnd = (L.nearEnd || 0) + 1; if (L.nearEnd >= 2) { save(); arrive(true); return; } } else L.nearEnd = 0;
+  const rArr = L.destPt ? Math.min(0.5, Math.max(0.15, E.haversine(NET.nodes[L.dest], L.destPt) + 0.12)) : 0.15;   // destinația poate fi la câteva sute de metri de drumul principal
+  if (c.accuracy <= 80 && (dEnd < rArr || (!L.destPt && mm.eid && NET.edges[mm.eid].to === L.dest && mm.s > NET.edges[mm.eid].len - 0.05))) { L.nearEnd = (L.nearEnd || 0) + 1; if (L.nearEnd >= 2) { save(); arrive(true); return; } } else L.nearEnd = 0;
   save(); drawTrip(); pullTraffic(); if (S.fam) famPushPosition(L, liveState(L));
 }
 function startGeo() {
@@ -874,7 +935,7 @@ function drawTrip() {
   if (L.local) { const ls = liveState(L), set = (id, h) => { const el = $(id); if (el) el.innerHTML = h; };
     set('tvE', fmt(Math.round(ls.eta))); set('tvT', durTxt(ls.now - L.dep)); set('tvV', ls.v != null ? Math.round(ls.v) + '<small> km/h</small>' : '—');
     set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', kmTxt(ls.remKm));
-    set('tripInfo', ls.ok ? `📡 GPS ±${L.gps.acc} m` : L.gpsDenied ? '⚠️ Fără acces la locație' : '⏳ Caut semnalul GPS');
+    set('tripInfo', ls.ok ? `📡 GPS ±${L.gps.acc} m` : L.gpsDenied ? '⚠️ Fără acces la locație' : '⏳ Caut semnalul GPS'); set('tvF', fuelTxt(L));
     const pts = [{ lat: L.destPt.lat, lon: L.destPt.lon, name: 'Destinația' }].concat(ls.pos ? [{ lat: ls.pos.lat, lon: ls.pos.lon, name: 'Eu', me: true }] : []); drawFamMap(cv, pts); return; }
   const nowT = Date.now(); if (nowT - TRIPDRAW < 400) return; TRIPDRAW = nowT;
   const ls = liveState(L); drawTripMap(cv, L, ls);
@@ -882,7 +943,12 @@ function drawTrip() {
   const ta = L.ta, slack = ta != null ? ta - ls.eta : null;
   set('tvE', fmt(Math.round(ls.eta)));
   set('tvS', slack == null ? '' : `<span class="chip" style="background:${slack >= 5 ? 'var(--gbg)' : slack >= 0 ? 'var(--ybg)' : 'var(--rbg)'};color:${slack >= 5 ? 'var(--g)' : slack >= 0 ? '#92400e' : 'var(--r)'}">${slack >= 0 ? 'rezervă ' + durTxt(slack) + ' față de ' + fmt(ta) : 'întârziere ~' + durTxt(-slack) + ' față de ' + fmt(ta)}</span>`);
-  set('tvT', durTxt(ls.now - L.dep)); set('tvV', ls.v != null ? Math.round(ls.v) + '<small> km/h</small>' : '—');
+  set('tvT', durTxt(ls.now - L.dep));
+  { const e = L.mm && L.mm.eid && ls.ok ? NET.edges[L.mm.eid] : null, ms = e && e.ms, over = ms && ls.v != null && ls.v > ms + 5;
+    set('tvV', (ls.v != null ? Math.round(ls.v) + '<small> km/h</small>' : '—') + (ms ? limitSign(ms, over) : ''));
+    const cell = $('tvV') && $('tvV').parentElement; if (cell) cell.style.background = over ? 'rgba(224,49,61,.35)' : ''; }
+  set('tvU', L.usual ? `Azi ~${durTxt(ls.eta - L.dep)} · de obicei ${durTxt(L.usual)} (${ls.eta - L.dep - L.usual >= 0 ? '+' : '−'}${durTxt(Math.abs(ls.eta - L.dep - L.usual))})` : '');
+  set('tvF', fuelTxt(L));
   set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', kmTxt(ls.remKm));
   const z = zoneSpeed(L, ls); set('tvZ', z ? Math.round(z.v) + '<small> km/h</small>' : '—');
   set('tvZn', z && z.measured ? 'Trafic măsurat aici' : 'Trafic estimat aici');
@@ -891,10 +957,16 @@ function drawTrip() {
   const span = Math.max(0.5, Math.min(10, ls.remKm));
   set('tvLane', `<div class="mid"></div>${ah.ch.map(c => `<div class="sec ${c.level}" style="bottom:${c.a / span * 100}%;height:${(c.b - c.a) / span * 100}%"></div>`).join('')}${ah.incs.filter(x => x.at <= span).map(x => `<div class="pin" style="bottom:${x.at / span * 100}%">${warnSVG(x.kind)}</div>`).join('')}<div class="car">🚗</div>`);
   set('tvParts', ah.ch.length ? ah.ch.map(c => { const f = FACE[c.level]; return `<div class="part" style="flex:${c.b - c.a}">${faceSVG(c.level)}<div><b style="color:${f[2]}">${f[1]}</b><span>${c.a === 0 ? 'Următorii ' + kmTxt(c.b) : 'De la ' + kmTxt(c.a) + ' la ' + kmTxt(c.b)}: ~${Math.round(c.v)} km/h, ${durTxt(c.t)}</span></div></div>`; }).reverse().join('') : '<p class="muted">Ați ajuns aproape de destinație.</p>');
+  const pos0 = L.mm && L.mm.eid && ls.ok ? (() => { let c = 0; for (const e of L.path) { if (e === L.mm.eid) return c + L.mm.s; c += NET.edges[e].len; } return null; })() : null;
+  const hz = pos0 == null ? [] : hazardsOnPath(L.path).filter(h => h.at > pos0 && h.at - pos0 <= 3 && (h.kind === 'lx' || schoolTime(L.date, ls.now))).slice(0, 3);
+  set('tvHz', hz.map(h => `<div class="inc"><span style="font-size:22px">${h.kind === 'lx' ? '🚆' : '🚸'}</span><span><b>${h.kind === 'lx' ? 'Trecere la nivel cu calea ferată' : 'Școală'}</b> în ${h.at - pos0 < 1 ? Math.round((h.at - pos0) * 100) * 10 + ' m' : kmTxt(h.at - pos0)}${h.kind === 'school' ? ': atenție la copii' : ''}</span></div>`).join(''));
   set('tvInc', ah.incs.slice(0, 4).map(x => { const e = NET.edges[x.eid]; return `<div class="inc">${warnSVG(x.kind)}<span><b>${KIND_LABEL[x.kind] || 'Problemă'}</b> peste ${kmTxt(x.at)}${e.name ? ', pe ' + esc(e.name) : ''}, ${PLT.dirName(E, NET, x.eid)}${x.mine ? ' (semnalarea dumneavoastră)' : ''}</span></div>`; }).join(''));
   set('tripInfo', (ls.ok ? `📡 GPS ±${L.gps.acc} m` : L.gpsDenied ? '⚠️ Fără acces la locație · poziție estimată' : (L.gps && L.gps.at && Date.now() - L.gps.at < 45000) ? `📡 GPS ±${L.gps.acc} m · caut drumul pe hartă` : '⏳ Caut semnalul GPS · poziție estimată') + (ls.km >= 1 ? ` · traficul de azi: ${ls.factor >= 1.05 ? 'cu ' + Math.round((ls.factor - 1) * 100) + '% mai lent' : ls.factor <= 0.95 ? 'cu ' + Math.round((1 - ls.factor) * 100) + '% mai rapid' : 'ca de obicei'} decât estimarea` : ''));
   { const W = WXD(), d = W && W[L.date], hr = Math.min(23, Math.floor(ls.now / 60)), c = d ? d.h[hr] : 'senin';
-    set('tvWx', c && c !== 'senin' ? `<div class="note" style="background:var(--ybg);color:var(--ink)">${PLT.WX_ICON[c] || '🌦️'} <b>${esc(d.d[hr].charAt(0).toUpperCase() + d.d[hr].slice(1))}</b> acum în zonă. Estimarea ține cont de asta; păstrați distanța.</div>` : ''); }
+    const hn = Math.min(23, hr + 1), tmin = d && d.t ? Math.min(d.t[hr] ?? 99, d.t[hn] ?? 99) : 99, ice = d && d.t && tmin <= 1 && ((d.rh && Math.max(d.rh[hr] || 0, d.rh[hn] || 0) >= 85) || c !== 'senin');
+    const fogNext = d && c !== 'ceata' && d.h[hn] === 'ceata';
+    if (ice || fogNext) { set('tvWx', `<div class="note" style="background:var(--ybg);color:var(--ink)">${ice ? `❄️ <b>Risc de polei:</b> ${Math.round(tmin)} °C și umezeală mare. ` : ''}${fogNext ? '🌫️ <b>Ceață în următoarea oră.</b> ' : ''}Mergeți mai încet și păstrați distanța.</div>`); }
+    else set('tvWx', c && c !== 'senin' ? `<div class="note" style="background:var(--ybg);color:var(--ink)">${PLT.WX_ICON[c] || '🌦️'} <b>${esc(d.d[hr].charAt(0).toUpperCase() + d.d[hr].slice(1))}</b> acum în zonă. Estimarea ține cont de asta; păstrați distanța.</div>` : ''); }
   set('tripRoad', ls.road ? `<div class="note" style="background:${ls.road.drop >= 0.15 ? 'var(--rbg)' : ls.road.drop >= 0.05 ? 'var(--ybg)' : 'var(--gbg)'};color:var(--ink)"><span>${ls.road.drop >= 0.15 ? '🐢 ' : ''}${ls.road.name ? 'Pe ' + esc(ls.road.name) : 'Pe ultima porțiune'} mergeți cu ${Math.round(ls.road.v)} km/h; de obicei ~${Math.round(ls.road.vTyp)} km/h${ls.road.drop >= 0.05 ? ` (cu ${Math.round(ls.road.drop * 100)}% mai încet)` : ''}.</span></div>` : '');
 }
 const KIND_LABEL = { coada: 'Aglomerat', accident: 'Accident', politie: 'Poliție', banda: 'Bandă închisă', lucrari: 'Lucrări', pericol: 'Obstacol', restr: 'Restricție' };
@@ -908,7 +980,7 @@ function renderTrip() {
       ${S.habits.map((h, i) => `<button class="btn dark" data-h="${i}">Am plecat · ${esc(h.name)}</button>`).join('')}
       <button class="btn ghost" id="bOther">Am plecat · alt drum</button>
       <div id="otherBox" style="display:none;margin-top:8px">${picker('oO', null, 'De unde plecați', 'Caut poziția dumneavoastră…')}${picker('oD', null, 'Unde mergeți?', 'Localitate, cartier, spital, mall, benzinărie…', true)}<button class="btn dark" id="bOtherGo">Am plecat</button></div></div>
-      <div class="card"><div class="kicker">Drumurile mele</div>${histHTML()}</div>`;
+      ${lastTripHTML()}${weekHTML()}<div class="card"><div class="kicker">Drumurile mele</div>${histHTML()}</div>`;
     $('s-trip').querySelectorAll('[data-h]').forEach(b => b.onclick = () => depart(S.habits[+b.dataset.h]));
     $('bOther').onclick = () => { $('otherBox').style.display = 'block'; $('bOther').style.display = 'none'; bindPickers($('otherBox')); const pk = $('oO').closest('.pk'); if (pk._geoFill) pk._geoFill(); };
     $('bOtherGo').onclick = () => departOther($('oD').value, $('oO').value);
@@ -918,7 +990,7 @@ function renderTrip() {
     $('s-trip').innerHTML = `<div class="card trip"><div class="top"><div><div class="dest">Spre ${esc(placeName(L.dest))}</div><div class="etal" style="margin-top:8px">Sosire estimată</div><div class="eta" id="tvE">—</div></div></div>
       <div class="stats"><div><small>Timp pe drum</small><b id="tvT">—</b></div><div><small>Viteza acum</small><b id="tvV">—</b></div><div><small>Viteza medie</small><b id="tvA">—</b></div>
         <div><small>Parcurs</small><b id="tvD">—</b></div><div><small>Mai aveți</small><b id="tvR">—</b></div><div><small>Drum</small><b style="font-size:15px">scurt, local</b></div></div>
-      <div class="note" style="background:var(--asph2);color:#fff">Drum scurt, pe străzi locale: aplicația urmărește distanța până la destinație și observă singură când ați ajuns.</div>
+      <p class="muted" id="tvF" style="margin:8px 0 0;font-size:13.5px;color:#d5dce3"></p><div class="note" style="background:var(--asph2);color:#fff">Drum scurt, pe străzi locale: aplicația urmărește distanța până la destinație și observă singură când ați ajuns.</div>
       <canvas class="rmap" id="tripMap" style="height:260px"></canvas><p class="muted" id="tripInfo" style="margin:6px 0 0;font-size:13px"></p>
       <button class="btn go" id="bArr">Am ajuns</button><div class="row2" style="margin-top:8px"><button class="btn ghost" id="bDest">Altă destinație</button><button class="btn ghost" id="bCan">Anulați drumul</button></div>${tripDestForm()}</div>`;
     $('bArr').onclick = () => arrive(false); $('bCan').onclick = () => { stopGeo(); S.live = null; save(); famEndTrip(false); renderTrip(); };
@@ -929,13 +1001,14 @@ function renderTrip() {
   const kk = Math.max(0, L.path.indexOf(L.mm && L.mm.eid)), cur0 = L.path.slice(kk), alts0 = (L.alts || [L.path]).map((p, i) => i === (L.sel || 0) ? cur0 : p);
   const opts = alts0.map(path => { const w = M.walk(path, L.date, now, ctx), byName = {}; for (const e of path) { const x = NET.edges[e]; if (x.name) byName[x.name] = (byName[x.name] || 0) + x.len; } return { path, med: w.total, km: E.pathLen(NET, path), via: Object.entries(byName).sort((a, b) => b[1] - a[1]).slice(0, 2).map(x => x[0]) }; });
   $('s-trip').innerHTML = `<div class="card trip">
-    <div class="top"><div><div class="dest">Spre ${esc(placeName(L.dest))}</div><div class="etal" style="margin-top:8px">Sosire estimată</div><div class="eta" id="tvE">—</div><div id="tvS"></div></div><div class="face" id="tvFace"></div></div>
+    <div class="top"><div><div class="dest">Spre ${esc(placeName(L.dest))}</div><div class="etal" style="margin-top:8px">Sosire estimată</div><div class="eta" id="tvE">—</div><div id="tvS"></div><div class="etal" id="tvU" style="margin-top:4px"></div></div><div class="face" id="tvFace"></div></div>
     <div class="stats">
       <div><small>Timp pe drum</small><b id="tvT">—</b></div><div><small>Viteza acum</small><b id="tvV">—</b></div><div><small>Viteza medie</small><b id="tvA">—</b></div>
       <div><small>Parcurs</small><b id="tvD">—</b></div><div><small>Mai aveți</small><b id="tvR">—</b></div><div><small id="tvZn">Trafic în zonă</small><b id="tvZ">—</b></div></div>
+    <p class="muted" id="tvF" style="margin:8px 0 0;font-size:13.5px;color:#d5dce3"></p>
     <div class="kicker" style="margin-top:14px">Drumul în față</div>
     <div class="road"><div class="lane" id="tvLane"></div><div class="parts" id="tvParts"></div></div>
-    <div id="tvInc"></div><div id="tvWx"></div><div id="tripRoad"></div>
+    <div id="tvHz"></div><div id="tvInc"></div><div id="tvWx"></div><div id="tripRoad"></div>
     ${L.better ? `<div class="note" style="background:var(--ybg);color:var(--ink)">↪️ Alternativa ${L.better.i} este acum cu ~${durTxt(L.better.gain)} mai rapidă decât drumul pe care sunteți.</div>` : ''}
     <div class="mapwrap"><canvas class="rmap" id="tripMap" style="height:220px"></canvas><div class="mapbtns"><button id="tZin" aria-label="Mărește">+</button><button id="tZout" aria-label="Micșorează">−</button></div></div>
     <p class="muted" id="tripInfo" style="margin:6px 0 0;font-size:13px"></p>
@@ -966,7 +1039,8 @@ function startTrip(o, d, name, ta, h) {
   if (!s) { toast('Nu găsesc un drum între aceste locuri.'); return; }
   const order = alts.map((pth, i) => ({ i, t: M.walk(pth, date, dep, ctx).total })).sort((a, b) => a.t - b.t).map(x => alts[x.i]);
   const f = h ? forecast(h, date) : null, rec = f && (f.early ? f.early.t0 : f.usual);
-  S.live = { id: S.pid + '-' + Date.now(), name, orig: o, dest: d, ta, alts: order, sel: 0, path: order[0], date, dep, weather: weatherFor(date, dep), destPt: { lat: dpt.lat, lon: dpt.lon }, mm: {}, obs: [],
+  const usual = usualDur(o, d) || (f && f.typ ? Math.round(f.typ.med) : null);
+  S.live = { id: S.pid + '-' + Date.now(), name, orig: o, dest: d, ta, usual, usualMed: f && f.cur ? f.cur.med : null, lvl: f ? f.level : null, alts: order, sel: 0, path: order[0], date, dep, weather: weatherFor(date, dep), destPt: { lat: dpt.lat, lon: dpt.lon }, mm: {}, obs: [],
     pred: { madeAt: new Date().toISOString(), median: s.med, q: s.q, tau: 0.95, deadline: ta, ta, recT0: rec, version: LR() ? LR().version : 'a-priori', followed: rec != null && dep <= rec + 2 } };
   save(); keepAwake(); renderTrip(); toast('Drum bun! Puneți telefonul în suport.');
 }
@@ -1019,13 +1093,14 @@ function reportNow(kind) {
 function arrive(auto) {
   const L = S.live; if (!L) return; const arr = nowMin(); let dur = arr - L.dep; if (dur <= 0) dur += 1440;
   stopGeo();
-  if (L.local) { S.live = null; save(); famEndTrip(true); renderTrip(); toast((auto ? 'Am detectat sosirea. ' : '') + 'Ați ajuns.'); return; }
+  if (L.local) { S.lastSummary = { at: Date.now(), name: 'Drum scurt spre ' + placeName(L.dest), dur: Math.round(nowMin() - L.dep), usual: null, idle: L.idle || 0, fuel: fuelTxt(L) }; S.live = null; save(); famEndTrip(true); renderTrip(); toast((auto ? 'Am detectat sosirea. ' : '') + 'Ați ajuns.'); return; }
   const mm = L.mm || {}, driven = mm.driven && mm.driven.length ? mm.driven : null;
   if (dur < 2) { S.live = null; save(); renderTrip(); toast('Drumul a durat sub 2 minute; nu l-am înregistrat.'); return; }
   const onTime = L.ta == null ? null : L.dep + dur <= L.ta;
   const path = driven || L.path, orig = NET.edges[path[0]].from;
   S.trips.push({ id: L.id, date: L.date, dep: L.dep, dur, orig, dest: L.dest, path, weather: L.weather, vacation: false, source: 'participant', participant: S.pid,
-    pred: Object.assign({}, L.pred, { offRoute: !driven, gps: !!(L.gps && L.gps.fixes), segments: (L.obs || []).length, driven: !!driven, gaps: mm.gaps || 0, km: Math.round((mm.km || 0) * 10) / 10 }), onTime });
+    pred: Object.assign({}, L.pred, { idle: Math.round((L.idle || 0) * 10) / 10, fuel: Math.round((L.fuel || 0) * 100) / 100, fuelType: car().fuel, saved: L.usualMed && L.pred.followed && L.lvl && L.lvl !== 'g' ? Math.max(0, Math.round(L.usualMed - dur)) : 0, offRoute: !driven, gps: !!(L.gps && L.gps.fixes), segments: (L.obs || []).length, driven: !!driven, gaps: mm.gaps || 0, km: Math.round((mm.km || 0) * 10) / 10 }), onTime });
+  S.lastSummary = { at: Date.now(), name: L.name, dur: Math.round(dur), usual: L.usual, idle: L.idle || 0, fuel: fuelTxt(L) };
   S.live = null; save(); enqueue('trip', S.trips[S.trips.length - 1]); famEndTrip(true);
   renderTrip(); toast((auto ? 'Am detectat sosirea. ' : '') + (onTime ? 'Ați ajuns la timp! 🎉' : 'Ați ajuns. Vă mulțumim, aplicația învață din acest drum.'));
 }
@@ -1057,6 +1132,7 @@ function renderSet() {
       <label class="chk"><input type="checkbox" id="vOn" ${S.voice === false ? '' : 'checked'}><span><b>Anunț vocal</b> pentru ambuteiajele grave (când întârzierea e sigură și are o cauză clară). Telefonul citește mesajul când atingeți notificarea sau dacă aplicația e deschisă.</span></label>
       <button class="btn ghost" id="bVoice">🔊 Ascultați un exemplu</button>
       <button class="btn dark" id="bSave">Salvați</button></div>
+    ${carSettingsHTML()}
     <div class="card"><div class="kicker">Datele mele</div><p class="muted">Codul dumneavoastră de participant: <b>${S.pid}</b>. Drumurile se trimit fără nume, doar cu acest cod, pentru îmbunătățirea avertizărilor. Butonul de mai jos le șterge definitiv, de pe telefon și de pe server. <a href="confidentialitate.html" target="_blank" rel="noopener">Informarea privind datele personale</a></p><button class="btn red" id="bWipe">Ștergeți toate datele</button></div>
     <p class="muted" style="text-align:center;font-size:12.5px">Hărți: © OpenStreetMap contributors (ODbL). Date meteo: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0).</p>
     <div class="card"><div class="kicker">Probleme?</div><p class="muted">Dacă aplicația arată ciudat sau nu se actualizează, apăsați aici. Datele dumneavoastră rămân.</p><button class="btn ghost" onclick="window.__pltRepair()">Actualizează aplicația</button></div>`;
@@ -1070,7 +1146,7 @@ function renderSet() {
     S.lead = +($('leadSeg').querySelector('.on') || { dataset: { v: 30 } }).dataset.v; S.evening = $('evOn').checked; S.eveningAt = $('evAt').value || '21:00';
     save(); enqueue('participant'); enqueue('habits'); rebuild(); toast('Am salvat.'); show('home');
   };
-  let arm = 0; $('bWipe').onclick = async () => { if (Date.now() - arm > 3000) { arm = Date.now(); toast('Apăsați din nou pentru a confirma ștergerea.'); return; } try { const s = await session(); if (s) { await s.c.rpc('delete_my_data'); await s.c.auth.signOut(); } } catch (e) { } S = fresh(); save(); rebuild(); toast('Toate datele dumneavoastră au fost șterse, inclusiv de pe server.'); welcome(); };
+  let arm = 0; bindCarSettings(); $('bWipe').onclick = async () => { if (Date.now() - arm > 3000) { arm = Date.now(); toast('Apăsați din nou pentru a confirma ștergerea.'); return; } try { const s = await session(); if (s) { await s.c.rpc('delete_my_data'); await s.c.auth.signOut(); } } catch (e) { } S = fresh(); save(); rebuild(); toast('Toate datele dumneavoastră au fost șterse, inclusiv de pe server.'); welcome(); };
 }
 
 /* ---------- Bun venit ---------- */
