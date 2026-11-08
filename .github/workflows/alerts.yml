@@ -3,7 +3,7 @@ name: alerts
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/10 3-20 * * *'
+    - cron: '*/10 * * * *'   # every 10 min, all day (family positions are deleted 10 min after the last update)
 concurrency: { group: alerts, cancel-in-progress: false }
 jobs:
   run:

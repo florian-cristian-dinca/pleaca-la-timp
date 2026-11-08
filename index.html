@@ -1071,7 +1071,7 @@ async function pullFamily() {
     if (!mem || !mem.length) { S.fam = null; save(); return; }
     const me = mem.find(m => m.participant === s.uid);
     const { data: fam } = await s.c.from('families').select('id,code,created_by').limit(1);
-    const { data: pos } = await s.c.from('live_positions').select('*');
+    const { data: pos0 } = await s.c.from('live_positions').select('*'), pos = (pos0 || []).filter(p => Date.now() - new Date(p.updated_at).getTime() < 10 * 60000);
     S.fam = { uid: s.uid, code: fam && fam[0] ? fam[0].code : null, owner: fam && fam[0] ? fam[0].created_by : null, me, members: mem, pos: pos || [], at: Date.now() };
     const was = S.famApproved; S.famApproved = !!(me && me.approved); save();
     if (S.minor && S.famApproved && !was) { toast('Părintele dumneavoastră și-a dat acordul. Aplicația funcționează complet.'); flush(); }
@@ -1149,7 +1149,7 @@ function renderFam() {
         const st = !m.approved ? 'așteaptă acordul părintelui' : !m.sharing ? 'partajarea e oprită' : p ? (p.status === 'a ajuns' ? `a ajuns la ${esc(p.dest_name || 'destinație')}, ${famAgo(p.updated_at)}` : `pe drum spre ${esc(p.dest_name || '?')}, sosire ~${fmt(Math.round(p.eta_min))}${p.speed_kmh != null ? `, ${Math.round(p.speed_kmh)} km/h` : ''} · ${famAgo(p.updated_at)}`) : 'nu e pe drum acum';
         return `<div class="next" style="cursor:default"><i class="lamp" style="margin:0;background:${p && m.sharing && m.approved ? (p.status === 'a ajuns' ? 'var(--gl)' : 'var(--rl)') : '#c4ccd4'}"></i><div><b>${esc(m.display_name)}${isMe ? ' (dumneavoastră)' : ''}${m.minor ? ', sub 18 ani' : ''}</b><span>${st}</span></div></div>`; }).join('')}
       ${pts.length ? '<canvas class="rmap" id="famMap" style="height:260px"></canvas>' : ''}
-      <p class="muted" style="font-size:13px">Pozițiile se actualizează la 15 secunde în timpul unui drum. Serverul păstrează doar ultima poziție, iar după 3 ore o șterge.</p></div>
+      <p class="muted" style="font-size:13px">Pozițiile se actualizează la 15 secunde în timpul unui drum. Serverul păstrează doar ultima poziție; dacă nu se mai actualizează 10 minute, nu mai e afișată și se șterge.</p></div>
     <div class="card"><div class="kicker">Codul grupului</div><div style="font-size:30px;font-weight:900;letter-spacing:.08em;margin:4px 0">${esc(F.code || '—')}</div>
       <p class="muted">Trimiteți codul membrilor familiei. Fiecare îl introduce în aplicație, la Familie.</p><button class="btn ghost" id="fShare">Trimiteți codul</button></div>
     <div class="card"><label class="chk"><input type="checkbox" id="fShareOn" ${me.sharing ? 'checked' : ''}><span>Familia îmi vede poziția în timpul drumurilor</span></label>

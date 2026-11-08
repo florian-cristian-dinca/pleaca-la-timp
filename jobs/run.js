@@ -125,16 +125,16 @@ async function all(table, q = x => x) { // PostgREST returns at most 1000 rows p
       }
     }
   }
-  // 4) familie: anunț membrii când cineva a plecat / a ajuns; șterg pozițiile mai vechi de 3 ore (tabelele pot lipsi încă)
+  // 4) familie: anunț membrii când cineva a plecat / a ajuns; șterg pozițiile neactualizate de 10 minute (tabelele pot lipsi încă)
   try {
-    const old = new Date(Date.now() - 3 * 3600e3).toISOString();
+    const old = new Date(Date.now() - 10 * 60e3).toISOString();
     await db.from('live_positions').delete().lt('updated_at', old);
     const [{ data: mem, error: e1 }, { data: pos, error: e2 }] = await Promise.all([db.from('family_members').select('*'), db.from('live_positions').select('*')]);
     if (e1 || e2) throw new Error((e1 || e2).message);
     let fam = 0;
     for (const p of pos || []) {
       const m = (mem || []).find(x => x.participant === p.participant); if (!m || !m.approved || !m.sharing) continue;
-      const age = (Date.now() - new Date(p.updated_at).getTime()) / 60000; if (age > 15) continue;
+      const age = (Date.now() - new Date(p.updated_at).getTime()) / 60000; if (age > 10) continue;
       const arrived = p.status === 'a ajuns', key = `fam|${p.participant}|${p.day}|${p.dest_name}|${arrived ? 'arr' : 'dep'}`;
       const msg = arrived ? { title: `👪 ${m.display_name} a ajuns`, body: `${m.display_name} a ajuns la ${p.dest_name}.` }
         : { title: `👪 ${m.display_name} a plecat`, body: `${m.display_name} e pe drum spre ${p.dest_name}, sosire estimată în jur de ${PLT.fmt(Math.round(p.eta_min))}.` };

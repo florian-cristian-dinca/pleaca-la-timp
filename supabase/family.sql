@@ -62,7 +62,7 @@ create policy mem_delete on family_members for delete using (participant = auth.
 drop policy if exists pos_own on live_positions;
 create policy pos_own on live_positions for all using (participant = auth.uid()) with check (participant = auth.uid());
 drop policy if exists pos_family on live_positions;
-create policy pos_family on live_positions for select using (can_see(participant));
+create policy pos_family on live_positions for select using (can_see(participant) and updated_at > now() - interval '10 minutes');   -- după 10 min fără actualizare nu mai e vizibilă
 
 -- creez grupul (devin primul membru, adult)
 create or replace function create_family(p_name text) returns text language plpgsql security definer set search_path = public as $$
