@@ -13,6 +13,7 @@ Usage:
   python osm_import.py romania-latest.osm.pbf graph.json
   python osm_import.py region.osm graph.json --bbox 44.25,25.80,44.72,26.40 --min-class tertiary
 """
+import os
 import argparse, json, math, sys, datetime
 from collections import defaultdict, deque
 
@@ -32,6 +33,7 @@ CLS = {
     'B': dict(lanes=2, capLane=800, v0=40, alpha=1.3, beta=4, base=0.70),
 }
 HIGHWAY_RANK = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary']
+STREET_KINDS = {'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'service', 'pedestrian'}
 LINK = {'motorway_link': 'motorway', 'trunk_link': 'trunk', 'primary_link': 'primary',
         'secondary_link': 'secondary', 'tertiary_link': 'tertiary'}
 PLACE_TYPES = {'city', 'town', 'village', 'suburb', 'quarter', 'neighbourhood'}
@@ -133,12 +135,17 @@ class Collector(osmium.SimpleHandler):
         super().__init__()
         self.bbox, self.min_rank = bbox, min_rank
         self.ways, self.places = [], []
+        self.streets, self.houses = [], []   # address index (all named streets, house numbers)
 
     def inside(self, lat, lon):
         s, w, n, e = self.bbox
         return s <= lat <= n and w <= lon <= e
 
     def node(self, n):
+        if 'addr:housenumber' in n.tags and n.location.valid() and self.inside(n.location.lat, n.location.lon):
+            st = n.tags.get('addr:street') or n.tags.get('addr:place')
+            if st:
+                self.houses.append((st, n.tags['addr:housenumber'], n.location.lat, n.location.lon))
         c = poi_cat(n.tags)
         if c and poi_name(n.tags) and n.location.valid() and self.inside(n.location.lat, n.location.lon):
             self.places.append(dict(name=poi_name(n.tags), kind='poi', cat=c, lat=n.location.lat, lon=n.location.lon))
@@ -149,7 +156,8 @@ class Collector(osmium.SimpleHandler):
     def area(self, a):
         # buildings / campuses mapped as closed ways or multipolygons
         c = poi_cat(a.tags)
-        if not c or not poi_name(a.tags):
+        hn, st = a.tags.get('addr:housenumber'), a.tags.get('addr:street') or a.tags.get('addr:place')
+        if not (c and poi_name(a.tags)) and not (hn and st):
             return
         try:
             ring = next(iter(a.outer_rings()))
@@ -159,11 +167,22 @@ class Collector(osmium.SimpleHandler):
         if pts:
             la, lo = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts)
             if self.inside(la, lo):
-                self.places.append(dict(name=poi_name(a.tags), kind='poi', cat=c, lat=la, lon=lo))
+                if c and poi_name(a.tags):
+                    self.places.append(dict(name=poi_name(a.tags), kind='poi', cat=c, lat=la, lon=lo))
+                if hn and st:
+                    self.houses.append((st, hn, la, lo))
 
     def way(self, w):
         hw = w.tags.get('highway')
         base = LINK.get(hw, hw)
+        if hw in STREET_KINDS and w.tags.get('name'):
+            try:
+                ll = [(nd.location.lat, nd.location.lon) for nd in w.nodes]
+                if ll and self.inside(*ll[len(ll) // 2]):
+                    L = sum(haversine(ll[i - 1], ll[i]) for i in range(1, len(ll)))
+                    self.streets.append((w.tags['name'], ll[len(ll) // 2][0], ll[len(ll) // 2][1], L))
+            except Exception:
+                pass
         if base not in HIGHWAY_RANK or HIGHWAY_RANK.index(base) > self.min_rank:
             return
         if w.tags.get('access') in ('no', 'private') or w.tags.get('area') == 'yes':
@@ -393,7 +412,7 @@ def build(ways, places):
                 if nt and nt != p['name']:
                     q['near'] = nt
             plist.append(q)
-    return nodes, edges, plist
+    return nodes, edges, plist, nearest, near_town
 
 
 def main():
@@ -406,7 +425,7 @@ def main():
     bbox = tuple(float(x) for x in a.bbox.split(','))
     h = Collector(bbox, HIGHWAY_RANK.index(a.min_class))
     h.apply_file(a.input, locations=True)
-    nodes, edges, places = build(h.ways, h.places)
+    nodes, edges, places, nearest, near_town = build(h.ways, h.places)
     if not edges:
         sys.exit('No edges found - check the bbox and the input file.')
     graph = dict(
@@ -419,6 +438,35 @@ def main():
     with open(a.output, 'w', encoding='utf-8') as f:
         json.dump(graph, f, ensure_ascii=False, separators=(',', ':'))
     print(f"graph.json: {len(nodes)} nodes, {len(edges)} edges, {len(places)} places")
+    # address index (separate file, loaded by the app only when searching): streets per locality + house numbers
+    streets = {}
+    for name, la, lo, L in h.streets:
+        loc = near_town(la, lo) or ''
+        k = (name, loc)
+        if k not in streets or L > streets[k][2]:
+            streets[k] = (la, lo, L)
+    houses = defaultdict(list)
+    for st, hn, la, lo in h.houses:
+        houses[(st, near_town(la, lo) or '')].append((hn, la, lo))
+    out, hs = [], {}
+    for (name, loc), (la, lo, L) in sorted(streets.items()):
+        k, d = nearest(la, lo)
+        if not k or d > 3:
+            continue
+        i = len(out)
+        out.append([name, loc, round(la, 5), round(lo, 5), k, round(d, 2)])
+        hh = houses.get((name, loc)) or []
+        if hh:
+            seen = {}
+            for hn, hla, hlo in hh:
+                seen.setdefault(hn, (round(hla, 5), round(hlo, 5)))
+            hs[i] = [[hn, p[0], p[1]] + list(nearest(p[0], p[1])[:1]) for hn, p in sorted(seen.items())]
+    adr = dict(meta=dict(source='OpenStreetMap', licence='ODbL 1.0 - (c) OpenStreetMap contributors', built=graph['meta']['built']),
+               streets=out, houses=hs)
+    apath = os.path.join(os.path.dirname(os.path.abspath(a.output)), 'addresses.json')
+    with open(apath, 'w', encoding='utf-8') as f:
+        json.dump(adr, f, ensure_ascii=False, separators=(',', ':'))
+    print(f"addresses.json: {len(out)} streets, {sum(len(v) for v in hs.values())} house numbers, {os.path.getsize(apath) // 1024} KB")
 
 
 if __name__ == '__main__':
