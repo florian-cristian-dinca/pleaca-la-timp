@@ -138,6 +138,7 @@ class Collector(osmium.SimpleHandler):
         self.bbox, self.min_rank = bbox, min_rank
         self.ways, self.places = [], []
         self.streets, self.houses = [], []   # address index (all named streets, house numbers)
+        self.lx = []     # level crossings with the railway
         self.base = []   # map layer: (kind, [(lat, lon), ...]) – streets, railways, water, green areas
 
     def inside(self, lat, lon):
@@ -145,6 +146,8 @@ class Collector(osmium.SimpleHandler):
         return s <= lat <= n and w <= lon <= e
 
     def node(self, n):
+        if n.tags.get('railway') == 'level_crossing' and n.location.valid() and self.inside(n.location.lat, n.location.lon):
+            self.lx.append((round(n.location.lat, 5), round(n.location.lon, 5)))
         if 'addr:housenumber' in n.tags and n.location.valid() and self.inside(n.location.lat, n.location.lon):
             st = n.tags.get('addr:street') or n.tags.get('addr:place')
             if st:
@@ -309,6 +312,21 @@ def write_tiles(base, folder):
     print(f'tiles: {len(idx)} files, {total // 1024} KB')
 
 
+def parse_maxspeed(v):
+    """OSM maxspeed → km/h (numbers, 'RO:urban' 50, 'RO:rural' 90, 'RO:trunk' 100, 'RO:motorway' 130)."""
+    if not v:
+        return None
+    v = v.split(';')[0].strip()
+    zones = {'RO:urban': 50, 'RO:rural': 90, 'RO:trunk': 100, 'RO:motorway': 130, 'RO:living_street': 20}
+    if v in zones:
+        return zones[v]
+    try:
+        x = float(v.split()[0])
+        return int(round(x * 1.609)) if 'mph' in v else int(x)
+    except ValueError:
+        return None
+
+
 def build(ways, places):
     use = defaultdict(int)
     loc = {}
@@ -383,6 +401,9 @@ def build(ways, places):
                     # heuristic: inbound entries of national roads / motorways crossing the city radius
                     bottleneck=bool(cls in ('N', 'A', 'M') and ru > CITY_RADIUS_KM >= rv),
                     radial=round(cos, 2))
+                ms = parse_maxspeed(tags.get('maxspeed'))
+                if ms:
+                    edges[eid]['ms'] = ms
                 if shape:  # intermediate shape points (simplified), in the direction of travel
                     edges[eid]['g'] = shape if (u, v) == (a, b) else shape[::-1]
     # fix edge ids as strings
@@ -493,6 +514,22 @@ def build(ways, places):
                 if nt and nt != p['name']:
                     q['near'] = nt
             plist.append(q)
+    # legal speed limit where OSM has none: 50 km/h inside localities, 90 outside, 130 on motorways
+    loc_pts = [(p['lat'], p['lon'], 2.0 if p['kind'] in ('city', 'town') else 0.9) for p in places if p['kind'] in ('city', 'town', 'village', 'suburb', 'quarter', 'neighbourhood')]
+    lgrid = defaultdict(list)
+    for p in loc_pts:
+        lgrid[(round(p[0] * 20), round(p[1] * 20))].append(p)
+
+    def in_locality(lat, lon):
+        gi, gj = round(lat * 20), round(lon * 20)
+        return any(haversine((lat, lon), (p[0], p[1])) < p[2] for i in range(gi - 1, gi + 2) for j in range(gj - 1, gj + 2) for p in lgrid.get((i, j), []))
+    for e in edges.values():
+        e['msd'] = 1 if 'ms' not in e else 0
+        if 'ms' in e:
+            continue
+        a, b = nodes[e['from']], nodes[e['to']]
+        la, lo = (a['lat'] + b['lat']) / 2, (a['lon'] + b['lon']) / 2
+        e['ms'] = 130 if e['cls'] == 'A' else 50 if (a.get('zone') == 'B' or in_locality(la, lo)) else 90
     return nodes, edges, plist, nearest, near_town
 
 
@@ -515,7 +552,7 @@ def main():
                   built=datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%MZ'),
                   nodes=len(nodes), edges=len(edges), places=len(places),
                   note='Demand/capacity attributes are priors from road class; calibrate on observed trips.'),
-        nodes=nodes, edges=edges, places=places)
+        nodes=nodes, edges=edges, places=places, hazards=dict(lx=sorted(set(h.lx))))
     with open(a.output, 'w', encoding='utf-8') as f:
         json.dump(graph, f, ensure_ascii=False, separators=(',', ':'))
     print(f"graph.json: {len(nodes)} nodes, {len(edges)} edges, {len(places)} places")
