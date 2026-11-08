@@ -933,23 +933,24 @@ function zoneSpeed(L, ls) {
 function drawTrip() {
   const L = S.live, cv = $('tripMap'); if (!L || !cv) return;
   if (L.local) { const ls = liveState(L), set = (id, h) => { const el = $(id); if (el) el.innerHTML = h; };
-    set('tvE', fmt(Math.round(ls.eta))); set('tvT', durTxt(ls.now - L.dep)); set('tvV', ls.v != null ? Math.round(ls.v) + '<small> km/h</small>' : '—');
-    set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', kmTxt(ls.remKm));
+    const remMin = Math.max(0, Math.round(ls.eta - ls.now)); set('tvE', fmt(Math.floor(ls.now) + remMin)); set('tvT', durTxt(ls.now - L.dep)); set('tvV', ls.v != null ? Math.round(ls.v) + '<small> km/h</small>' : '—');
+    set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', `${kmTxt(ls.remKm)}<small> · ${durTxt(remMin)}</small>`);
     set('tripInfo', ls.ok ? `📡 GPS ±${L.gps.acc} m` : L.gpsDenied ? '⚠️ Fără acces la locație' : '⏳ Caut semnalul GPS'); set('tvF', fuelTxt(L));
     const pts = [{ lat: L.destPt.lat, lon: L.destPt.lon, name: 'Destinația' }].concat(ls.pos ? [{ lat: ls.pos.lat, lon: ls.pos.lon, name: 'Eu', me: true }] : []); drawFamMap(cv, pts); return; }
   const nowT = Date.now(); if (nowT - TRIPDRAW < 400) return; TRIPDRAW = nowT;
   const ls = liveState(L); drawTripMap(cv, L, ls);
   const set = (id, h) => { const el = $(id); if (el) el.innerHTML = h; };
-  const ta = L.ta, slack = ta != null ? ta - ls.eta : null;
-  set('tvE', fmt(Math.round(ls.eta)));
+  const ta = L.ta, slack = ta != null ? ta - (Math.floor(ls.now) + Math.max(0, Math.round(ls.eta - ls.now))) : null;
+  const remMin = Math.max(0, Math.round(ls.eta - ls.now)), etaShown = Math.floor(ls.now) + remMin;
+  set('tvE', fmt(etaShown));
   set('tvS', slack == null ? '' : `<span class="chip" style="background:${slack >= 5 ? 'var(--gbg)' : slack >= 0 ? 'var(--ybg)' : 'var(--rbg)'};color:${slack >= 5 ? 'var(--g)' : slack >= 0 ? '#92400e' : 'var(--r)'}">${slack >= 0 ? 'rezervă ' + durTxt(slack) + ' față de ' + fmt(ta) : 'întârziere ~' + durTxt(-slack) + ' față de ' + fmt(ta)}</span>`);
   set('tvT', durTxt(ls.now - L.dep));
   { const e = L.mm && L.mm.eid && ls.ok ? NET.edges[L.mm.eid] : null, ms = e && e.ms, over = ms && ls.v != null && ls.v > ms + 5;
     set('tvV', (ls.v != null ? Math.round(ls.v) + '<small> km/h</small>' : '—') + (ms ? limitSign(ms, over) : ''));
     const cell = $('tvV') && $('tvV').parentElement; if (cell) cell.style.background = over ? 'rgba(224,49,61,.35)' : ''; }
-  set('tvU', L.usual ? `Azi ~${durTxt(ls.eta - L.dep)} · de obicei ${durTxt(L.usual)} (${ls.eta - L.dep - L.usual >= 0 ? '+' : '−'}${durTxt(Math.abs(ls.eta - L.dep - L.usual))})` : '');
+  { const tot = Math.round(etaShown - L.dep); set('tvU', L.usual ? `Tot drumul azi: ~${durTxt(tot)} · de obicei ${durTxt(L.usual)} (${tot - L.usual >= 0 ? '+' : '−'}${durTxt(Math.abs(tot - L.usual))})` : ''); }
   set('tvF', fuelTxt(L));
-  set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', kmTxt(ls.remKm));
+  set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', `${kmTxt(ls.remKm)}<small> · ${durTxt(remMin)}</small>`);
   const z = zoneSpeed(L, ls); set('tvZ', z ? Math.round(z.v) + '<small> km/h</small>' : '—');
   set('tvZn', z && z.measured ? 'Trafic măsurat aici' : 'Trafic estimat aici');
   const ah = aheadInfo(L, ls), F = FACE[ah.overall];
@@ -988,7 +989,7 @@ function renderTrip() {
   }
   if (L.local) {
     $('s-trip').innerHTML = `<div class="card trip"><div class="top"><div><div class="dest">Spre ${esc(placeName(L.dest))}</div><div class="etal" style="margin-top:8px">Sosire estimată</div><div class="eta" id="tvE">—</div></div></div>
-      <div class="stats"><div><small>Timp pe drum</small><b id="tvT">—</b></div><div><small>Viteza acum</small><b id="tvV">—</b></div><div><small>Viteza medie</small><b id="tvA">—</b></div>
+      <div class="stats"><div><small>De la plecare</small><b id="tvT">—</b></div><div><small>Viteza acum</small><b id="tvV">—</b></div><div><small>Viteza medie</small><b id="tvA">—</b></div>
         <div><small>Parcurs</small><b id="tvD">—</b></div><div><small>Mai aveți</small><b id="tvR">—</b></div><div><small>Drum</small><b style="font-size:15px">scurt, local</b></div></div>
       <p class="muted" id="tvF" style="margin:8px 0 0;font-size:13.5px;color:#d5dce3"></p><div class="note" style="background:var(--asph2);color:#fff">Drum scurt, pe străzi locale: aplicația urmărește distanța până la destinație și observă singură când ați ajuns.</div>
       <canvas class="rmap" id="tripMap" style="height:260px"></canvas><p class="muted" id="tripInfo" style="margin:6px 0 0;font-size:13px"></p>
@@ -1003,7 +1004,7 @@ function renderTrip() {
   $('s-trip').innerHTML = `<div class="card trip">
     <div class="top"><div><div class="dest">Spre ${esc(placeName(L.dest))}</div><div class="etal" style="margin-top:8px">Sosire estimată</div><div class="eta" id="tvE">—</div><div id="tvS"></div><div class="etal" id="tvU" style="margin-top:4px"></div></div><div class="face" id="tvFace"></div></div>
     <div class="stats">
-      <div><small>Timp pe drum</small><b id="tvT">—</b></div><div><small>Viteza acum</small><b id="tvV">—</b></div><div><small>Viteza medie</small><b id="tvA">—</b></div>
+      <div><small>De la plecare</small><b id="tvT">—</b></div><div><small>Viteza acum</small><b id="tvV">—</b></div><div><small>Viteza medie</small><b id="tvA">—</b></div>
       <div><small>Parcurs</small><b id="tvD">—</b></div><div><small>Mai aveți</small><b id="tvR">—</b></div><div><small id="tvZn">Trafic în zonă</small><b id="tvZ">—</b></div></div>
     <p class="muted" id="tvF" style="margin:8px 0 0;font-size:13.5px;color:#d5dce3"></p>
     <div class="kicker" style="margin-top:14px">Drumul în față</div>
