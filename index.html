@@ -804,7 +804,8 @@ function drawTripMap(cv, L, ls) {
   const g = cv.getContext('2d'), W = cv.width, H = cv.height, c = ls.pos || NET.nodes[NET.edges[L.path[0]].from];
   const kx = Math.cos(c.lat * Math.PI / 180), sc = W / (TV.km / 111.32 / kx), X = lon => W / 2 + (lon - c.lon) * sc * 1, Y = lat => H * 0.58 - (lat - c.lat) * (W / (TV.km / 110.57));
   const latR = TV.km / 110.57 * (H / W) * 0.75, lonR = TV.km / 111.32 / kx * 0.75;
-  g.fillStyle = '#eef1f4'; g.fillRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'round';
+  g.fillStyle = '#e9edf1'; g.fillRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'round';
+  drawBase(g, X, Y, c.lat - latR * 1.4, c.lat + latR * 1.4, c.lon - lonR * 1.4, c.lon + lonR * 1.4, dpr, TV.km, () => { TRIPDRAW = 0; drawTrip(); });
   const done = new Set(), date = L.date, ctx = E.ctxFor(date, L.weather, false), t = ls.now, abs = E.dayIndex(date) * 1440 + Math.floor(t), marks = [];
   for (const eid of trk().inBox(c.lat - latR, c.lat + latR, c.lon - lonR, c.lon + lonR)) {
     const e = NET.edges[eid];
@@ -1167,6 +1168,7 @@ function drawFamMap(cv, pts) {
   const kx = Math.cos((la0 + la1) / 2 * Math.PI / 180), sx = W / ((lo1 - lo0) * kx), sy = H / (la1 - la0), sc = Math.min(sx, sy);
   const cx = (lo0 + lo1) / 2, cy = (la0 + la1) / 2, X = lon => W / 2 + (lon - cx) * kx * sc, Y = lat => H / 2 - (lat - cy) * sc;
   g.fillStyle = '#e9edf1'; g.fillRect(0, 0, W, H); g.lineCap = 'round';
+  drawBase(g, X, Y, la0, la1, lo0, lo1, dpr, (lo1 - lo0) * kx * 111.32, () => { const c2 = $(cv.id); if (c2) drawFamMap(c2, pts); });
   const seen = new Set();
   for (const eid of trk().inBox(la0, la1, lo0, lo1)) { const e = NET.edges[eid], k = e.from < e.to ? e.from + e.to : e.to + e.from; if (seen.has(k)) continue; seen.add(k);
     g.strokeStyle = '#fff'; g.lineWidth = (['A', 'C', 'N', 'M'].includes(e.cls) ? 3.5 : 1.6) * dpr; g.beginPath(); strokeEdge(g, eid, X, Y, true); g.stroke(); }
@@ -1235,6 +1237,35 @@ async function fixAge(btn) {
 }
 function confirmTwice(btn, msg) { if (btn.dataset.armed) return true; btn.dataset.armed = 1; btn.textContent = msg; setTimeout(() => { delete btn.dataset.armed; }, 4000); return false; }
 
+/* ---------- Fundalul hărții: toate străzile, căile ferate, apele și parcurile (OpenStreetMap), în dale ~4,5 km ---------- */
+const TILES = new Map(); let TIDX = null, TIDXP = null;
+function tileIndex() { if (TIDX || TIDXP) return TIDXP; TIDXP = fetch('tiles/index.json').then(r => r.json()).then(j => { TIDX = j; TIDX.set = new Set(j.tiles); return TIDX; }).catch(() => { TIDXP = null; }); return TIDXP; }
+function decodeTile(d) { const o = {}; for (const k in d) o[k] = d[k].map(a => { const p = new Float64Array(a.length); let la = 0, lo = 0; for (let i = 0; i < a.length; i += 2) { la += a[i]; lo += a[i + 1]; p[i] = la / 1e5; p[i + 1] = lo / 1e5; } return p; }); return o; }
+function needTiles(la0, la1, lo0, lo1, redraw) {
+  if (!TIDX) { const p = tileIndex(); if (p) p.then(() => redraw && redraw()); return []; }
+  const out = []; let n = 0;
+  for (let i = Math.floor(la0 / TIDX.lat); i <= Math.floor(la1 / TIDX.lat); i++) for (let j = Math.floor(lo0 / TIDX.lon); j <= Math.floor(lo1 / TIDX.lon); j++) {
+    const k = i + '_' + j; if (!TIDX.set.has(k) || ++n > 30) continue; const t = TILES.get(k);
+    if (t === undefined) { TILES.set(k, null); fetch(`tiles/${k}.json`).then(r => r.json()).then(d => { TILES.set(k, decodeTile(d)); redraw && redraw(); }).catch(() => TILES.delete(k)); }
+    else if (t) out.push(t);
+  }
+  return out;
+}
+function drawBase(g, X, Y, la0, la1, lo0, lo1, dpr, widthKm, redraw) {
+  if (widthKm > 16) return;
+  const ts = needTiles(la0, la1, lo0, lo1, redraw); if (!ts.length) return;
+  const path = (p, close) => { g.beginPath(); for (let i = 0; i < p.length; i += 2) { const x = X(p[i + 1]), y = Y(p[i]); i ? g.lineTo(x, y) : g.moveTo(x, y); } if (close) g.closePath(); };
+  const fill = (k, col) => { g.fillStyle = col; for (const t of ts) for (const p of t[k] || []) { path(p, true); g.fill(); } };
+  const line = (k, col, w, dash) => { g.strokeStyle = col; g.lineWidth = w * dpr; g.setLineDash(dash ? dash.map(x => x * dpr) : []); for (const t of ts) for (const p of t[k] || []) { path(p); g.stroke(); } g.setLineDash([]); };
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  fill('green', '#d3e6cb'); fill('water', '#aed1ec'); line('river', '#aed1ec', widthKm < 6 ? 5 : 3); if (widthKm < 8) line('stream', '#aed1ec', 1.5);
+  if (widthKm < 4) line('k', '#cfc8b6', 1.2, [4, 3]);
+  if (widthKm < 5) line('s', '#ffffff', widthKm < 2 ? 2.2 : 1.4);
+  line('r', '#ffffff', widthKm < 2 ? 4 : widthKm < 5 ? 2.6 : 1.4);
+  line('t', '#ffffff', widthKm < 5 ? 4.5 : 2.5); line('p', '#fff7d6', widthKm < 5 ? 5.5 : 3); line('m', '#ffe3a8', widthKm < 5 ? 6.5 : 4);
+  line('rail', '#9aa3ab', 1.6, [7, 4]);
+}
+
 /* ---------- Alegerea destinației pe hartă: magazine, spitale, primării… sau orice punct atins ---------- */
 const POI_ICON = { shop: '🛒', mall: '🏬', hospital: '🏥', clinic: '⚕️', townhall: '🏛️', school: '🏫', university: '🎓', fuel: '⛽', station: '🚉', airport: '✈️', landmark: '📍' };
 const MP = { lat: 44.43, lon: 26.1, km: 3, sel: null, cb: null, drag: null, filter: null };
@@ -1254,6 +1285,7 @@ function drawMapPick() {
   const v = mpView(), { cv, dpr, W, H, X, Y } = v; if (!W) return; cv.width = W; cv.height = H;
   const g = cv.getContext('2d'); g.fillStyle = '#e9edf1'; g.fillRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'round';
   const la = (H / 2) / v.sy, lo = (W / 2) / v.sc, seen = new Set();
+  drawBase(g, X, Y, MP.lat - la, MP.lat + la, MP.lon - lo, MP.lon + lo, dpr, MP.km, () => { if ($('mapPick').classList.contains('on')) drawMapPick(); });
   for (const eid of trk().inBox(MP.lat - la, MP.lat + la, MP.lon - lo, MP.lon + lo)) { const e = NET.edges[eid], k = e.from < e.to ? e.from + e.to : e.to + e.from; if (seen.has(k)) continue; seen.add(k);
     g.strokeStyle = '#fff'; g.lineWidth = (['A', 'C', 'N', 'M'].includes(e.cls) ? 5 : 2.5) * dpr; g.beginPath(); strokeEdge(g, eid, X, Y, true); g.stroke(); }
   // străzile mici (din indexul de adrese), ca repere cu nume, când e destul de aproape
@@ -1263,7 +1295,10 @@ function drawMapPick() {
       if (boxes.some(b => Math.abs(b.x - x) < b.w + w && Math.abs(b.y - y) < h * 2)) continue; boxes.push({ x, y, w }); g.fillText(t, x, y); } }
   const pois = mpPois(v), many = pois.length > 220; MP.vis = [];
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (const p of pois) { const x = X(p.pt.lon), y = Y(p.pt.lat); if (many && !['hospital', 'mall', 'townhall', 'station', 'university', 'landmark'].includes(p.cat)) continue;
+  const IMP = { landmark: 0, airport: 0, hospital: 1, mall: 1, station: 2, townhall: 2, university: 3, clinic: 4, fuel: 4, shop: 5, school: 5 }, placed = [];
+  pois.sort((a, b) => (IMP[a.cat] ?? 5) - (IMP[b.cat] ?? 5));
+  for (const p of pois) { const x = X(p.pt.lon), y = Y(p.pt.lat); if (many && MP.km > 2.5 && (IMP[p.cat] ?? 5) > 2) continue;
+    if (placed.some(q => Math.hypot(q[0] - x, q[1] - y) < 30 * dpr)) continue; placed.push([x, y]);
     g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 14 * dpr, 0, 7); g.fill(); g.strokeStyle = '#0b4ea2'; g.lineWidth = 2 * dpr; g.stroke();
     g.font = `${15 * dpr}px sans-serif`; g.fillText(POI_ICON[p.cat] || '📍', x, y + 1); MP.vis.push({ p, x, y }); }
   if (MP.me) { const x = X(MP.me.lon), y = Y(MP.me.lat); g.fillStyle = '#0b4ea2'; g.beginPath(); g.arc(x, y, 8 * dpr, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 3 * dpr; g.stroke(); }
