@@ -254,7 +254,7 @@ function placesList() {
   PLACES = { net: NET, list }; return list;
 }
 const CAT = { hospital: 'spital', clinic: 'clinică, centru medical', mall: 'mall', fuel: 'benzinărie', shop: 'magazin', university: 'universitate, facultate', school: 'școală, liceu', station: 'gară, stație de metrou', airport: 'aeroport', townhall: 'primărie', landmark: 'loc important' };
-const placeName = (node, fallback) => { if (fallback) return fallback; if (S.geoName && S.geoName.node === node) return S.geoName.name; const p = placesList().find(x => x.node === node); return p ? p.name + (p.kind === 'poi' && p.near ? ', ' + p.near : '') : pname(node); };
+const placeName = (node, fallback) => { if (fallback) return fallback; if (S.labels && S.labels[node]) return S.labels[node]; if (S.geoName && S.geoName.node === node) return S.geoName.name; const p = placesList().find(x => x.node === node); return p ? p.name + (p.kind === 'poi' && p.near ? ', ' + p.near : '') : pname(node); };
 /* cel mai apropiat nod de drum față de o poziție GPS (pentru „de unde plecați”) */
 function nearestRoadNode(lat, lon) { const T = trk(); let best = null; for (const eid of T.near(lat, lon)) { const p = T.projEdge(eid, lat, lon); if (!best || p.d < best.d) best = { d: p.d, eid, p }; }
   if (!best || best.d > 0.4) return null; const e = NET.edges[best.eid]; return best.p.s < e.len / 2 ? e.from : e.to; }
@@ -263,17 +263,34 @@ function picker(id, value, label, ph, noGeo) {
   const v = value || {}; const node = typeof v === 'string' ? v : v.node, name = typeof v === 'string' ? '' : v.name;
   return `<div class="field"><small>${label}</small><div class="pk"><input type="hidden" id="${id}" value="${esc(node || '')}"><div class="pkrow"><input class="pkq" placeholder="${esc(ph || 'Scrieți numele localității sau al cartierului')}" value="${node ? esc(placeName(node, name)) : ''}" autocomplete="off" enterkeyhint="search">${noGeo ? '' : '<button type="button" class="pkgeo" title="Folosiți locația mea">📍</button>'}</div><div class="pkl"></div></div></div>`;
 }
+/* adrese (străzi + numere, din OpenStreetMap): fișier separat, încărcat doar la prima căutare */
+let ADR = null, ADRP = null;
+function loadAdr() {
+  if (ADR || ADRP) return ADRP; ADRP = fetch('addresses.json').then(r => r.json()).then(j => { ADR = j.streets.map((x, i) => ({ kind: 'addr', name: x[0], near: x[1], lat: x[2], lon: x[3], node: x[4], i, h: j.houses[i] || null, n: norm(x[0] + ' ' + x[1]) })); return ADR; }).catch(() => { ADRP = null; return null; }); return ADRP;
+}
+function adrSearch(t) { // „lalelelor 5 tamasi” → strada + numărul (dacă e în OpenStreetMap)
+  if (!ADR || t.length < 3) return [];
+  const m = t.match(/(?:^|\s)(?:nr\.?\s*)?(\d+[a-z]?)(?=\s|$)/), num = m ? m[1] : null, words = t.replace(/(?:^|\s)(?:nr\.?\s*)?\d+[a-z]?(?=\s|$)/, ' ').split(' ').filter(w => w && w !== 'nr' && w !== 'str' && w !== 'strada');
+  if (!words.length) return [];
+  const hits = ADR.filter(a => words.every(w => a.n.includes(w))).slice(0, 60).sort((a, b) => a.name.length - b.name.length);
+  return hits.map(a => { const hn = num && a.h ? a.h.find(x => norm(x[0]) === num) : null;
+    return hn ? { kind: 'addr', name: `${a.name} ${hn[0]}`, near: a.near, node: hn[3] || a.node, exact: true }
+      : { kind: 'addr', name: num ? `${a.name} ${num}` : a.name, near: a.near, node: a.node, exact: false, approx: !!num }; }).sort((x, y) => y.exact - x.exact).slice(0, 6);
+}
+function setLabel(node, name) { (S.labels = S.labels || {})[node] = name; save(); }
 function bindPickers(root) {
   (root || document).querySelectorAll('.pk').forEach(el => {
     if (el._bound) return; el._bound = true;
     const hid = el.querySelector('input[type=hidden]'), q = el.querySelector('.pkq'), list = el.querySelector('.pkl');
-    const pick = p => { hid.value = p.node; hid.dataset.name = p.name; q.value = p.name; list.innerHTML = ''; hid.dispatchEvent(new Event('change')); };
+    const pick = p => { const nm = p.kind === 'addr' && p.near ? p.name + ', ' + p.near : p.name; if (p.kind === 'addr') setLabel(p.node, nm); hid.value = p.node; hid.dataset.name = nm; q.value = nm; list.innerHTML = ''; hid.dispatchEvent(new Event('change')); };
     const render = () => {
       const t = norm(q.value); if (t.length < 2) { list.innerHTML = ''; return; }
       const words = t.split(' ');
-      const res = placesList().filter(p => words.every(w => p.n.includes(w)))
-        .sort((a, b) => (b.n.startsWith(t) - a.n.startsWith(t)) || (rk(a) - rk(b)) || a.name.length - b.name.length).slice(0, 8);
-      list.innerHTML = res.length ? res.map((p, i) => `<button type="button" data-i="${i}"><b>${esc(p.name)}</b><span>${p.kind === 'poi' ? (CAT[p.cat] || 'loc important') : (KIND[p.kind] || 'loc')}, ${p.near ? 'lângă ' + esc(p.near) : p.zone}</span></button>`).join('') : '<div class="pke">Nu găsesc acest loc. Încercați localitatea sau cartierul.</div>';
+      if (!ADR && t.length >= 3) loadAdr().then(() => { if (document.activeElement === q) render(); });
+      const pl = placesList().filter(p => words.every(w => p.n.includes(w)))
+        .sort((a, b) => (b.n.startsWith(t) - a.n.startsWith(t)) || (rk(a) - rk(b)) || a.name.length - b.name.length);
+      const ad = adrSearch(t), res = (/\d/.test(t) ? ad.concat(pl) : pl.slice(0, 5).concat(ad)).slice(0, 8);
+      list.innerHTML = res.length ? res.map((p, i) => `<button type="button" data-i="${i}"><b>${esc(p.name)}</b><span>${p.kind === 'addr' ? (p.exact ? 'adresă' : p.approx ? 'stradă (numărul nu e pe hartă, aproximativ)' : 'stradă') + (p.near ? ', ' + esc(p.near) : '') : (p.kind === 'poi' ? (CAT[p.cat] || 'loc important') : (KIND[p.kind] || 'loc')) + ', ' + (p.near ? 'lângă ' + esc(p.near) : p.zone)}</span></button>`).join('') : '<div class="pke">Nu găsesc acest loc. Încercați localitatea sau cartierul.</div>';
       list.querySelectorAll('button').forEach(b => b.onmousedown = e => { e.preventDefault(); pick(res[+b.dataset.i]); });
     };
     q.oninput = () => { if (hid.value) { hid.value = ''; hid.dispatchEvent(new Event('change')); } render(); };
@@ -997,7 +1014,7 @@ function welcome() {
   const o = placeOptions();
   $('welcomeBody').innerHTML = `<h2 style="margin:0 0 6px;font-size:24px;font-weight:900">Aflați de ambuteiaj înainte să fiți în el.</h2>
   <p>Vă anunță <b>din timp</b>, de obicei cu o seară înainte, când urmează un ambuteiaj pe drumul dumneavoastră. Vă spune la ce oră să plecați și pe ce drum, ca să stați cât mai puțin pe loc și să ajungeți la timp.</p>
-  ${picker('wH', null, 'Unde locuiți?', 'Scrieți localitatea sau cartierul, ex. Corbeanca')}
+  ${picker('wH', null, 'Unde locuiți?', 'Strada și numărul sau localitatea, ex. Corbeanca')}
   ${picker('wW', null, 'Unde mergeți de obicei?', 'Localitate, cartier, spital, mall, gară…', true)}
   <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="wTa" value="09:00"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" id="wU" value="08:00"></div></div>
   <div class="kicker" style="margin-top:6px">Vârsta</div>
