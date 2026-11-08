@@ -242,6 +242,8 @@ function placeOptions() {
 const norm = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 const KIND = { city: 'oraș', town: 'oraș', village: 'localitate', suburb: 'cartier', quarter: 'cartier', neighbourhood: 'cartier', poi: 'loc important', place: 'loc' };
 const KRANK = { city: 0, town: 0, suburb: 1, quarter: 1, village: 2, neighbourhood: 3, place: 3, poi: 4 };
+const CRANK = { landmark: 0, airport: 0, university: 1, station: 1, hospital: 2, mall: 2, townhall: 3, clinic: 4, school: 4, fuel: 5, shop: 5 };
+const rk = p => KRANK[p.kind] * 10 + (p.kind === 'poi' ? CRANK[p.cat] ?? 5 : 0);
 let PLACES = null;
 function placesList() {
   if (PLACES && PLACES.net === NET) return PLACES.list;
@@ -270,7 +272,7 @@ function bindPickers(root) {
       const t = norm(q.value); if (t.length < 2) { list.innerHTML = ''; return; }
       const words = t.split(' ');
       const res = placesList().filter(p => words.every(w => p.n.includes(w)))
-        .sort((a, b) => (b.n.startsWith(t) - a.n.startsWith(t)) || (KRANK[a.kind] - KRANK[b.kind]) || a.name.length - b.name.length).slice(0, 8);
+        .sort((a, b) => (b.n.startsWith(t) - a.n.startsWith(t)) || (rk(a) - rk(b)) || a.name.length - b.name.length).slice(0, 8);
       list.innerHTML = res.length ? res.map((p, i) => `<button type="button" data-i="${i}"><b>${esc(p.name)}</b><span>${p.kind === 'poi' ? (CAT[p.cat] || 'loc important') : (KIND[p.kind] || 'loc')}, ${p.near ? 'lângă ' + esc(p.near) : p.zone}</span></button>`).join('') : '<div class="pke">Nu găsesc acest loc. Încercați localitatea sau cartierul.</div>';
       list.querySelectorAll('button').forEach(b => b.onmousedown = e => { e.preventDefault(); pick(res[+b.dataset.i]); });
     };
@@ -998,19 +1000,26 @@ function welcome() {
   ${picker('wH', null, 'Unde locuiți?', 'Scrieți localitatea sau cartierul, ex. Corbeanca')}
   ${picker('wW', null, 'Unde mergeți de obicei?', 'Localitate, cartier, spital, mall, gară…', true)}
   <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" id="wTa" value="09:00"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" id="wU" value="08:00"></div></div>
+  <div class="kicker" style="margin-top:6px">Vârsta</div>
+  <div class="seg" id="wAge"><button type="button" data-a="adult">Am 18 ani sau mai mult</button><button type="button" data-a="minor">Am sub 18 ani</button></div>
+  <div id="wAdultBox" style="display:none">
   <label class="chk"><input type="checkbox" id="wC"><span>Am cel puțin 18 ani și sunt de acord ca localitățile, orele și drumurile mele, fără numele meu, să fie prelucrate de PRO SMART WORK S.R.L. în acest pilot, pentru calculul și îmbunătățirea avertizărilor. Cât timp sunt pe drum, cu aplicația deschisă, poziția GPS este folosită doar pentru a calcula cât durează fiecare porțiune de drum; traseul GPS nu se păstrează. Pot retrage acordul oricând, ștergând datele din Setări.</span></label>
   <p class="muted" style="margin:6px 0 0"><a href="confidentialitate.html" target="_blank" rel="noopener">Citiți informarea privind datele personale</a></p>
-  <details id="wMinorBox" style="margin-top:8px"><summary>Am sub 18 ani</summary>
+  </div>
+  <div id="wMinorBox" style="display:none;margin-top:8px">
     <p class="muted">Puteți folosi aplicația doar în grupul familiei, cu acordul părintelui sau tutorelui, dat din aplicația lui. Cereți-i codul grupului.</p>
     <div class="field"><small>Codul grupului familiei</small><input id="wCode" maxlength="8" autocapitalize="characters" placeholder="ex. 3A7F9C2D"></div>
     <div class="field"><small>Prenumele afișat familiei</small><input id="wName" maxlength="30" placeholder="ex. Andrei"></div>
-    <label class="chk"><input type="checkbox" id="wM"><span>Am sub 18 ani. Părintele sau tutorele meu știe și își dă acordul din aplicația lui. Până atunci, datele mele nu se trimit.</span></label></details>
+    <label class="chk"><input type="checkbox" id="wM"><span>Am sub 18 ani. Părintele sau tutorele meu știe și își dă acordul din aplicația lui. Până atunci, datele mele nu se trimit.</span></label></div>
   <button class="btn go" id="wGo" disabled>Încep</button>`;
   $('welcome').classList.add('on');
   bindPickers($('welcome'));
   const minorOk = () => $('wM').checked && $('wCode').value.trim().length >= 6 && $('wName').value.trim();
-  const chk = () => { if ($('wM').checked) $('wC').checked = false; $('wGo').disabled = !(($('wC').checked || minorOk()) && $('wH').value && $('wW').value && $('wH').value !== $('wW').value); };
+  const chk = () => { $('wGo').disabled = !(($('wC').checked || minorOk()) && $('wH').value && $('wW').value && $('wH').value !== $('wW').value); };
   ['wC', 'wH', 'wW', 'wM'].forEach(i => $(i).onchange = chk); ['wCode', 'wName'].forEach(i => $(i).oninput = chk);
+  $('wAge').querySelectorAll('button').forEach(b => b.onclick = () => { const ad = b.dataset.a === 'adult';
+    $('wAge').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); $('wAdultBox').style.display = ad ? 'block' : 'none'; $('wMinorBox').style.display = ad ? 'none' : 'block';
+    if (ad) $('wM').checked = false; else $('wC').checked = false; chk(); });
   $('wGo').onclick = () => {
     const H = $('wH').value, W = $('wW').value, ta = $('wTa').value || '09:00', u = $('wU').value || '08:00';
     S.consent = true; S.home = H; S.work = W;
@@ -1092,17 +1101,21 @@ function renderFam() {
   if (!F || !F.me) {
     el.innerHTML = `<div class="card"><div class="msg">Familia pe drum</div><p class="muted">Membrii grupului își văd unii altora poziția, destinația și ora estimată de sosire, <b>doar în timpul drumurilor pornite cu „Am plecat”</b>. Când drumul se încheie, poziția nu mai e afișată.</p>
       <label class="field" for="fName" style="display:block"><small>Scrieți aici numele pe care îl vede familia</small><input id="fName" maxlength="30" placeholder="Atingeți aici și scrieți, ex. Cristian" autocomplete="given-name"></label>
-      <button class="btn dark" id="fNew">Creez grupul familiei</button>
-      <details style="margin-top:12px"><summary>Am primit un cod de la familie</summary>
-        <label class="field" for="fCode" style="display:block"><small>Codul grupului</small><input id="fCode" maxlength="8" autocapitalize="characters" placeholder="Atingeți aici și scrieți codul"></label>
-        ${S.minor ? '<p class="muted">Aveți sub 18 ani: intrați în grup cu acordul părintelui, dat din aplicația lui.</p>' : '<label class="chk"><input type="checkbox" id="fMinor"><span>Telefonul este al unui copil sub 18 ani. Părintele sau tutorele își dă acordul din aplicația lui, după intrarea în grup.</span></label>'}
-        <button class="btn dark" id="fJoin">Intru în grup</button></details></div>`;
+      <div class="kicker" style="margin-top:4px">Un membru al familiei are deja grup?</div>
+      <label class="field" for="fCode" style="display:block;margin-top:6px"><small>Scrieți codul primit de la el</small><input id="fCode" maxlength="8" autocapitalize="characters" placeholder="Atingeți aici și scrieți codul"></label>
+      ${S.minor ? '<p class="muted">Aveți sub 18 ani: intrați în grup cu acordul părintelui, dat din aplicația lui.</p>' : ''}
+      <button class="btn dark" id="fJoin">Intru în grupul familiei</button>
+      ${S.minor ? '' : `<details style="margin-top:12px"><summary>Nimeni nu are încă un grup: creez unul</summary>
+        <p class="muted">Creați grupul o singură dată, pe un singur telefon. Ceilalți intră cu codul pe care îl primiți.</p>
+        <button class="btn ghost" id="fNew">Creez un grup nou</button></details>`}
+      ${S.minor ? '<button class="btn ghost" id="fAge" style="margin-top:12px">Am ales greșit vârsta</button>' : ''}</div>`;
     if (renderFam.keep) { $('fName').value = renderFam.keep.n || ''; $('fCode').value = renderFam.keep.c || ''; }
+    if ($('fAge')) $('fAge').onclick = () => fixAge($('fAge'));
     $('fName').oninput = $('fCode').oninput = () => { renderFam.keep = { n: $('fName').value, c: $('fCode').value }; };
     const need = (id, msg) => { const el = $(id); el.closest('.field').style.outline = '2px solid var(--r)'; el.focus(); toast(msg); };
-    $('fNew').onclick = async () => { const n = $('fName').value.trim(); if (!n) { need('fName', 'Scrieți întâi numele, în câmpul de deasupra butonului.'); return; } if (S.minor) { toast('Grupul îl creează un adult; dumneavoastră intrați cu codul primit.'); return; }
+    if ($('fNew')) $('fNew').onclick = async () => { const n = $('fName').value.trim(); if (!n) { need('fName', 'Scrieți întâi numele, în câmpul de deasupra butonului.'); return; } if (S.minor) { toast('Grupul îl creează un adult; dumneavoastră intrați cu codul primit.'); return; }
       try { await flush(); await famCall('create_family', { p_name: n }); await pullFamily(); renderFam(); toast('Am creat grupul. Trimiteți codul familiei.'); } catch (e) { toast(famErr(e)); } };
-    $('fJoin').onclick = async () => { const n = $('fName').value.trim(), c = $('fCode').value.trim(), minor = S.minor || ($('fMinor') && $('fMinor').checked);
+    $('fJoin').onclick = async () => { const n = $('fName').value.trim(), c = $('fCode').value.trim(), minor = !!S.minor;
       if (!n) { need('fName', 'Scrieți întâi numele, în câmpul de sus.'); return; } if (c.length < 6) { need('fCode', 'Scrieți codul grupului, de 8 caractere.'); return; }
       try { await flush(); await famCall('join_family', { p_code: c, p_name: n, p_minor: !!minor }); await pullFamily(); renderFam(); toast(minor ? 'Ați intrat în grup. Așteptăm acordul părintelui.' : 'Ați intrat în grupul familiei.'); } catch (e) { toast(famErr(e)); } };
     return;
@@ -1111,7 +1124,7 @@ function renderFam() {
   const pending = F.members.filter(m => m.minor && !m.approved);
   const pts = F.members.map(m => { const p = pos[m.participant]; return p ? { lat: p.lat, lon: p.lon, name: m.display_name, status: p.status, me: m.participant === F.uid } : null; }).filter(Boolean);
   el.innerHTML = `<div class="card"><div class="kicker">Familia</div>
-      ${!me.approved ? '<div class="alertline" style="background:var(--ybg)">⏳ <span>Așteptăm acordul părintelui sau tutorelui. Până atunci, datele dumneavoastră nu se trimit și poziția nu e afișată.</span></div>' : ''}
+      ${!me.approved ? '<div class="alertline" style="background:var(--ybg);display:block">⏳ <span>Așteptăm acordul părintelui sau tutorelui. Până atunci, datele dumneavoastră nu se trimit și poziția nu e afișată.</span><button class="btn ghost" id="fAge2" style="margin-top:8px">Am 18 ani sau mai mult: am ales greșit</button></div>' : ''}
       ${me.approved && !me.minor && pending.map(m => `<div class="alertline" style="background:var(--ybg);display:block"><b>${esc(m.display_name)}</b> (sub 18 ani) vrea să intre în grup.
         <label class="chk"><input type="checkbox" class="fOk" data-p="${m.participant}"><span>Sunt părintele sau tutorele lui/ei și sunt de acord ca PRO SMART WORK S.R.L. să îi prelucreze datele în acest pilot (drumurile, fără nume, și poziția în timpul drumurilor, vizibilă doar familiei), conform informării privind datele personale.</span></label>
         <button class="btn go fApprove" data-p="${m.participant}">Îmi dau acordul</button></div>`).join('') || ''}
@@ -1125,6 +1138,7 @@ function renderFam() {
     <div class="card"><label class="chk"><input type="checkbox" id="fShareOn" ${me.sharing ? 'checked' : ''}><span>Familia îmi vede poziția în timpul drumurilor</span></label>
       <button class="btn red" id="fLeave">Ieșiți din grup</button>${owner ? '<p class="muted" style="font-size:13px">Ați creat grupul: dacă ieșiți, grupul se închide pentru toți.</p>' : ''}</div>`;
   if (pts.length) setTimeout(() => drawFamMap($('famMap'), pts), 30);
+  if ($('fAge2')) $('fAge2').onclick = () => fixAge($('fAge2'));
   el.querySelectorAll('.fApprove').forEach(b => b.onclick = async () => { const cb = el.querySelector(`.fOk[data-p="${b.dataset.p}"]`); if (!cb.checked) { toast('Bifați acordul înainte.'); return; }
     try { await famCall('approve_minor', { p_participant: b.dataset.p }); await pullFamily(); renderFam(); toast('Acordul a fost înregistrat.'); } catch (e) { toast(famErr(e)); } });
   $('fShare').onclick = () => { const t = `Intră în grupul familiei din aplicația „Pleacă la timp”: Familie → „Am primit un cod”, codul ${F.code}. ${location.origin + location.pathname}`;
@@ -1132,6 +1146,12 @@ function renderFam() {
   $('fShareOn').onchange = async () => { try { const s = await session(); const on = $('fShareOn').checked; await s.c.from('family_members').update({ sharing: on }).eq('participant', s.uid); if (!on) await s.c.from('live_positions').delete().eq('participant', s.uid); await pullFamily(); renderFam(); toast(on ? 'Familia vă vede poziția în timpul drumurilor.' : 'Am oprit partajarea poziției.'); } catch (e) { toast(famErr(e)); } };
   $('fLeave').onclick = async () => { if (!confirmTwice($('fLeave'), 'Apăsați din nou pentru a ieși din grup.')) return;
     try { const s = await session(); await s.c.from('live_positions').delete().eq('participant', s.uid); if (owner) await s.c.from('families').delete().eq('created_by', s.uid); else await s.c.from('family_members').delete().eq('participant', s.uid); S.fam = null; save(); renderFam(); toast('Ați ieșit din grupul familiei.'); } catch (e) { toast(famErr(e)); } };
+}
+/* vârsta aleasă greșit la început: se reia de la capăt (datele de pe acest telefon și de pe server se șterg) */
+async function fixAge(btn) {
+  if (!confirmTwice(btn, 'Apăsați din nou: datele de pe acest telefon se șterg și reluați primul ecran.')) return;
+  try { const s = await session(); if (s) { await s.c.rpc('delete_my_data'); await s.c.auth.signOut(); } } catch (e) { }
+  S = fresh(); save(); rebuild(); show('home'); welcome(); toast('Reluați primul ecran și alegeți vârsta corectă.');
 }
 function confirmTwice(btn, msg) { if (btn.dataset.armed) return true; btn.dataset.armed = 1; btn.textContent = msg; setTimeout(() => { delete btn.dataset.armed; }, 4000); return false; }
 
@@ -1154,7 +1174,7 @@ function showInstall() {
   const el = $('install');
   el.innerHTML = isIOS
     ? '<b>📲 Adăugați aplicația pe ecranul principal</b>Pe iPhone, avertizările funcționează doar așa: apăsați <b style="display:inline">Partajează</b> (pătratul cu săgeată) → <b style="display:inline">Adaugă pe ecranul principal</b>, apoi deschideți aplicația de pe noua iconiță. <div style="margin-top:8px"><button class="link" id="instX" style="background:none;border:none;color:var(--mute);font-weight:800">Mai târziu</button></div>'
-    : '<b>📲 Instalați aplicația</b>Ca să primiți avertizările și cu aplicația închisă.<button class="btn dark" id="instGo" style="margin-top:10px">Instalați</button><button class="link" id="instX" style="background:none;border:none;color:var(--mute);font-weight:800;margin-top:6px">Mai târziu</button>';
+    : '<b>📲 Instalați aplicația</b>Ca să primiți avertizările și cu aplicația închisă. Dacă Google Play Protect afișează un avertisment, alegeți „Detalii” → „Instalați oricum”, sau din meniul ⋮ al Chrome alegeți „Adăugați la ecranul de pornire” → „Comandă rapidă”.<button class="btn dark" id="instGo" style="margin-top:10px">Instalați</button><button class="link" id="instX" style="background:none;border:none;color:var(--mute);font-weight:800;margin-top:6px">Mai târziu</button>';
   el.classList.add('on');
   if ($('instGo')) $('instGo').onclick = async () => { if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; el.classList.remove('on'); };
   $('instX').onclick = () => { S.installDismissed = true; save(); el.classList.remove('on'); };
