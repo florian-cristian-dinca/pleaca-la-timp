@@ -254,7 +254,7 @@ function placesList() {
   PLACES = { net: NET, list }; return list;
 }
 const CAT = { hospital: 'spital', clinic: 'clinică, centru medical', mall: 'mall', fuel: 'benzinărie', shop: 'magazin', university: 'universitate, facultate', school: 'școală, liceu', station: 'gară, stație de metrou', airport: 'aeroport', townhall: 'primărie', landmark: 'loc important' };
-const placeName = (node, fallback) => { if (fallback) return fallback; if (S.labels && S.labels[node]) return S.labels[node]; if (S.geoName && S.geoName.node === node) return S.geoName.name; const p = placesList().find(x => x.node === node); return p ? p.name + (p.kind === 'poi' && p.near ? ', ' + p.near : '') : pname(node); };
+const placeName = (node, fallback) => { if (fallback) return fallback; if (S.labels && S.labels[node]) return S.labels[node]; if (S.geoName && S.geoName.node === node) return S.geoName.name; const p = placesList().filter(x => x.node === node).sort((a, b) => rk(a) - rk(b))[0]; return p ? p.name + (p.kind === 'poi' && p.near ? ', ' + p.near : '') : pname(node); };
 /* cel mai apropiat nod de drum față de o poziție GPS (pentru „de unde plecați”) */
 function nearestRoadNode(lat, lon) { const T = trk(); let best = null; for (const eid of T.near(lat, lon)) { const p = T.projEdge(eid, lat, lon); if (!best || p.d < best.d) best = { d: p.d, eid, p }; }
   if (!best || best.d > 0.4) return null; const e = NET.edges[best.eid]; return best.p.s < e.len / 2 ? e.from : e.to; }
@@ -282,7 +282,7 @@ function bindPickers(root) {
   (root || document).querySelectorAll('.pk').forEach(el => {
     if (el._bound) return; el._bound = true;
     const hid = el.querySelector('input[type=hidden]'), q = el.querySelector('.pkq'), list = el.querySelector('.pkl');
-    const pick = p => { const nm = p.kind === 'addr' && p.near ? p.name + ', ' + p.near : p.name; if (p.kind === 'addr') setLabel(p.node, nm); hid.value = p.node; hid.dataset.name = nm; q.value = nm; list.innerHTML = ''; hid.dispatchEvent(new Event('change')); };
+    const pick = p => { const nm = p.kind === 'addr' && p.near ? p.name + ', ' + p.near : p.name; if (p.kind === 'addr' || p.kind === 'poi') setLabel(p.node, nm); hid.value = p.node; hid.dataset.name = nm; q.value = nm; list.innerHTML = ''; hid.dispatchEvent(new Event('change')); };
     const render = () => {
       const t = norm(q.value); if (t.length < 2) { list.innerHTML = ''; return; }
       const words = t.split(' ');
@@ -754,6 +754,8 @@ function onFix(pos) {
   const L = S.live; if (!L) return;
   const c = pos.coords, t = tMinNow();
   L.gps = L.gps || { fixes: 0 }; L.gps.fixes++; L.gps.acc = Math.round(c.accuracy); L.gps.lat = c.latitude; L.gps.lon = c.longitude; L.gps.at = Date.now();
+  if (L.habitO && !L.originChecked && c.accuracy <= 100) { L.originChecked = true;
+    if (E.haversine({ lat: c.latitude, lon: c.longitude }, NET.nodes[L.habitO]) > 1.5 && L.ta != null) { L.ta = null; L.pred.deadline = null; toast('Nu plecați din locul obișnuit: nu mai calculez rezerva față de ora drumului obișnuit.'); } }
   L.mm = L.mm || {};
   const r = trk().update(L.mm, { lat: c.latitude, lon: c.longitude, acc: c.accuracy, t, speed: c.speed }, new Set(L.path));
   if (r.obs.length) { // timpii pe tronsoane pleacă imediat (alertele altor participanți folosesc ultimele 75 de minute)
@@ -929,8 +931,21 @@ function startTrip(o, d, name, ta, h) {
     pred: { madeAt: new Date().toISOString(), median: s.med, q: s.q, tau: 0.95, deadline: ta, ta, recT0: rec, version: LR() ? LR().version : 'a-priori', followed: rec != null && dep <= rec + 2 } };
   save(); keepAwake(); renderTrip(); toast('Drum bun! Puneți telefonul în suport.');
 }
-function depart(h) { // ora la care trebuie să ajungeți contează doar dacă e încă înainte (altfel nu afișăm „întârziere 6 h”)
-  const ta = parseT(h.ta), now = nowMin(); startTrip(h.o, h.d, h.name, ta != null && ta > now && ta - now <= 240 ? ta : null, ta != null && ta > now && ta - now <= 240 ? h : null); }
+/* drum obișnuit: pornește de unde sunteți. Dacă nu sunteți în locul obișnuit de plecare (peste 1 km), e un drum
+   spre aceeași destinație, dar fără ora obișnuită de sosire (nu are sens „rezervă” sau „întârziere” față de ea). */
+function depart(h) {
+  const go = (o, here) => { const ta = parseT(h.ta), now = nowMin(), useTa = here && ta != null && ta > now && ta - now <= 240;
+    startTrip(o, h.d, h.name, useTa ? ta : null, useTa ? h : null); if (S.live) { S.live.habitO = h.o; S.live.originChecked = here !== null; save(); }
+    if (here === false) toast('Nu plecați din locul obișnuit: am calculat ruta de unde sunteți, fără ora obișnuită de sosire.'); };
+  if (!navigator.geolocation) return go(h.o, null);
+  let done = false; const fallback = setTimeout(() => { if (!done) { done = true; go(h.o, null); } }, 7000);
+  toast('Caut poziția dumneavoastră…');
+  navigator.geolocation.getCurrentPosition(pos => { if (done) return; done = true; clearTimeout(fallback);
+    const me = { lat: pos.coords.latitude, lon: pos.coords.longitude }, far = E.haversine(me, NET.nodes[h.o]) > 1;
+    if (!far) return go(h.o, true);
+    const n = nearestRoadNode(me.lat, me.lon); if (n && n !== h.d) { S.geoName = { node: n, name: 'Poziția mea' + ((p => p ? ', lângă ' + p : '')(nearestPlaceName(me.lat, me.lon))) }; go(n, false); } else go(h.o, null);
+  }, () => { if (done) return; done = true; clearTimeout(fallback); go(h.o, null); }, { enableHighAccuracy: true, timeout: 6500, maximumAge: 60000 });
+}
 function nearestNode(lat, lon) { let best = null, bd = 1e9; for (const p of placesList()) { if (p.kind === 'poi') continue; const n = NET.nodes[p.node], d = E.haversine({ lat, lon }, n); if (d < bd) { bd = d; best = p; } } return bd < 25 ? best : null; }
 function departOther(d, o) {
   if (!d) { toast('Alegeți destinația din lista de sugestii.'); return; }
