@@ -84,11 +84,11 @@
       // speed (km/h): GPS value when available, otherwise from consecutive fixes
       // viteza: din GPS dacă telefonul o dă; altfel din deplasarea pe ultimele ~15 s. Pe loc, „zgomotul” GPS
       // (câțiva metri între citiri) nu trebuie să pară mers: sub precizia GPS considerăm viteza 0.
-      st.win = (st.win || []).filter(p => fix.t - p.t <= 0.25).concat([{ lat: fix.lat, lon: fix.lon, t: fix.t }]);
+      st.win = (st.win || []).filter(p => fix.t - p.t <= 0.34).concat([{ lat: fix.lat, lon: fix.lon, t: fix.t }]);
       let v = null;
       if (fix.speed != null && fix.speed >= 0) v = fix.speed * 3.6;
-      else if (st.win.length >= 4) { // media primei jumătăți vs a celei de-a doua: zgomotul se reduce, mersul rămâne
-        const h = Math.floor(st.win.length / 2), avg = arr => ({ lat: arr.reduce((s, p) => s + p.lat, 0) / arr.length, lon: arr.reduce((s, p) => s + p.lon, 0) / arr.length, t: arr.reduce((s, p) => s + p.t, 0) / arr.length });
+      else if (st.win.length >= 2) { // media primei jumătăți vs a celei de-a doua: zgomotul se reduce, mersul rămâne
+        const h = Math.max(1, Math.floor(st.win.length / 2)), avg = arr => ({ lat: arr.reduce((s, p) => s + p.lat, 0) / arr.length, lon: arr.reduce((s, p) => s + p.lon, 0) / arr.length, t: arr.reduce((s, p) => s + p.t, 0) / arr.length });
         const A = avg(st.win.slice(0, h)), B = avg(st.win.slice(h)), dtw = B.t - A.t, dw = E.haversine(A, B);
         if (dtw >= 0.03) v = dw < Math.max(0.02, 1.2 * fix.acc / 1000) ? 0 : dw / dtw * 60; }
       if (v != null && v < 4) v = 0;
