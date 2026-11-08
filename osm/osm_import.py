@@ -33,6 +33,8 @@ CLS = {
     'B': dict(lanes=2, capLane=800, v0=40, alpha=1.3, beta=4, base=0.70),
 }
 HIGHWAY_RANK = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary']
+BASE_LINE = {'motorway': 'm', 'trunk': 'm', 'primary': 'p', 'secondary': 'p', 'tertiary': 't', 'unclassified': 'r', 'residential': 'r', 'living_street': 'r', 'service': 's', 'pedestrian': 's', 'track': 'k',
+             'motorway_link': 'm', 'trunk_link': 'm', 'primary_link': 'p', 'secondary_link': 'p', 'tertiary_link': 't'}
 STREET_KINDS = {'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'service', 'pedestrian'}
 LINK = {'motorway_link': 'motorway', 'trunk_link': 'trunk', 'primary_link': 'primary',
         'secondary_link': 'secondary', 'tertiary_link': 'tertiary'}
@@ -136,6 +138,7 @@ class Collector(osmium.SimpleHandler):
         self.bbox, self.min_rank = bbox, min_rank
         self.ways, self.places = [], []
         self.streets, self.houses = [], []   # address index (all named streets, house numbers)
+        self.base = []   # map layer: (kind, [(lat, lon), ...]) – streets, railways, water, green areas
 
     def inside(self, lat, lon):
         s, w, n, e = self.bbox
@@ -157,6 +160,17 @@ class Collector(osmium.SimpleHandler):
         # buildings / campuses mapped as closed ways or multipolygons
         c = poi_cat(a.tags)
         hn, st = a.tags.get('addr:housenumber'), a.tags.get('addr:street') or a.tags.get('addr:place')
+        t = a.tags
+        ak = 'water' if (t.get('natural') == 'water' or t.get('landuse') in ('reservoir', 'basin') or t.get('waterway') == 'riverbank') else \
+             'green' if (t.get('leisure') in ('park', 'garden') or t.get('landuse') in ('forest', 'grass', 'recreation_ground', 'cemetery') or t.get('natural') == 'wood') else None
+        if ak:
+            try:
+                for ring in a.outer_rings():
+                    ll = [(nd.lat, nd.lon) for nd in ring]
+                    if len(ll) >= 4 and any(self.inside(*p) for p in ll[::max(1, len(ll) // 4)]):
+                        self.base.append((ak, ll))
+            except Exception:
+                pass
         if not (c and poi_name(a.tags)) and not (hn and st):
             return
         try:
@@ -175,6 +189,15 @@ class Collector(osmium.SimpleHandler):
     def way(self, w):
         hw = w.tags.get('highway')
         base = LINK.get(hw, hw)
+        bk = BASE_LINE.get(hw) or ('rail' if w.tags.get('railway') == 'rail' and not w.tags.get('service') else None) or ('river' if w.tags.get('waterway') in ('river', 'canal') else None) \
+            or ('stream' if w.tags.get('waterway') == 'stream' else None)
+        if bk and not (hw == 'service' and w.tags.get('service') in ('parking_aisle', 'driveway')):
+            try:
+                ll = [(nd.location.lat, nd.location.lon) for nd in w.nodes]
+                if ll and any(self.inside(*p) for p in ll[::max(1, len(ll) // 4)]):
+                    self.base.append((bk, ll))
+            except Exception:
+                pass
         if hw in STREET_KINDS and w.tags.get('name'):
             try:
                 ll = [(nd.location.lat, nd.location.lon) for nd in w.nodes]
@@ -226,6 +249,64 @@ def simplify(pts, tol_km=0.012):
             keep[bk] = True
             stack += [(i, bk), (bk, j)]
     return [[round(pts[k][0], 5), round(pts[k][1], 5)] for k in range(1, len(pts) - 1) if keep[k]]
+
+
+TILE_LAT, TILE_LON = 0.04, 0.06
+
+
+def write_tiles(base, folder):
+    """Map background in tiles (~4.4 x 4.8 km): simplified lines/polygons, coordinates as 1e-5 deg integers, delta-encoded."""
+    tiles = defaultdict(lambda: defaultdict(list))
+    tol = {'m': 0.006, 'p': 0.006, 't': 0.006, 'r': 0.005, 's': 0.005, 'k': 0.008, 'rail': 0.008, 'river': 0.01, 'stream': 0.008, 'water': 0.01, 'green': 0.012}
+    for kind, ll in base:
+        if kind in ('water', 'green'):
+            pts = [ll[0]] + simplify(ll, tol[kind]) + [ll[-1]]
+            if len(pts) < 4:
+                continue
+            la = sum(p[0] for p in pts) / len(pts)
+            lo = sum(p[1] for p in pts) / len(pts)
+            # a polygon goes to every tile its bounding box touches
+            i0, i1 = int(min(p[0] for p in pts) // TILE_LAT), int(max(p[0] for p in pts) // TILE_LAT)
+            j0, j1 = int(min(p[1] for p in pts) // TILE_LON), int(max(p[1] for p in pts) // TILE_LON)
+            if (i1 - i0 + 1) * (j1 - j0 + 1) > 40:
+                continue
+            for i in range(i0, i1 + 1):
+                for j in range(j0, j1 + 1):
+                    tiles[(i, j)][kind].append(pts)
+            continue
+        pts = [ll[0]] + simplify(ll, tol.get(kind, 0.006)) + [ll[-1]]
+        cur, key = [pts[0]], (int(pts[0][0] // TILE_LAT), int(pts[0][1] // TILE_LON))
+        for p in pts[1:]:
+            cur.append(p)
+            k = (int(p[0] // TILE_LAT), int(p[1] // TILE_LON))
+            if k != key:   # the line crosses into another tile: close it here and start again from this point
+                tiles[key][kind].append(cur)
+                cur, key = [p], k
+        if len(cur) >= 2:
+            tiles[key][kind].append(cur)
+    os.makedirs(folder, exist_ok=True)
+    for f in os.listdir(folder):
+        os.remove(os.path.join(folder, f))
+    total = 0
+
+    def enc(pts):
+        out, pl, po = [], 0, 0
+        for la, lo in pts:
+            a, b = round(la * 1e5), round(lo * 1e5)
+            out += [a - pl, b - po]
+            pl, po = a, b
+        return out
+    idx = []
+    for (i, j), kinds in tiles.items():
+        data = {k: [enc(p) for p in v] for k, v in kinds.items()}
+        path = os.path.join(folder, f'{i}_{j}.json')
+        with open(path, 'w') as f:
+            json.dump(data, f, separators=(',', ':'))
+        total += os.path.getsize(path)
+        idx.append(f'{i}_{j}')
+    with open(os.path.join(folder, 'index.json'), 'w') as f:
+        json.dump(dict(lat=TILE_LAT, lon=TILE_LON, tiles=sorted(idx)), f, separators=(',', ':'))
+    print(f'tiles: {len(idx)} files, {total // 1024} KB')
 
 
 def build(ways, places):
@@ -466,6 +547,7 @@ def main():
     apath = os.path.join(os.path.dirname(os.path.abspath(a.output)), 'addresses.json')
     with open(apath, 'w', encoding='utf-8') as f:
         json.dump(adr, f, ensure_ascii=False, separators=(',', ':'))
+    write_tiles(h.base, os.path.join(os.path.dirname(os.path.abspath(a.output)), 'tiles'))
     print(f"addresses.json: {len(out)} streets, {sum(len(v) for v in hs.values())} house numbers, {os.path.getsize(apath) // 1024} KB")
 
 
