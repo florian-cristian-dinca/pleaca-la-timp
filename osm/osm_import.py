@@ -405,7 +405,7 @@ def build(ways, places):
         if k and d < (1.5 if poi else 2.5):
             if not poi:
                 nodes[k].setdefault('place', p['name'])
-            q = dict(name=p['name'], kind=p['kind'], node=k, distKm=round(d, 2))
+            q = dict(name=p['name'], kind=p['kind'], node=k, distKm=round(d, 2), lat=round(p['lat'], 5), lon=round(p['lon'], 5))
             if poi:
                 q['cat'] = p.get('cat', 'landmark')
                 nt = near_town(p['lat'], p['lon'])
