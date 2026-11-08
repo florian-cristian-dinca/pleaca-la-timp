@@ -82,10 +82,20 @@
       let brg = null; if (prev && moved > 0.015) { brg = Math.atan2((fix.lon - prev.lon) * KX(fix.lat), (fix.lat - prev.lat) * KY); st.brg = brg; st.brgAt = fix.t; }
       else if (st.brg != null && fix.t - st.brgAt < 1) brg = st.brg;     // stopped in traffic: keep the last heading for a minute
       // speed (km/h): GPS value when available, otherwise from consecutive fixes
-      let v = fix.speed != null && fix.speed >= 0 ? fix.speed * 3.6 : (prev && dt > 0.03 ? moved / dt * 60 : null);
-      if (v != null && v < 250) { st.v = st.v == null ? v : 0.6 * v + 0.4 * st.v; st.vAt = fix.t; }
+      // viteza: din GPS dacă telefonul o dă; altfel din deplasarea pe ultimele ~15 s. Pe loc, „zgomotul” GPS
+      // (câțiva metri între citiri) nu trebuie să pară mers: sub precizia GPS considerăm viteza 0.
+      st.win = (st.win || []).filter(p => fix.t - p.t <= 0.25).concat([{ lat: fix.lat, lon: fix.lon, t: fix.t }]);
+      let v = null;
+      if (fix.speed != null && fix.speed >= 0) v = fix.speed * 3.6;
+      else if (st.win.length >= 4) { // media primei jumătăți vs a celei de-a doua: zgomotul se reduce, mersul rămâne
+        const h = Math.floor(st.win.length / 2), avg = arr => ({ lat: arr.reduce((s, p) => s + p.lat, 0) / arr.length, lon: arr.reduce((s, p) => s + p.lon, 0) / arr.length, t: arr.reduce((s, p) => s + p.t, 0) / arr.length });
+        const A = avg(st.win.slice(0, h)), B = avg(st.win.slice(h)), dtw = B.t - A.t, dw = E.haversine(A, B);
+        if (dtw >= 0.03) v = dw < Math.max(0.02, 1.2 * fix.acc / 1000) ? 0 : dw / dtw * 60; }
+      if (v != null && v < 4) v = 0;
+      if (v != null && v < 250) { st.v = st.v == null || v === 0 ? v : 0.6 * v + 0.4 * st.v; st.vAt = fix.t; }
       // distanța parcursă, din GPS: adun doar pașii mai mari decât precizia (fără „zgomotul” de pe loc)
-      if (fix.acc <= 50) { if (!st.anchor) st.anchor = { lat: fix.lat, lon: fix.lon }; else { const d = E.haversine(st.anchor, fix); if (d >= Math.max(0.02, fix.acc / 1000)) { st.dist = (st.dist || 0) + d; st.anchor = { lat: fix.lat, lon: fix.lon }; } } }
+      if (fix.acc <= 50) { const w3 = st.win.slice(-3), sm = { lat: w3.reduce((s, p) => s + p.lat, 0) / w3.length, lon: w3.reduce((s, p) => s + p.lon, 0) / w3.length };
+        if (!st.anchor) st.anchor = sm; else { const d = E.haversine(st.anchor, sm); if (d >= Math.max(0.03, 1.5 * fix.acc / 1000)) { st.dist = (st.dist || 0) + d; st.anchor = sm; } } }
       const r = Math.min(0.09, Math.max(0.035, fix.acc / 1000 * 1.5));
       let best = null;
       // the current edge and the ones right after it stay candidates over a wider radius (continuity)

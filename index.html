@@ -924,7 +924,8 @@ function startTrip(o, d, name, ta, h) {
     pred: { madeAt: new Date().toISOString(), median: s.med, q: s.q, tau: 0.95, deadline: ta, ta, recT0: rec, version: LR() ? LR().version : 'a-priori', followed: rec != null && dep <= rec + 2 } };
   save(); keepAwake(); renderTrip(); toast('Drum bun! Puneți telefonul în suport.');
 }
-function depart(h) { startTrip(h.o, h.d, h.name, parseT(h.ta), h); }
+function depart(h) { // ora la care trebuie să ajungeți contează doar dacă e încă înainte (altfel nu afișăm „întârziere 6 h”)
+  const ta = parseT(h.ta), now = nowMin(); startTrip(h.o, h.d, h.name, ta != null && ta > now && ta - now <= 240 ? ta : null, ta != null && ta > now && ta - now <= 240 ? h : null); }
 function nearestNode(lat, lon) { let best = null, bd = 1e9; for (const p of placesList()) { if (p.kind === 'poi') continue; const n = NET.nodes[p.node], d = E.haversine({ lat, lon }, n); if (d < bd) { bd = d; best = p; } } return bd < 25 ? best : null; }
 function departOther(d, o) {
   if (!d) { toast('Alegeți destinația din lista de sugestii.'); return; }
