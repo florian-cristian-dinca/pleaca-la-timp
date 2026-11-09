@@ -94,10 +94,10 @@ function createForecaster(o) {
     if (!PATHS[k]) PATHS[k] = M.alternatives(o, d, date, t, ctx, 3).map(a => a.path);
     return PATHS[k];
   }
-  function forecast(h, date, light) {
-    const key = (light ? 'L|' : '') + h.id + '|' + h.o + h.d + '|' + date + '|' + h.ta + '|' + h.usual + '|' + version;
+  function forecast(h, date, light, dry) {
+    const key = (light ? 'L|' : '') + (dry ? 'D|' : '') + h.id + '|' + h.o + h.d + '|' + date + '|' + h.ta + '|' + h.usual + '|' + version;
     if (CACHE[key]) return CACHE[key];
-    const ctx = E.ctxFor(date, weatherFor(date, parseT(h.usual)), false), ctx0 = E.ctxFor(date, 'senin', false), ta = parseT(h.ta), usual = parseT(h.usual), deadline = ta - (o.bufferMin || 0); // ora aleasă de utilizator, fără rezerve ascunse
+    const ctx = E.ctxFor(date, dry ? 'senin' : weatherFor(date, parseT(h.usual)), false), ctx0 = E.ctxFor(date, 'senin', false), ta = parseT(h.ta), usual = parseT(h.usual), deadline = ta - (o.bufferMin || 0); // ora aleasă de utilizator, fără rezerve ascunse
     const from = Math.min(usual - 60, ta - 150), to = Math.max(usual + 60, ta + 30), slots = [];
     const paths = pathsFor(h.o, h.d, date, usual, ctx); if (!paths.length) return (CACHE[key] = null);
     for (let t = Math.round(from / 10) * 10; t <= to; t += 10) { const s = slotEval(M, paths, date, t, ctx, !light); if (s) slots.push(s); }
@@ -129,8 +129,23 @@ function createForecaster(o) {
       const dir = dirName(E, NET, r.segId);
       causes.push(m ? `${KIND_TXT[m[1]] || 'o problemă'}${road ? ' pe ' + road : ''}, ${dir} (semnalare de la participanți)` : (r.note || ('o bandă închisă' + (road ? ' pe ' + road : ''))) + (m ? '' : ', ' + dir));
     }
-    const wx = o.weatherSpan ? o.weatherSpan(date, Math.min(usual, early ? early.t0 : usual) - 30, ta) : null; if (wx) causes.push('vremea: ' + wx.txt);
-    const res = { date, slots, cur, typ, early, calm, lateBy, extra, level, jam, causes: [...new Set(causes)], ta, usual, deadline, near, wx };
+    const wx = !dry && o.weatherSpan ? o.weatherSpan(date, Math.min(usual, early ? early.t0 : usual) - 30, ta) : null;
+    const res = { date, slots, cur, typ, early, calm, lateBy, extra, level, jam, causes: [...new Set(causes)], ta, usual, deadline, near, wx, wxDelta: 0 };
+    if (!dry && ctx.weather !== 'senin') {
+      /* Vremea NU decide singură prin marja de siguranță de 95–97% (prognoza de ceață/ploaie e adesea greșită, iar
+         marja ar amplifica efectul). Decizia se ia ca pe vreme bună, apoi se pleacă mai devreme cu exact minutele
+         pe care vremea le adaugă în medie la drum, doar dacă sunt cel puțin 5. */
+      const f0 = forecast(h, date, light, true);
+      if (f0) {
+        const d = Math.max(0, Math.round(cur.med - f0.cur.med)); res.wxDelta = d;
+        res.lateBy = f0.lateBy; res.extra = f0.extra; res.jam = f0.jam;
+        const base = f0.level === 'g' ? usual : (f0.early ? f0.early.t0 : f0.slots[0].t0), t = d >= 5 ? base - Math.max(5, Math.round(d / 5) * 5) : base;
+        res.level = f0.level !== 'g' ? (f0.level === 'y' && d >= 20 ? 'r' : f0.level) : d >= 20 ? 'r' : t < usual ? 'y' : 'g';
+        res.wxOnly = f0.level === 'g' && res.level !== 'g';
+        res.early = t === base ? f0.early : Object.assign({}, near(t), { t0: t });
+      }
+    }
+    if (wx) res.causes.push('vremea: ' + wx.txt);
     return (CACHE[key] = res);
   }
   const LV = { g: ['Drum liniștit', '🟢'], y: ['Aglomerat', '🟡'], r: ['Ambuteiaj anunțat', '🔴'] };
@@ -146,11 +161,11 @@ function decision(f, h) {
   const leave = f.level === 'g' ? f.usual : (f.early ? f.early.t0 : f.slots[0].t0);
   const where = f.jam ? ` Coloana se formează pe ${f.jam.name}, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}.` : '';
   const unusual = f.extra >= 8 ? ` Neobișnuit: cu ${Math.round(f.extra)} min mai mult decât de obicei.` : '';
-  const wx = f.wx ? ` Atenție la vreme: ${f.wx.txt}.` : '';
+  const wx = f.wx ? ` Atenție la vreme: ${f.wx.txt}${f.wxDelta >= 3 ? `; drumul poate dura cu ~${f.wxDelta} min mai mult` : ''}.` : '';
   return {
     leave, level: f.level,
-    morning: { title: `${h.name}: plecați la ${fmt(leave)}`, body: (f.level === 'g' ? 'Drum liniștit, puteți pleca la ora obișnuită.' : `${f.level === 'r' ? 'Ambuteiaj' : 'Aglomerație'} pe drumul dumneavoastră.${where}${unusual}`) + wx },
-    evening: { title: `Mâine: ${LV[f.level][0].toLowerCase()} · ${h.name.toLowerCase()}`, body: (f.level === 'g' ? `Puteți pleca la ora obișnuită, ${h.usual}.` : `Plecați la ${fmt(leave)} în loc de ${h.usual}.`) + `${where}${unusual}${wx}` }
+    morning: { title: `${h.name}: plecați la ${fmt(leave)}`, body: f.wxOnly ? `Drumul e liber, dar vremea îl poate lungi.${wx}` : (f.level === 'g' ? 'Drum liniștit, puteți pleca la ora obișnuită.' : `${f.level === 'r' ? 'Ambuteiaj' : 'Aglomerație'} pe drumul dumneavoastră.${where}${unusual}`) + wx },
+    evening: { title: `Mâine: ${f.wxOnly ? 'vreme dificilă' : LV[f.level][0].toLowerCase()} · ${h.name.toLowerCase()}`, body: (f.level === 'g' ? `Puteți pleca la ora obișnuită, ${h.usual}.` : `Plecați la ${fmt(leave)} în loc de ${h.usual}.`) + `${where}${unusual}${wx}` }
   };
 }
 
@@ -163,11 +178,11 @@ function urgent(f, h, live) {
   const lv = live || { extra: 0 }, ta = f.ta, usual = f.usual;
   const typ = f.typ ? f.typ.med : f.cur.med, med = f.cur.med + (lv.extra || 0), late = usual + med - ta;
   const growth = (med - typ) / typ;
-  const restr = f.causes.length > 0 && (f.extra >= 5 || growth >= 0.1), slow = ((lv.drop || 0) >= 0.15 && (lv.extra || 0) >= 3) || (lv.extra || 0) >= Math.max(5, 0.15 * typ);
+  const restr = f.causes.some(c => !c.startsWith('vremea')) && (f.extra >= 5 || growth >= 0.1), slow = ((lv.drop || 0) >= 0.15 && (lv.extra || 0) >= 3) || (lv.extra || 0) >= Math.max(5, 0.15 * typ);
   if (!(late >= 5 && (restr || slow))) return null;
   const leave = Math.floor((usual - late - 5) / 5) * 5;
   let cause = '';
-  if (restr) cause = ` Cauza: ${f.causes[0]}.`;
+  if (restr) cause = ` Cauza: ${f.causes.find(c => !c.startsWith('vremea'))}.`;
   else if (lv.road) cause = ` Viteza pe ${lv.road} a scăzut cu aproximativ ${Math.round((lv.drop || 0) * 100)}%.`;
   const text = `Dacă plecați la ora stabilită, ${fmt(usual)}, ajungeți cu aproximativ ${minTxt(late)} întârziere! Plecați la ${fmt(leave)}.${cause}`;
   return { late, leave, text, title: `⚠️ Ambuteiaj grav pe drumul dumneavoastră (${h.name.toLowerCase()})` };

@@ -28,7 +28,7 @@ async function fetchWeather() {
     const W = {}, H = j[0].hourly;
     H.time.forEach((ts, i) => {
       const date = ts.slice(0, 10), h = +ts.slice(11, 13), cats = j.map(x => PLT.wxCode(x.hourly.weather_code[i], x.hourly.precipitation[i], x.hourly.snowfall[i], x.hourly.visibility[i], x.hourly.temperature_2m[i]));
-      let pick = cats[0]; for (const c of cats) if (PLT.WX_SEV[c[0]] > PLT.WX_SEV[pick[0]] && cats.filter(x => x[0] === c[0]).length >= 2) pick = c;
+      let pick = ['senin', '']; for (const c of cats) if (PLT.WX_SEV[c[0]] > PLT.WX_SEV[pick[0]] && cats.filter(x => x[0] === c[0]).length >= (c[0] === 'ceata' ? 3 : 2)) pick = c;   // ceața: doar dacă e prognozată în majoritatea zonei (prognoza ei e cea mai nesigură)
       const d = W[date] || (W[date] = { h: Array(24).fill('senin'), d: Array(24).fill(''), t: Array(24).fill(null), rh: Array(24).fill(null) }); d.h[h] = pick[0]; d.d[h] = pick[1];
       d.t[h] = Math.min(...j.map(x => x.hourly.temperature_2m[i])); d.rh[h] = Math.max(...j.map(x => x.hourly.relative_humidity_2m[i]));   // cel mai rece / cel mai umed punct
     });
@@ -144,4 +144,4 @@ async function all(table, q = x => x) { // PostgREST returns at most 1000 rows p
     if (fam) console.log(`family notices: ${fam}`);
   } catch (e) { if (!/does not exist|schema cache/.test(e.message)) console.log('family: ' + e.message); }
   console.log(`run ${today} ${PLT.fmt(now.min)}: participants ${parts.length}, notifications sent ${n}, failed ${fails}, expired ${gone}`);
-})().catch(e => { console.error('job failed:', e.message); process.exit(1); });
+})().catch(e => { console.error('job failed:', e.message, e.stack); process.exit(1); });

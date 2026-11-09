@@ -615,14 +615,16 @@ function card(h, date, idx, compact) {
   const f = forecast(h, date); if (f) f_ta = f.ta; if (!f) return `<div class="card">Nu găsesc un drum între ${esc(pname(h.o))} și ${esc(pname(h.d))}.</div>`;
   const today = date === todayStr(), now = nowMin(), lv = LV[f.level];
   let msg, why = '';
-  if (f.level === 'g') msg = `Puteți pleca liniștit la ora obișnuită, <b>${fmt(f.usual)}</b>. Stați pe loc cel mult câteva minute.`;
+  if (f.wxOnly) msg = `Drumul e liber, dar vremea îl poate lungi cu aproximativ <b>${mins(f.wxDelta)}</b>. Plecați la <b>${fmt(f.early.t0)}</b> în loc de ${fmt(f.usual)}.`;
+  else if (f.level === 'g') msg = `Puteți pleca liniștit la ora obișnuită, <b>${fmt(f.usual)}</b>. Stați pe loc cel mult câteva minute.`;
   else msg = `Dacă plecați la <b>${fmt(f.usual)}</b>, ca de obicei, stați aproximativ <b>${mins(f.cur.idle)}</b> pe loc${f.lateBy > 0 ? ` și riscați o întârziere de până la <b>${mins(f.lateBy)}</b>` : ''}.`;
   if (f.jam) why += `Coloana se formează pe <b>${esc(f.jam.name)}</b>, între ${fmt(f.jam.a)} și ${fmt(f.jam.b)}. `;
   if (f.extra >= 8) why += `Este <b>neobișnuit</b>: cu ${mins(f.extra)} mai mult decât într-o zi obișnuită de ${WD[wday(date)]}.${(cs => cs.length ? (cs.length > 1 ? ' Cauze: ' : ' Cauza: ') + cs.map(esc).join('; ') + '.' : '')(f.causes.filter(c => !c.startsWith('vremea')))}`;
+  else if (f.wxOnly) why += `Prognoza meteo: ${esc(f.wx ? f.wx.txt : '')}. Prognozele de ceață sau ploaie nu se confirmă mereu; recomandarea ține cont doar de efectul mediu al vremii.`;
   else if (f.level !== 'g') why += `Este aglomerația obișnuită pentru o zi de ${WD[wday(date)]}, la această oră.`;
   const opts = [];
   const gain = f.early ? f.cur.idle - f.early.idle : 0;
-  if (f.early && f.early.t0 < f.usual - 4 && (gain >= 5 || f.lateBy > 0)) opts.push({ best: true, t: f.early.t0, b: gain >= 5 ? 'Plecați mai devreme' : 'Plecați puțin mai devreme', s: (gain >= 5 ? `stați doar ~${mins(f.early.idle)} pe loc (cu ${mins(gain)} mai puțin)` : 'mai multă siguranță că ajungeți la timp') + ` · sosire în jur de ${fmt(f.early.t0 + f.early.med)}` + chance(f.early) });
+  if (f.early && f.early.t0 < f.usual - 4 && (gain >= 5 || f.lateBy > 0 || f.wxOnly)) opts.push({ best: true, t: f.early.t0, b: f.wxOnly ? 'Plecați puțin mai devreme' : gain >= 5 ? 'Plecați mai devreme' : 'Plecați puțin mai devreme', s: (f.wxOnly ? `din cauza vremii (~${mins(f.wxDelta)} în plus pe drum)` : gain >= 5 ? `stați doar ~${mins(f.early.idle)} pe loc (cu ${mins(gain)} mai puțin)` : 'mai multă siguranță că ajungeți la timp') + ` · sosire în jur de ${fmt(f.early.t0 + f.early.med)}` + chance(f.early) });
   opts.push({ best: !opts.length && f.level === 'g', t: f.usual, b: 'La ora obișnuită', s: `stați ~${mins(f.cur.idle)} pe loc · sosire în jur de ${fmt(f.usual + f.cur.med)}` + chance(f.cur) });
   if (f.calm && f.level !== 'g' && f.cur.idle - f.calm.idle >= 5) opts.push({ best: false, t: f.calm.t0, b: 'Mai târziu, dacă puteți', s: `stați doar ~${mins(f.calm.idle)} pe loc · sosire în jur de ${fmt(f.calm.t0 + f.calm.med)}${f.calm.t0 + f.calm.med > f.ta ? ', după ora la care trebuie să ajungeți' : ''}` + (f.calm.t0 + f.calm.med > f.ta ? '' : chance(f.calm)) });
   if (!f.early && f.level === 'r') opts.unshift({ best: true, t: f.slots[0].t0, b: 'Plecați cât mai devreme', s: 'Nicio oră de plecare din ultimele 2,5 ore nu garantează sosirea la timp.' });
@@ -796,7 +798,15 @@ function liveState(L) {
   const ctx = E.ctxFor(L.date, L.weather, false), now = tMinNow(), mm = L.mm || {}, T = trk();
   const ok = gpsFresh(L) && mm.eid;
   let k = ok ? L.path.indexOf(mm.eid) : -1, remMod = 0, remKm = 0, pos = null;
-  if (ok && k >= 0) {
+  if (k >= 0) L.lastK = k;
+  if (ok && k < 0 && L.gps && L.gps.lat) { // pe o stradă paralelă / bretea care nu e în rută: continui de la cel mai apropiat punct al rutei de mai departe, NU de la start
+    const me = { lat: L.gps.lat, lon: L.gps.lon }; let bj = -1, bd = 1e9;
+    for (let i = L.lastK || 0, c = 0; i < L.path.length && c < 4; i++) { const e = NET.edges[L.path[i]], dd = E.haversine(me, NET.nodes[e.to]); if (dd < bd) { bd = dd; bj = i; } c += e.len; }
+    if (bj >= 0 && bd < 1.5) { const rest = L.path.slice(bj + 1), acc = bd * 1.3;
+      remKm = acc + E.pathLen(NET, rest); remMod = acc / 30 * 60 + M.walk(rest, L.date, now, ctx).total; pos = { lat: me.lat, lon: me.lon, ang: 0, raw: true }; k = -2; }
+  }
+  if (k === -2) { /* calculat mai sus */ }
+  else if (ok && k >= 0) {
     const e = NET.edges[mm.eid], f = Math.max(0, 1 - mm.s / e.len);
     remKm = f * e.len + E.pathLen(NET, L.path.slice(k + 1)); remMod = M.segState(mm.eid, L.date, now, ctx).med * f + M.walk(L.path.slice(k + 1), L.date, now, ctx).total;
     pos = T.position(mm);
@@ -815,14 +825,21 @@ function liveState(L) {
   // cât de repede merge traficul azi, față de model, pe porțiunile deja parcurse (ultimii ~6 km)
   const ob = (L.obs || []).filter(o => !o.interp).slice(-80); let so = 0, sm = 0, km = 0;
   for (const o of ob) { so += o.dur; sm += M0.segState(o.segId, L.date, o.t, ctx).med; km += NET.edges[o.segId].len; }
-  const w = Math.min(1, km / 5), ratio = sm > 0 ? so / sm : 1, factor = Math.min(3, Math.max(0.75, Math.exp(w * Math.log(ratio))));
+  // încrederea crește treptat cu distanța măsurată (un semafor sau o coadă scurtă la început nu schimbă tot drumul),
+  // iar abaterea se aplică întreagă doar pe următoarele ~15 minute: mai departe traficul poate fi cu totul altul
+  const w = km / (km + 4), ratio = sm > 0 ? so / sm : 1, factor = Math.min(1.6, Math.max(0.85, Math.exp(w * Math.log(ratio))));
+  const near = Math.min(remMod, 15), remAdj = remMod + (factor - 1) * (near + 0.35 * Math.max(0, remMod - near));
   // viteza pe drumul pe care sunteți (ultimii ~1,5 km) față de o zi obișnuită
   let road = null; { let d = 0, t = 0, tt = 0; const nm = mm.eid ? NET.edges[mm.eid].name : '';
     for (let i = ob.length - 1; i >= 0 && d < 1.5; i--) { const e = NET.edges[ob[i].segId]; if (nm && e.name && e.name !== nm && d > 0.4) break; d += e.len; t += ob[i].dur; tt += M0.segState(ob[i].segId, L.date, ob[i].t, ctx).med; }
     if (d >= 0.4 && t > 0) road = { name: nm, v: d / t * 60, vTyp: d / tt * 60, drop: 1 - tt / t }; }
   const elapsed = Math.max(0.01, now - L.dep), dist = mm.dist || 0;
   const v = mm.v != null && now - mm.vAt < 0.5 ? mm.v : null;
-  return { ok, pos, remKm, eta: now + remMod * factor, factor, km, road, v, vAvg: elapsed >= 1 && dist >= 0.2 ? dist / elapsed * 60 : null, dist, now };
+  // ora de sosire afișată se schimbă lin (constantă de ~1 minut), ca să nu sară la fiecare semafor
+  let eta = now + remAdj; const tNow = Date.now();
+  if (L.etaS != null && L.etaAt && tNow - L.etaAt < 120000) { const a = 1 - Math.exp(-(tNow - L.etaAt) / 60000); eta = L.etaS + a * (eta - L.etaS); }
+  if (tNow - (L.etaAt || 0) > 900) { L.etaS = eta; L.etaAt = tNow; } else eta = L.etaS;
+  return { ok, pos, remKm, eta, factor, km, road, v, vAvg: elapsed >= 1 && dist >= 0.2 ? dist / elapsed * 60 : null, dist, now };
 }
 function onFix(pos) {
   const L = S.live; if (!L) return;

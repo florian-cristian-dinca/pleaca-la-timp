@@ -83,7 +83,7 @@ E.dayClass = date => (['L', 'V'].includes(E.dayType(date)) ? 'lucr' : 'lib');
    Motor predictiv mobilitate – București + Ilfov (pilot regional)
    Motor 0.3.0 – graf orientat, orice origine/destinație, 0 apeluri externe.
    ===================================================================== */
-E.VERSION = '0.3.0';
+E.VERSION = '0.3.1';
 E.CENTER = { lat: 44.4355, lon: 26.1025 }; // Universitate – referința pentru orientarea radială
 
 /* ---------- Clase de drum (valori a priori, de calibrat) ---------- */
@@ -204,10 +204,12 @@ E.validateNet = function (net) {
 
 E.WEATHER = {
   senin: { label: 'Senin / uscat', cap: 1.00, speed: 1.00, sig: 0.00 },
-  ploaie: { label: 'Ploaie', cap: 0.92, speed: 0.95, sig: 0.03 },
-  torential: { label: 'Ploaie torențială', cap: 0.85, speed: 0.88, sig: 0.06 },
-  ceata: { label: 'Ceață', cap: 0.90, speed: 0.85, sig: 0.05 },
-  ninsoare: { label: 'Ninsoare / polei', cap: 0.78, speed: 0.75, sig: 0.10 }
+  // efecte moderate (măsurătorile pe drumuri urbane arată câteva procente în plus la ploaie și ceață, mai mult la ninsoare);
+  // modelul își corectează apoi efectul din drumurile reale, care se salvează cu vremea din ziua respectivă
+  ploaie: { label: 'Ploaie', cap: 1.00, speed: 0.98, sig: 0.02 },
+  torential: { label: 'Ploaie torențială', cap: 0.97, speed: 0.93, sig: 0.04 },
+  ceata: { label: 'Ceață', cap: 1.00, speed: 0.96, sig: 0.03 },
+  ninsoare: { label: 'Ninsoare / polei', cap: 0.90, speed: 0.82, sig: 0.08 }
 };
 E.PARAMS = { rho: 0.55, workZoneFactor: 0.90, kJam: 130, n0: 8, safetyUncal: Math.log(1.10), minCal: 19 };
 E.ctxFor = (date, weather, vacation) => ({ dayType: E.dayType(date), weather: weather || 'senin', vacation: !!vacation });
