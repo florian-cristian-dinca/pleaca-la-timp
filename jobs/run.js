@@ -74,9 +74,9 @@ async function all(table, q = x => x) { // PostgREST returns at most 1000 rows p
   // 2) retrain when the data changed (or once a day at 03:xx)
   const model = new E.Model(graph, restr), model0 = new E.Model(graph, []);
   const T = trips.filter(t => t.path && t.path.every(e => graph.edges[e]) && !(t.pred && t.pred.offRoute) && t.dur_min >= 2 && E.pathLen(graph, t.path) / t.dur_min * 60 <= 130).map(t => ({ id: t.id, date: t.trip_date, dep: t.dep_min, dur: t.dur_min, orig: t.origin_node, dest: t.dest_node, path: t.path, weather: t.weather || 'senin' }));
-  const S = segs.filter(s => graph.edges[s.seg_id] && s.dur_min > 0.02 && graph.edges[s.seg_id].len / s.dur_min * 60 <= (VMAX[graph.edges[s.seg_id].cls] || 100)).map(s => ({ segId: s.seg_id, date: s.obs_date, t: s.entry_min, dur: s.dur_min, weather: s.weather }));
+  const S = segs.filter(s => graph.edges[s.seg_id] && s.dur_min > 0.02 && graph.edges[s.seg_id].len / s.dur_min * 60 <= (VMAX[graph.edges[s.seg_id].cls] || 100) && graph.edges[s.seg_id].len / s.dur_min * 60 >= 2).map(s => ({ segId: s.seg_id, date: s.obs_date, t: s.entry_min, dur: s.dur_min, weather: s.weather }));
   let pack = packs[0] ? packs[0].pack : null;
-  const sig = E.hash(JSON.stringify([T.length, S.length, restr.map(r => r.id), graph.meta.built]));
+  const sig = E.hash(JSON.stringify([T.length, S.length, restr.map(r => r.id), graph.meta.built, E.VERSION]));
   if (!pack || pack.sig !== sig || (now.min >= 180 && now.min < 190)) {
     const L = T.length ? E.train(model, T, S, { tau: 0.95 }) : null;
     pack = { format: 'mpred-model', sig, version: L ? L.version : 'a-priori-' + sig, exportedAt: new Date().toISOString(), tau: 0.95, lr: L ? L.lr : null, conf: L ? L.conf : null, trainedOn: T.length, restrictions: restr, edgeEdits: {}, weather: {} };

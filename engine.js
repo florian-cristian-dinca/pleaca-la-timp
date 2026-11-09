@@ -83,7 +83,7 @@ E.dayClass = date => (['L', 'V'].includes(E.dayType(date)) ? 'lucr' : 'lib');
    Motor predictiv mobilitate – București + Ilfov (pilot regional)
    Motor 0.3.0 – graf orientat, orice origine/destinație, 0 apeluri externe.
    ===================================================================== */
-E.VERSION = '0.3.1';
+E.VERSION = '0.4.0';
 E.CENTER = { lat: 44.4355, lon: 26.1025 }; // Universitate – referința pentru orientarea radială
 
 /* ---------- Clase de drum (valori a priori, de calibrat) ---------- */
@@ -219,7 +219,7 @@ E.lenClass = km => (km < 10 ? 'sub 10 km' : km < 25 ? '10–25 km' : 'peste 25 k
 /* ---------- Modelul fizico-statistic pe graf ---------- */
 class Model {
   constructor(net, restrictions, params) {
-    this.net = net; this.seg = net.edges; this.restr = restrictions || []; this.p = Object.assign({}, E.PARAMS, params || {});
+    this.net = net; this.seg = net.edges; this.restr = restrictions || []; E._net = net; this.p = Object.assign({}, E.PARAMS, params || {});
     this.adj = E.adjacency(net); this.qcache = new Map(); this.memo = new Map();
   }
   demandX(s, t, ctx) {
@@ -338,28 +338,42 @@ E.pathLen = (net, path) => path.reduce((s, e) => s + net.edges[e].len, 0);
 
 /* ---------- Învățare pe muchii: backfitting ierarhic (muchie → muchie × clasă zi × perioadă) ---------- */
 E.bkey = (eid, date, t) => eid + '|' + E.dayClass(date) + '|' + E.period(t);
+/* același drum (nume + clasă): observațiile de pe toate bucățile lui se adună, ca modelul să învețe repede
+   cum merge, de obicei, „Calea Bucureștilor” sau un pasaj, chiar dacă fiecare bucată are puține măsurători */
+E.rkey = eid => { const e = E._net && E._net.edges[eid]; return e && e.name ? e.cls + ':' + e.name : null; };
+E.rpkey = (eid, date, t) => { const r = E.rkey(eid); return r ? r + '|' + E.dayClass(date) + '|' + E.period(t) : null; };
+const LEVELS = [['R', (eid) => E.rkey(eid)], ['RP', (eid, d, t) => E.rpkey(eid, d, t)], ['L1', eid => eid], ['L2', (eid, d, t) => E.bkey(eid, d, t)]];
 E.learnEdges = function (rows, segObs, n0, iters = 3) {
-  // rows: {trip, parts:[{eid,t,med}], prior: total median, obs}
-  const L1 = {}, L2 = {}, W = {};
-  const bOf = (eid, date, t) => (L1[eid] ? L1[eid].b : 0) + (L2[E.bkey(eid, date, t)] ? L2[E.bkey(eid, date, t)].b : 0);
+  // rows: {trip, parts:[{eid,t,med}], prior: total median, obs}; niveluri: drum → drum × zi × perioadă → muchie → muchie × zi × perioadă
+  const T = { R: {}, RP: {}, L1: {}, L2: {} }, W = {};
+  // backfitting corect: reziduul se calculează FĂRĂ nivelul curent, iar corecția lui se ÎNLOCUIEȘTE (nu se adună la fiecare trecere)
+  let cur = null; const bOf = (eid, date, t) => { let b = 0; for (const [n, kf] of LEVELS) { if (n === cur) continue; const k = kf(eid, date, t); if (k && T[n][k]) b += T[n][k].b; } return b; };
+  const clip = r => Math.max(-0.9, Math.min(1.1, r));   // o singură observație nu poate muta modelul oricât (opriri, parcări, GPS greșit)
   for (let it = 0; it < iters; it++) {
-    for (const level of [1, 2]) {
-      const acc = {};
-      const add = (k, w, r) => { (acc[k] = acc[k] || { s: 0, w: 0 }); acc[k].s += w * r; acc[k].w += w; };
+    for (const [lv, kf] of LEVELS) {
+      cur = lv; const acc = {}, road = lv === 'R' || lv === 'RP', grp = {};
+      // la nivel de drum, toate bucățile parcurse în același drum (aceeași zi și oră) contează ca O SINGURĂ dovadă:
+      // o zi proastă nu trebuie să mute modelul cât zece zile
+      const add = (k, w, r, g) => { if (!k) return; if (road) { const gk = k + '#' + g, x = grp[gk] || (grp[gk] = { k, s: 0, w: 0 }); x.s += w * r; x.w += w; return; }
+        (acc[k] = acc[k] || { s: 0, w: 0 }); acc[k].s += w * r; acc[k].w += w; };
       for (const row of rows) {
         let tot = 0; const adj = row.parts.map(p => { const m = p.med * Math.exp(bOf(p.eid, row.trip.date, p.t)); tot += m; return m; });
-        const r = Math.log(row.obs) - Math.log(tot);
-        row.parts.forEach((p, i) => add(level === 1 ? p.eid : E.bkey(p.eid, row.trip.date, p.t), adj[i] / tot, r));
+        const r = clip(Math.log(row.obs) - Math.log(tot));
+        row.parts.forEach((p, i) => add(kf(p.eid, row.trip.date, p.t), adj[i] / tot, r, row.trip.date + Math.floor(row.trip.dep / 60)));
       }
-      for (const o of segObs || []) { if (!o._med) continue; const r = Math.log(o.dur) - Math.log(o._med * Math.exp(bOf(o.segId, o.date, o.t))); add(level === 1 ? o.segId : E.bkey(o.segId, o.date, o.t), 1, r); }
-      const T = level === 1 ? L1 : L2;
-      for (const [k, a] of Object.entries(acc)) { (T[k] = T[k] || { b: 0, w: 0 }); T[k].b += a.s / (a.w + n0); T[k].w = a.w; }
+      for (const o of segObs || []) { if (!o._med) continue; const r = clip(Math.log(o.dur) - Math.log(o._med * Math.exp(bOf(o.segId, o.date, o.t)))); add(kf(o.segId, o.date, o.t), o._med, r, o.date + Math.floor(o.t / 60)); }
+      if (road) for (const x of Object.values(grp)) { (acc[x.k] = acc[x.k] || { s: 0, w: 0 }); acc[x.k].s += x.s / x.w; acc[x.k].w += 1; }
+      const nn = road ? 3 : n0;   // la nivel de drum: 1 zi → 25% din abatere, 3 zile → 50%, 9 zile → 75%
+      T[lv] = {}; for (const [k, a] of Object.entries(acc)) T[lv][k] = { b: a.s / (a.w + nn), w: a.w };
     }
   }
-  for (const [k, v] of Object.entries(L1)) W[k] = v.w;
-  return { L1, L2, W, n0 };
+  cur = null;
+  for (const [k, v] of Object.entries(T.L1)) W[k] = v.w;
+  const round = o => { for (const v of Object.values(o)) { v.b = Math.round(v.b * 1e4) / 1e4; v.w = Math.round(v.w * 10) / 10; } return o; };
+  return { R: round(T.R), RP: round(T.RP), L1: round(T.L1), L2: round(T.L2), W, n0 };
 };
-E.edgeBias = (lr, eid, date, t) => lr ? (lr.L1[eid] ? lr.L1[eid].b : 0) + (lr.L2[E.bkey(eid, date, t)] ? lr.L2[E.bkey(eid, date, t)].b : 0) : 0;
+E.edgeBias = (lr, eid, date, t) => { if (!lr) return 0; let b = 0;
+  for (const [n, kf] of LEVELS) { const tab = lr[n]; if (!tab) continue; const k = kf(eid, date, t); if (k && tab[k]) b += tab[k].b; } return b; };
 /* deplasarea traseului pe scară log prin corecțiile muchiilor (ponderi = mediane) */
 E.pathShift = function (lr, parts, date) {
   if (!lr) return 0; let a = 0, b = 0;

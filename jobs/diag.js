@@ -20,6 +20,18 @@ const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
   const road = {};
   for (const s of segs) { const e = graph.edges[s.seg_id]; if (!e) continue; const ctx = E.ctxFor(s.obs_date, s.weather || 'senin', false), ex = m0.segState(s.seg_id, s.obs_date, s.entry_min, ctx).med;
     const k = (e.name || '(fără nume)') + ' [' + e.cls + ']'; road[k] = road[k] || { km: 0, obs: 0, mod: 0, n: 0 }; road[k].km += e.len; road[k].obs += s.dur_min; road[k].mod += ex; road[k].n++; }
+  // ce a învățat modelul din aceleași date (aceeași selecție ca serverul)
+  const VMAX = { A: 150, C: 130, N: 120, J: 100, M: 90, B: 80 };
+  const T = trips.filter(t => t.path && t.path.every(e => graph.edges[e]) && !(t.pred && t.pred.offRoute) && t.dur_min >= 2 && E.pathLen(graph, t.path) / t.dur_min * 60 <= 130).map(t => ({ id: t.id, date: t.trip_date, dep: t.dep_min, dur: t.dur_min, path: t.path, weather: t.weather || 'senin', vacation: false }));
+  const S = segs.filter(s => graph.edges[s.seg_id] && s.dur_min > 0.02 && graph.edges[s.seg_id].len / s.dur_min * 60 <= (VMAX[graph.edges[s.seg_id].cls] || 100) && graph.edges[s.seg_id].len / s.dur_min * 60 >= 2).map(s => ({ segId: s.seg_id, date: s.obs_date, t: s.entry_min, dur: s.dur_min, weather: s.weather || 'senin' }));
+  const L = E.train(m0, T, S, { tau: 0.95 });
+  console.log(`\nlearned: ${Object.keys(L.lr.R || {}).length} roads, ${Object.keys(L.lr.L1).length} segments; calibrated: ${L.conf && L.conf.calibrated}`);
+  let e0 = 0, e1 = 0;
+  T.forEach((t, i) => { const ctx = E.ctxFor(t.date, t.weather, false), w = m0.walk(t.path, t.date, t.dep, ctx), learned = w.total * Math.exp(E.pathShift(L.lr, w.parts, t.date));
+    e0 += Math.abs(Math.log(t.dur / w.total)); e1 += Math.abs(Math.log(t.dur / learned));
+    console.log(`fit ${i + 1}: measured ${t.dur.toFixed(0)} · a-priori ${w.total.toFixed(0)} · learned ${learned.toFixed(0)} min`); });
+  console.log(`mean |log error|: a-priori ${(e0 / T.length).toFixed(3)}, learned ${(e1 / T.length).toFixed(3)} (in-sample)`);
+  console.log('\nlearned road factors (×): ' + Object.entries(L.lr.R || {}).sort((a, b) => b[1].w - a[1].w).slice(0, 15).map(([k, v]) => `${k.split(':').slice(1).join(':')} ${Math.exp(v.b).toFixed(2)} (n=${v.w})`).join('; '));
   console.log('\nroad · km · measured min · model min · measured km/h · model km/h · ratio');
   Object.entries(road).sort((a, b) => b[1].km - a[1].km).forEach(([k, r]) => console.log(`${k} · ${r.km.toFixed(2)} · ${r.obs.toFixed(1)} · ${r.mod.toFixed(1)} · ${(r.km / r.obs * 60).toFixed(1)} · ${(r.km / r.mod * 60).toFixed(1)} · ${(r.obs / r.mod).toFixed(2)}`));
 })().catch(e => { console.error(e.message); process.exit(1); });

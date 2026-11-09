@@ -233,6 +233,12 @@ function rebuild() {
   FC = PLT.createForecaster({ E, net: NET, model: M, model0: M0, pack: S.pack, weatherFor, weatherSpan, version: (S.pack ? S.pack.version : '') + '|' + S.reports.length + '|' + wxSig() });
 }
 const LR = () => (S.pack && S.pack.lr ? S.pack : null);
+/* corecția învățată din drumurile participanților, pe un tronson, la o anumită oră (×) */
+const bias = (eid, date, t) => { const L = LR(); return L ? Math.exp(E.edgeBias(L.lr, eid, date, t)) : 1; };
+/* durata unui traseu după modelul învățat (minute) */
+function walkL(path, date, t, ctx) { const w = M.walk(path, date, t, ctx); let s = 0; for (const p of w.parts) s += p.med * bias(p.eid, date, p.t); return s; }
+/* trafic măsurat de participanți: doar dacă e proaspăt (cel mult 20 de minute) */
+const liveEdges = date => { const T = S.traffic; return T && T.date === date && T.edges && nowMin() - (T.at || 0) <= 20 && nowMin() >= (T.at || 0) ? T.edges : {}; };
 const pname = id => NET.nodes[id] ? (NET.nodes[id].place || NET.nodes[id].name) : '?';
 const WXD = () => S.traffic && S.traffic.weather;
 const weatherFor = (date, t) => PLT.wxAt(WXD(), date, t == null ? (date === todayStr() ? nowMin() : 480) : t) || (S.pack && S.pack.weather && S.pack.weather[date]) || 'senin';
@@ -379,9 +385,13 @@ async function flush() {
 }
 let TRAFFIC_AT = 0;
 async function pullTraffic(force) { // traficul măsurat de participanți și semnalările active (actualizate de server la 10 min)
-  if (!force && Date.now() - TRAFFIC_AT < 180000) return; TRAFFIC_AT = Date.now();
+  if (!force && Date.now() - TRAFFIC_AT < (S.live ? 90000 : 180000)) return; TRAFFIC_AT = Date.now();
   try { const s = await session(); if (!s) return; const { data, error } = await s.c.from('model_packs').select('pack').eq('version', 'live').limit(1);
-    if (!error && data && data[0]) { const before = wxSig(); S.traffic = data[0].pack; save(); if (wxSig() !== before) { rebuild(); if ($('s-home').classList.contains('on')) renderHome(); } } } catch (e) { }
+    if (!error && data && data[0]) { const before = wxSig(); S.traffic = data[0].pack; save(); if (wxSig() !== before) { rebuild(); if ($('s-home').classList.contains('on')) renderHome(); } }
+    // trafic și semnalări calculate de baza de date în momentul cererii (nu depind de programatorul GitHub)
+    const r = await s.c.rpc('live_traffic'); if (!r.error && r.data && S.traffic) { const d = r.data, ed = {};
+      for (const [k, x] of Object.entries(d.edges || {})) { const e = NET.edges[k]; if (e && x[0] > 0) { const v = e.len / x[0] * 60; if (v >= 2 && v <= 150) ed[k] = [Math.round(v), x[1]]; } }
+      Object.assign(S.traffic, { date: d.date, at: d.at, edges: ed, notices: d.notices || [] }); save(); } } catch (e) { }
 }
 async function pullPack() {
   try {
@@ -803,12 +813,12 @@ function liveState(L) {
     const me = { lat: L.gps.lat, lon: L.gps.lon }; let bj = -1, bd = 1e9;
     for (let i = L.lastK || 0, c = 0; i < L.path.length && c < 4; i++) { const e = NET.edges[L.path[i]], dd = E.haversine(me, NET.nodes[e.to]); if (dd < bd) { bd = dd; bj = i; } c += e.len; }
     if (bj >= 0 && bd < 1.5) { const rest = L.path.slice(bj + 1), acc = bd * 1.3;
-      remKm = acc + E.pathLen(NET, rest); remMod = acc / 30 * 60 + M.walk(rest, L.date, now, ctx).total; pos = { lat: me.lat, lon: me.lon, ang: 0, raw: true }; k = -2; }
+      remKm = acc + E.pathLen(NET, rest); remMod = acc / 30 * 60 + walkL(rest, L.date, now, ctx); pos = { lat: me.lat, lon: me.lon, ang: 0, raw: true }; k = -2; }
   }
   if (k === -2) { /* calculat mai sus */ }
   else if (ok && k >= 0) {
     const e = NET.edges[mm.eid], f = Math.max(0, 1 - mm.s / e.len);
-    remKm = f * e.len + E.pathLen(NET, L.path.slice(k + 1)); remMod = M.segState(mm.eid, L.date, now, ctx).med * f + M.walk(L.path.slice(k + 1), L.date, now, ctx).total;
+    remKm = f * e.len + E.pathLen(NET, L.path.slice(k + 1)); remMod = M.segState(mm.eid, L.date, now, ctx).med * bias(mm.eid, L.date, now) * f + walkL(L.path.slice(k + 1), L.date, now, ctx);
     pos = T.position(mm);
   } else if (L.gpsDenied) { // fără acces la locație: singura variantă e poziția estimată după model, de la plecare
     const w = M.walk(L.path, L.date, L.dep, ctx); let cum = 0, s = null;
@@ -819,22 +829,23 @@ function liveState(L) {
     const j = mm.eid ? Math.max(0, L.path.indexOf(mm.eid)) : 0, rest = L.path.slice(j);
     const fresh = L.gps && L.gps.lat && Date.now() - L.gps.at < 45000, start = NET.nodes[NET.edges[rest[0]].from];
     const acc = fresh && !mm.eid ? E.haversine({ lat: L.gps.lat, lon: L.gps.lon }, start) * 1.3 : 0;   // până la primul drum principal
-    remKm = acc + E.pathLen(NET, rest); remMod = acc / 25 * 60 + M.walk(rest, L.date, now, ctx).total;
+    remKm = acc + E.pathLen(NET, rest); remMod = acc / 25 * 60 + walkL(rest, L.date, now, ctx);
     pos = fresh ? { lat: L.gps.lat, lon: L.gps.lon, ang: 0, raw: true } : start;
   }
   // cât de repede merge traficul azi, față de model, pe porțiunile deja parcurse (ultimii ~6 km)
   const ob = (L.obs || []).filter(o => !o.interp).slice(-80); let so = 0, sm = 0, km = 0;
-  for (const o of ob) { so += o.dur; sm += M0.segState(o.segId, L.date, o.t, ctx).med; km += NET.edges[o.segId].len; }
+  for (const o of ob) { so += o.dur; sm += M0.segState(o.segId, L.date, o.t, ctx).med * bias(o.segId, L.date, o.t); km += NET.edges[o.segId].len; }
   // încrederea crește treptat cu distanța măsurată (un semafor sau o coadă scurtă la început nu schimbă tot drumul),
   // iar abaterea se aplică întreagă doar pe următoarele ~15 minute: mai departe traficul poate fi cu totul altul
   const w = km / (km + 4), ratio = sm > 0 ? so / sm : 1, factor = Math.min(1.6, Math.max(0.85, Math.exp(w * Math.log(ratio))));
   const near = Math.min(remMod, 15), remAdj = remMod + (factor - 1) * (near + 0.35 * Math.max(0, remMod - near));
   // viteza pe drumul pe care sunteți (ultimii ~1,5 km) față de o zi obișnuită
   let road = null; { let d = 0, t = 0, tt = 0; const nm = mm.eid ? NET.edges[mm.eid].name : '';
-    for (let i = ob.length - 1; i >= 0 && d < 1.5; i--) { const e = NET.edges[ob[i].segId]; if (nm && e.name && e.name !== nm && d > 0.4) break; d += e.len; t += ob[i].dur; tt += M0.segState(ob[i].segId, L.date, ob[i].t, ctx).med; }
+    for (let i = ob.length - 1; i >= 0 && d < 1.5; i--) { const e = NET.edges[ob[i].segId]; if (nm && e.name && e.name !== nm && d > 0.4) break; d += e.len; t += ob[i].dur; tt += M0.segState(ob[i].segId, L.date, ob[i].t, ctx).med * bias(ob[i].segId, L.date, ob[i].t); }
     if (d >= 0.4 && t > 0) road = { name: nm, v: d / t * 60, vTyp: d / tt * 60, drop: 1 - tt / t }; }
   const elapsed = Math.max(0.01, now - L.dep), dist = mm.dist || 0;
   const v = mm.v != null && now - mm.vAt < 0.5 ? mm.v : null;
+  if (!L.area && L.destPt && NET.nodes[L.dest]) { const tail = E.haversine(NET.nodes[L.dest], L.destPt) * 1.3; if (tail > 0.1) { remKm += tail; remMod += tail / 25 * 60; } }   // de la drumul principal până la adresă
   // ora de sosire afișată se schimbă lin (constantă de ~1 minut), ca să nu sară la fiecare semafor
   let eta = now + remAdj; const tNow = Date.now();
   if (L.etaS != null && L.etaAt && tNow - L.etaAt < 120000) { const a = 1 - Math.exp(-(tNow - L.etaAt) / 60000); eta = L.etaS + a * (eta - L.etaS); }
@@ -861,9 +872,19 @@ function onFix(pos) {
     const alts = routesFrom(mm.eid, L.dest, t); if (alts.length) { setRoutes(alts); if (!L.reTold) { L.reTold = true; toast('Mergeți pe alt drum. Am recalculat ruta de aici până la destinație.'); } save(); renderTrip(); return; }
   }
   if (mm.eid && gpsFresh(L) && t - (L.altAt || L.dep) > 3 && refreshAlts(L, t)) { const hadBetter = L.betterTold; if (L.better && !hadBetter) { L.betterTold = true; toast(`Alternativa ${L.better.i} este acum cu ~${durTxt(L.better.gain)} mai rapidă.`); } save(); renderTrip(); return; }
-  const dEnd = E.haversine({ lat: c.latitude, lon: c.longitude }, L.destPt || NET.nodes[L.dest]);
-  const rArr = L.destPt ? Math.min(0.5, Math.max(0.15, E.haversine(NET.nodes[L.dest], L.destPt) + 0.12)) : 0.15;   // destinația poate fi la câteva sute de metri de drumul principal
-  if (c.accuracy <= 80 && (dEnd < rArr || (!L.destPt && mm.eid && NET.edges[mm.eid].to === L.dest && mm.s > NET.edges[mm.eid].len - 0.05))) { L.nearEnd = (L.nearEnd || 0) + 1; if (L.nearEnd >= 2) { save(); arrive(true); return; } } else L.nearEnd = 0;
+  const here = { lat: c.latitude, lon: c.longitude }, dEnd = E.haversine(here, L.destPt || NET.nodes[L.dest]);
+  // oprit (motorul oprit / parcat): viteza netezită sub 3 km/h de cel puțin 3 minute
+  const vNow = mm.v != null && t - mm.vAt < 0.5 ? mm.v : null;
+  if (vNow != null && vNow < 3 && c.accuracy <= 60) { if (L.stillSince == null) L.stillSince = t; } else if (vNow != null && vNow >= 6) L.stillSince = null;
+  const still = L.stillSince != null && t - L.stillSince >= 3;
+  if (L.area) {
+    // destinația e o localitate întreagă (ex. „Corbeanca”), nu o adresă: NU mă opresc în centrul ei; drumul se încheie
+    // când mașina stă pe loc în zona localității, iar locul acela devine, de acum, destinația exactă a drumului
+    if (still && E.haversine(here, NET.nodes[L.dest]) < 5) { learnDest(L, here); save(); arrive(true, L.stillSince); return; }
+  } else {
+    const rArr = Math.min(0.5, Math.max(0.15, E.haversine(NET.nodes[L.dest], L.destPt) + 0.12));   // adresa poate fi la câteva sute de metri de drumul principal
+    if (still && dEnd < 1.2) { save(); arrive(true, L.stillSince); return; }   // parcat puțin mai departe de adresa aleasă
+  if (c.accuracy <= 80 && dEnd < rArr) { L.nearEnd = (L.nearEnd || 0) + 1; if (L.nearEnd >= 2) { save(); arrive(true); return; } } else L.nearEnd = 0; }
   save(); drawTrip(); pullTraffic(); if (S.fam) famPushPosition(L, liveState(L));
 }
 function startGeo() {
@@ -874,18 +895,48 @@ function stopGeo() { if (GEO != null) { navigator.geolocation.clearWatch(GEO); G
 async function keepAwake() { try { if ('wakeLock' in navigator && S.live) WAKE = await navigator.wakeLock.request('screen'); } catch (e) { } }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.live) { keepAwake(); startGeo(); } });
 /* harta de pe drum: centrată pe mașină, cu drumul parcurs, ruta înainte (colorată după trafic) și semnalările */
-const TV = { km: 3 };
+const TV = { km: 2 };
 function strokeEdge(g, eid, X, Y, first) { const pts = trk().geom(eid); pts.forEach((p, i) => (first && !i ? g.moveTo(X(p.lon), Y(p.lat)) : g.lineTo(X(p.lon), Y(p.lat)))); }
+/* hartă orientată în sensul de mers: rotesc pânza în jurul unui punct; simbolurile se desenează apoi drepte */
+function rotView(g, cx, cy, rot) { g.translate(cx, cy); g.rotate(rot); g.translate(-cx, -cy); }
+const rotPt = (x, y, cx, cy, rot) => { const c = Math.cos(rot), s = Math.sin(rot), dx = x - cx, dy = y - cy; return { x: cx + dx * c - dy * s, y: cy + dx * s + dy * c }; };
+const smoothAng = (a0, a1, k) => { if (a0 == null) return a1; let d = a1 - a0; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a0 + d * k; };
+/* numele drumurilor principale din imagine, scrise de-a lungul lor (cel mult câteva, fără suprapuneri) */
+function roadLabels(g, edges, X, Y, rot, cx, cy, dpr, W, H, avoid) {
+  const by = {};
+  for (const eid of edges) { const e = NET.edges[eid]; if (!e.name || e.len < 0.08) continue; (by[e.name] = by[e.name] || []).push(eid); }
+  const placed = (avoid || []).map(p => ({ x: p.x, y: p.y })); let n = 0; g.font = `700 ${11 * dpr}px "Overpass"`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const names = Object.entries(by).map(([nm, l]) => [nm, l.sort((a, b) => NET.edges[b].len - NET.edges[a].len), l.reduce((t, e) => t + NET.edges[e].len, 0)]).sort((a, b) => b[2] - a[2]);
+  for (const [name, list] of names) { if (n >= 10) break;
+    for (const eid of list.slice(0, 8)) {   // încerc mai multe bucăți ale drumului, până găsesc un loc liber în imagine
+      const m = trk().posOn(eid, NET.edges[eid].len / 2), p = rotPt(X(m.lon), Y(m.lat), cx, cy, rot);
+      if (p.x < 50 * dpr || p.x > W - 80 * dpr || p.y < 24 * dpr || p.y > H - 24 * dpr || placed.some(q => Math.hypot(q.x - p.x, q.y - p.y) < 80 * dpr)) continue;
+      placed.push(p); n++; let a = m.ang + rot; while (a > Math.PI / 2) a -= Math.PI; while (a < -Math.PI / 2) a += Math.PI;
+      const txt = name.length > 26 ? name.slice(0, 25) + '…' : name;
+      g.save(); g.translate(p.x, p.y); g.rotate(a); g.lineWidth = 3.5 * dpr; g.strokeStyle = 'rgba(255,255,255,.92)'; g.strokeText(txt, 0, 0); g.fillStyle = '#3b4652'; g.fillText(txt, 0, 0); g.restore(); break;
+    }
+  }
+}
+/* săgeata de navigare (în sus = sensul de mers) */
+function navArrow(g, x, y, dpr, ang, col) {
+  g.save(); g.translate(x, y); g.rotate(ang); g.fillStyle = '#fff'; g.beginPath(); g.arc(0, 0, 17 * dpr, 0, 7); g.fill();
+  g.fillStyle = col; g.beginPath(); g.moveTo(0, -12 * dpr); g.lineTo(9 * dpr, 10 * dpr); g.lineTo(0, 5 * dpr); g.lineTo(-9 * dpr, 10 * dpr); g.closePath(); g.fill(); g.restore();
+}
 function drawTripMap(cv, L, ls) {
   const r = cv.getBoundingClientRect(); if (!r.width) return;
   const dpr = devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr;
   const g = cv.getContext('2d'), W = cv.width, H = cv.height, c = ls.pos || NET.nodes[NET.edges[L.path[0]].from];
-  const kx = Math.cos(c.lat * Math.PI / 180), sc = W / (TV.km / 111.32 / kx), X = lon => W / 2 + (lon - c.lon) * sc * 1, Y = lat => H * 0.58 - (lat - c.lat) * (W / (TV.km / 110.57));
-  const latR = TV.km / 110.57 * (H / W) * 0.75, lonR = TV.km / 111.32 / kx * 0.75;
+  const kx = Math.cos(c.lat * Math.PI / 180), sc = W / (TV.km / 111.32 / kx), cx = W / 2, cy = H * 0.66;
+  const X = lon => cx + (lon - c.lon) * sc, Y = lat => cy - (lat - c.lat) * (W / (TV.km / 110.57));
+  // sensul de mers în sus (netezit, ca harta să nu se zbată); fără direcție sigură rămâne cum era
+  if (ls.pos && ls.ok && ls.pos.ang != null && !ls.pos.raw) TV.rot = smoothAng(TV.rot, -Math.PI / 2 - ls.pos.ang, TV.rot == null ? 1 : 0.35);
+  const rot = TV.north ? 0 : (TV.rot || 0);
+  const R = TV.km * Math.max(1, H / W) * 0.95, latR = R / 110.57, lonR = R / 111.32 / kx;   // destul cât să acopere colțurile după rotire
   g.fillStyle = '#e9edf1'; g.fillRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'round';
-  drawBase(g, X, Y, c.lat - latR * 1.4, c.lat + latR * 1.4, c.lon - lonR * 1.4, c.lon + lonR * 1.4, dpr, TV.km, () => { TRIPDRAW = 0; drawTrip(); });
-  const done = new Set(), date = L.date, ctx = E.ctxFor(date, L.weather, false), t = ls.now, abs = E.dayIndex(date) * 1440 + Math.floor(t), marks = [];
-  for (const eid of trk().inBox(c.lat - latR, c.lat + latR, c.lon - lonR, c.lon + lonR)) {
+  g.save(); rotView(g, cx, cy, rot);
+  drawBase(g, X, Y, c.lat - latR, c.lat + latR, c.lon - lonR, c.lon + lonR, dpr, TV.km, () => { TRIPDRAW = 0; drawTrip(); });
+  const done = new Set(), date = L.date, ctx = E.ctxFor(date, L.weather, false), t = ls.now, abs = E.dayIndex(date) * 1440 + Math.floor(t), marks = [], inView = trk().inBox(c.lat - latR, c.lat + latR, c.lon - lonR, c.lon + lonR);
+  for (const eid of inView) {
     const e = NET.edges[eid];
     const k = e.from < e.to ? e.from + '|' + e.to : e.to + '|' + e.from; if (done.has(k)) continue; done.add(k);
     g.strokeStyle = '#fff'; g.lineWidth = (['A', 'C', 'N', 'M'].includes(e.cls) ? 4 : 2) * dpr; g.beginPath(); strokeEdge(g, eid, X, Y, true); g.stroke();
@@ -894,15 +945,19 @@ function drawTripMap(cv, L, ls) {
   (L.alts || []).forEach((p, i) => { if (i === (L.sel || 0)) return; g.globalAlpha = .5; g.strokeStyle = RCOL[i % 3]; g.lineWidth = 5 * dpr; g.beginPath(); p.forEach((eid, j) => strokeEdge(g, eid, X, Y, !j)); g.stroke(); g.globalAlpha = 1; });
   const drv = (L.mm && L.mm.driven) || []; if (drv.length) { g.strokeStyle = 'rgba(11,31,77,.45)'; g.lineWidth = 6 * dpr; g.beginPath(); drv.slice(-400).forEach((eid, j) => strokeEdge(g, eid, X, Y, !j)); g.stroke(); }
   const k0 = Math.max(0, L.path.indexOf(L.mm && L.mm.eid)); let tt = t;
-  for (const eid of L.path.slice(k0)) { const e = NET.edges[eid], st = M.segState(eid, date, tt, ctx), slow = st.med / (e.len / e.v0 * 60); tt += st.med;
-    g.strokeStyle = slow > 2 ? '#dc2626' : slow > 1.4 ? '#f59e0b' : '#1d4ed8'; g.lineWidth = 7 * dpr; g.beginPath(); strokeEdge(g, eid, X, Y, true); g.stroke(); }
+  for (const eid of L.path.slice(k0)) { const e = NET.edges[eid], st = M.segState(eid, date, tt, ctx), md = st.med * bias(eid, date, tt), slow = md / (e.len / e.v0 * 60); tt += md;
+    g.strokeStyle = slow >= 3 ? '#dc2626' : slow >= 2 ? '#f59e0b' : '#1d4ed8'; g.lineWidth = 7 * dpr; g.beginPath(); strokeEdge(g, eid, X, Y, true); g.stroke(); }
+  g.restore();
+  roadLabels(g, inView, X, Y, rot, cx, cy, dpr, W, H, [ls.pos ? rotPt(X(ls.pos.lon), Y(ls.pos.lat), cx, cy, rot) : null, ...marks.map(m => rotPt(m.x, m.y, cx, cy, rot))].filter(Boolean));
   g.font = `${18 * dpr}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (const m of marks) { g.fillStyle = '#fff'; g.beginPath(); g.arc(m.x, m.y, 15 * dpr, 0, 7); g.fill(); g.fillText(CAUSE_ICON[restrKind(m.r)] || '⚠️', m.x, m.y + 1); }
-  const B = NET.nodes[L.dest]; if (B) { g.fillStyle = '#dc2626'; g.beginPath(); g.arc(X(B.lon), Y(B.lat), 11 * dpr, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = `800 ${12 * dpr}px "Overpass"`; g.fillText('B', X(B.lon), Y(B.lat) + 1); }
-  if (ls.pos) { const x = X(ls.pos.lon), y = Y(ls.pos.lat), est = !ls.ok, accPx = L.gps && L.gps.acc ? Math.min(60 * dpr, L.gps.acc / 1000 * W / TV.km) : 0;
-    if (!est && accPx > 6 * dpr) { g.fillStyle = 'rgba(21,128,61,.12)'; g.beginPath(); g.arc(x, y, accPx, 0, 7); g.fill(); }
-    g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 15 * dpr, 0, 7); g.fill(); g.strokeStyle = est ? '#1d4ed8' : '#15803d'; g.lineWidth = 2.5 * dpr; g.stroke();
-    g.font = `${17 * dpr}px sans-serif`; g.fillText('🚗', x, y + 1); }
+  for (const m of marks) { const p = rotPt(m.x, m.y, cx, cy, rot); g.fillStyle = '#fff'; g.beginPath(); g.arc(p.x, p.y, 15 * dpr, 0, 7); g.fill(); g.fillText(CAUSE_ICON[restrKind(m.r)] || '⚠️', p.x, p.y + 1); }
+  const B = L.destPt && !L.area ? L.destPt : NET.nodes[L.dest]; if (B) { const p = rotPt(X(B.lon), Y(B.lat), cx, cy, rot); g.fillStyle = '#dc2626'; g.beginPath(); g.arc(p.x, p.y, 11 * dpr, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = `800 ${12 * dpr}px "Overpass"`; g.fillText('B', p.x, p.y + 1); }
+  if (ls.pos) { const p = rotPt(X(ls.pos.lon), Y(ls.pos.lat), cx, cy, rot), est = !ls.ok, accPx = L.gps && L.gps.acc ? Math.min(60 * dpr, L.gps.acc / 1000 * W / TV.km) : 0;
+    if (!est && accPx > 6 * dpr) { g.fillStyle = 'rgba(21,128,61,.12)'; g.beginPath(); g.arc(p.x, p.y, accPx, 0, 7); g.fill(); }
+    navArrow(g, p.x, p.y, dpr, ls.pos.ang != null && !ls.pos.raw ? ls.pos.ang + Math.PI / 2 + rot : 0, est ? '#1d4ed8' : '#15803d'); }
+  if (rot) { // busola: unde e nordul
+    const bx = 24 * dpr, by = 24 * dpr; g.save(); g.translate(bx, by); g.rotate(rot); g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.arc(0, 0, 14 * dpr, 0, 7); g.fill();
+    g.fillStyle = '#dc2626'; g.beginPath(); g.moveTo(0, -11 * dpr); g.lineTo(5 * dpr, 0); g.lineTo(-5 * dpr, 0); g.closePath(); g.fill(); g.fillStyle = '#1f262e'; g.font = `800 ${8 * dpr}px "Overpass"`; g.fillText('N', 0, 6 * dpr); g.restore(); }
   g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillStyle = 'rgba(27,31,36,.5)'; g.font = `600 ${10 * dpr}px "Overpass"`; g.fillText('© OpenStreetMap contributors', 8 * dpr, H - 8 * dpr);
 }
 /* drumul în față, pe bucăți: 0–2 km, 2–5 km, 5–10 km (cât rămâne), cu fața verde / galbenă / roșie */
@@ -922,36 +977,40 @@ function noticesOn(eid) { // semnalările active pe acest tronson, în acest sen
   return out;
 }
 function aheadInfo(L, ls) {
-  const ctx = E.ctxFor(L.date, L.weather, false), mm = L.mm || {}, k = Math.max(0, L.path.indexOf(mm.eid)), rest = L.path.slice(k), T = S.traffic && S.traffic.date === L.date ? S.traffic.edges || {} : {};
+  const ctx = E.ctxFor(L.date, L.weather, false), mm = L.mm || {}, k = Math.max(0, L.path.indexOf(mm.eid)), rest = L.path.slice(k), T = liveEdges(L.date);
   const total = ls.remKm, bounds = [[0, 2], [2, 5], [5, 10]].filter(b => b[0] < total - 0.05).map(([a, b]) => [a, Math.min(b, total)]);
   const ch = bounds.map(([a, b]) => ({ a, b, t: 0, f: 0, km: 0, inc: [] }));
   let pos = 0, tt = ls.now; const incs = [];
   rest.forEach((eid, i) => {
     const e = NET.edges[eid], part = i === 0 && mm.eid === eid && ls.ok ? Math.max(0, 1 - mm.s / e.len) : 1, len = e.len * part; if (len <= 0) return;
-    const live = T[eid], med = (live ? e.len / live[0] * 60 : M.segState(eid, L.date, tt, ctx).med * ls.factor) * part, free = len / e.v0 * 60;
+    const live = T[eid], fk = Math.pow(ls.factor, pos < 3 ? 1 : pos < 6 ? 0.5 : 0.35);   // abaterea de azi contează mai ales în apropiere
+    const med = (live ? e.len / live[0] * 60 : M.segState(eid, L.date, tt, ctx).med * bias(eid, L.date, tt) * fk) * part, free = len / e.v0 * 60;
+    if (live) ch.forEach(c => { if (pos < c.b && pos + len > c.a) c.live = true; });
     for (const n of noticesOn(eid)) if (!incs.some(x => x.kind === n.kind && Math.abs(x.at - pos) < 0.5)) incs.push({ kind: n.kind, at: pos, eid, mine: n.mine });
     for (const r of M.activeRestr(eid, E.dayIndex(L.date) * 1440 + tt).list) { const kd = restrKind(r); if (!incs.some(x => x.kind === kd && Math.abs(x.at - pos) < 0.5)) incs.push({ kind: kd, at: pos, eid }); }
     for (const c of ch) { const o = Math.max(0, Math.min(pos + len, c.b) - Math.max(pos, c.a)); if (o > 0) { const w = o / len; c.t += med * w; c.f += free * w; c.km += o; } }
     pos += len; tt += med;
   });
   for (const c of ch) { c.inc = incs.filter(x => x.at >= c.a && x.at < c.b); const ratio = c.t / Math.max(0.01, c.f);
-    c.v = c.km / Math.max(0.01, c.t) * 60; c.level = c.inc.some(x => SEVERE[x.kind]) || ratio >= 1.8 ? 'r' : ratio >= 1.35 || c.inc.some(x => x.kind === 'coada' || x.kind === 'pericol') ? 'y' : 'g'; }
+    c.v = c.km / Math.max(0.01, c.t) * 60; // pragurile țin cont că în oraș, cu semafoare, se merge normal la 50–60% din viteza legală:
+    // roșu = sub ~1/3 din viteza legală (coloană), galben = sub ~1/2 (trafic îngreunat)
+    c.level = c.inc.some(x => SEVERE[x.kind]) || ratio >= 3 ? 'r' : ratio >= 2 || c.inc.some(x => x.kind === 'coada' || x.kind === 'pericol') ? 'y' : 'g'; }
   const overall = ch.some(c => c.level === 'r') ? 'r' : ch.some(c => c.level === 'y') ? 'y' : 'g';
   return { ch, incs, overall };
 }
 /* viteza traficului în zonă: măsurată de participanți în ultimele 45 min (dacă există), altfel estimată de model */
 function zoneSpeed(L, ls) {
-  const T = S.traffic && S.traffic.date === L.date ? S.traffic.edges || {} : {}, p = ls.pos;
+  const T = liveEdges(L.date), p = ls.pos;
   if (p) { const d = 0.009, v = []; for (const eid of trk().inBox(p.lat - d, p.lat + d, p.lon - d * 1.4, p.lon + d * 1.4)) if (T[eid]) v.push(T[eid][0]); if (v.length >= 2) { v.sort((a, b) => a - b); return { v: v[Math.floor(v.length / 2)], measured: true, n: v.length }; } }
   const eid = L.mm && L.mm.eid; if (!eid) return null;
   const e = NET.edges[eid], st = M.segState(eid, L.date, ls.now, E.ctxFor(L.date, L.weather, false));
-  return { v: e.len / (st.med * ls.factor) * 60, free: e.v0, measured: false, name: e.name };
+  return { v: e.len / (st.med * bias(eid, L.date, ls.now) * ls.factor) * 60, free: e.v0, measured: false, name: e.name };
 }
 function drawTrip() {
   const L = S.live, cv = $('tripMap'); if (!L || !cv) return;
   if (L.local) { const ls = liveState(L), set = (id, h) => { const el = $(id); if (el) el.innerHTML = h; };
     const remMin = Math.max(0, Math.round(ls.eta - ls.now)); set('tvE', fmt(Math.floor(ls.now) + remMin)); set('tvT', durTxt(ls.now - L.dep)); set('tvV', ls.v != null ? Math.round(ls.v) + '<small> km/h</small>' : '—');
-    set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', `${kmTxt(ls.remKm)}<small> · ${durTxt(remMin)}</small>`);
+    set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', `${kmTxt(ls.remKm)}<small style="display:block;margin-top:2px">${durTxt(remMin)}</small>`);
     set('tripInfo', ls.ok ? `📡 GPS ±${L.gps.acc} m` : L.gpsDenied ? '⚠️ Fără acces la locație' : '⏳ Caut semnalul GPS'); set('tvF', fuelTxt(L));
     const pts = [{ lat: L.destPt.lat, lon: L.destPt.lon, name: 'Destinația' }].concat(ls.pos ? [{ lat: ls.pos.lat, lon: ls.pos.lon, name: 'Eu', me: true }] : []); drawFamMap(cv, pts); return; }
   const nowT = Date.now(); if (nowT - TRIPDRAW < 400) return; TRIPDRAW = nowT;
@@ -967,7 +1026,7 @@ function drawTrip() {
     const cell = $('tvV') && $('tvV').parentElement; if (cell) cell.style.background = over ? 'rgba(224,49,61,.35)' : ''; }
   { const tot = Math.round(etaShown - L.dep); set('tvU', L.usual ? `Tot drumul azi: ~${durTxt(tot)} · de obicei ${durTxt(L.usual)} (${tot - L.usual >= 0 ? '+' : '−'}${durTxt(Math.abs(tot - L.usual))})` : ''); }
   set('tvF', fuelTxt(L));
-  set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', `${kmTxt(ls.remKm)}<small> · ${durTxt(remMin)}</small>`);
+  set('tvA', ls.vAvg != null ? Math.round(ls.vAvg) + '<small> km/h</small>' : '—'); set('tvD', kmTxt(ls.dist || 0)); set('tvR', `${kmTxt(ls.remKm)}<small style="display:block;margin-top:2px">${durTxt(remMin)}</small>`);
   const z = zoneSpeed(L, ls); set('tvZ', z ? Math.round(z.v) + '<small> km/h</small>' : '—');
   set('tvZn', z && z.measured ? 'Trafic măsurat aici' : 'Trafic estimat aici');
   const ah = aheadInfo(L, ls), F = FACE[ah.overall];
@@ -1028,7 +1087,7 @@ function renderTrip() {
     <div class="road"><div class="lane" id="tvLane"></div><div class="parts" id="tvParts"></div></div>
     <div id="tvHz"></div><div id="tvInc"></div><div id="tvWx"></div><div id="tripRoad"></div>
     ${L.better ? `<div class="note" style="background:var(--ybg);color:var(--ink)">↪️ Alternativa ${L.better.i} este acum cu ~${durTxt(L.better.gain)} mai rapidă decât drumul pe care sunteți.</div>` : ''}
-    <div class="mapwrap"><canvas class="rmap" id="tripMap" style="height:220px"></canvas><div class="mapbtns"><button id="tZin" aria-label="Mărește">+</button><button id="tZout" aria-label="Micșorează">−</button></div></div>
+    <div class="mapwrap"><canvas class="rmap" id="tripMap" style="height:300px"></canvas><div class="mapbtns"><button id="tZin" aria-label="Mărește">+</button><button id="tZout" aria-label="Micșorează">−</button><button id="tNorth" aria-label="Orientarea hărții">🧭</button></div></div>
     <p class="muted" id="tripInfo" style="margin:6px 0 0;font-size:13px"></p>
     ${S.fam && S.fam.me && S.fam.me.approved && S.fam.me.sharing ? '<p class="muted" style="margin:4px 0 0;font-size:13px">👪 Familia vă vede poziția și ora de sosire în timpul acestui drum.</p>' : ''}
     <div class="kicker" style="margin-top:14px">Semnalați pe sensul dumneavoastră de mers</div>
@@ -1040,14 +1099,15 @@ function renderTrip() {
     <p class="muted" style="font-size:13px">Țineți aplicația deschisă pe ecran: cu ecranul blocat, telefonul oprește GPS-ul pentru aplicațiile web.</p></div>`;
   $('s-trip').querySelectorAll('.ropt').forEach(r => r.onclick = () => { const i = +r.dataset.i; if (i === (L.sel || 0)) return; L.sel = i; L.path = L.alts[i]; save(); renderTrip(); });
   $('s-trip').querySelectorAll('[data-r]').forEach(b => b.onclick = () => reportNow(b.dataset.r));
-  $('tZin').onclick = () => { TV.km = Math.max(0.8, TV.km / 1.6); TRIPDRAW = 0; drawTrip(); }; $('tZout').onclick = () => { TV.km = Math.min(40, TV.km * 1.6); TRIPDRAW = 0; drawTrip(); };
+  $('tNorth').onclick = () => { TV.north = !TV.north; TRIPDRAW = 0; drawTrip(); toast(TV.north ? 'Harta: nordul în sus.' : 'Harta: în sensul de mers.'); };
+  $('tZin').onclick = () => { TV.km = Math.max(0.5, TV.km / 1.6); TRIPDRAW = 0; drawTrip(); }; $('tZout').onclick = () => { TV.km = Math.min(40, TV.km * 1.6); TRIPDRAW = 0; drawTrip(); };
   $('bDest').onclick = () => { $('destBox').style.display = 'block'; bindPickers($('destBox')); $('destBox').scrollIntoView({ behavior: 'smooth' }); };
   $('tDestGo').onclick = () => changeDest($('tDest').value);
   $('bArr').onclick = () => arrive(false); $('bCan').onclick = () => { stopGeo(); S.live = null; save(); famEndTrip(false); renderTrip(); };
   TRIPDRAW = 0; setTimeout(drawTrip, 30); startGeo(); pullTraffic();
 }
-function startTrip(o, d, name, ta, h) {
-  const date = todayStr(), dep = nowMin(), dpt = destPoint(d), opt = S.lastFix && Date.now() - S.lastFix.at < 180000 ? S.lastFix : NET.nodes[o];
+function startTrip(o, d, name, ta, h, hd) {   // hd: obiceiul a cărui destinație este (pentru locul exact învățat), chiar dacă plecarea e din alt loc
+  hd = hd || h; const known = (hd && hd.d === d && hd.destPt) || (S.pts && S.pts[d]), date = todayStr(), dep = nowMin(), dpt = known || destPoint(d), opt = S.lastFix && Date.now() - S.lastFix.at < 180000 ? S.lastFix : NET.nodes[o];
   if (o === d || E.haversine(opt, dpt) < 2) { // drum scurt, pe străzi locale (care nu sunt în rețeaua de drumuri principale)
     S.live = { local: true, id: S.pid + '-' + Date.now(), name, orig: o, dest: d, destPt: { lat: dpt.lat, lon: dpt.lon }, ta, date, dep, weather: weatherFor(date, dep), path: [], alts: [], mm: {}, obs: [], pred: { madeAt: new Date().toISOString(), deadline: ta, ta } };
     save(); keepAwake(); renderTrip(); toast('Drum scurt: urmăresc distanța până la destinație. Drum bun!'); return;
@@ -1058,7 +1118,7 @@ function startTrip(o, d, name, ta, h) {
   const order = alts.map((pth, i) => ({ i, t: M.walk(pth, date, dep, ctx).total })).sort((a, b) => a.t - b.t).map(x => alts[x.i]);
   const f = h ? forecast(h, date) : null, rec = f && (f.early ? f.early.t0 : f.usual);
   const usual = usualDur(o, d) || (f && f.typ ? Math.round(f.typ.med) : null);
-  S.live = { id: S.pid + '-' + Date.now(), name, orig: o, dest: d, ta, usual, usualMed: f && f.cur ? f.cur.med : null, lvl: f ? f.level : null, alts: order, sel: 0, path: order[0], date, dep, weather: weatherFor(date, dep), destPt: { lat: dpt.lat, lon: dpt.lon }, mm: {}, obs: [],
+  S.live = { id: S.pid + '-' + Date.now(), name, orig: o, dest: d, ta, usual, usualMed: f && f.cur ? f.cur.med : null, lvl: f ? f.level : null, alts: order, sel: 0, path: order[0], date, dep, weather: weatherFor(date, dep), destPt: { lat: dpt.lat, lon: dpt.lon }, area: !known, hid: hd ? hd.id : null, mm: {}, obs: [],
     pred: { madeAt: new Date().toISOString(), median: s.med, q: s.q, tau: 0.95, deadline: ta, ta, recT0: rec, version: LR() ? LR().version : 'a-priori', followed: rec != null && dep <= rec + 2 } };
   save(); keepAwake(); renderTrip(); toast('Drum bun! Puneți telefonul în suport.');
 }
@@ -1066,7 +1126,7 @@ function startTrip(o, d, name, ta, h) {
    spre aceeași destinație, dar fără ora obișnuită de sosire (nu are sens „rezervă” sau „întârziere” față de ea). */
 function depart(h) {
   const go = (o, here) => { const ta = parseT(h.ta), now = nowMin(), useTa = here && ta != null && ta > now && ta - now <= 240;
-    startTrip(o, h.d, h.name, useTa ? ta : null, useTa ? h : null); if (S.live) { S.live.habitO = h.o; S.live.originChecked = here !== null; save(); }
+    startTrip(o, h.d, h.name, useTa ? ta : null, useTa ? h : null, h); if (S.live) { S.live.habitO = h.o; S.live.originChecked = here !== null; save(); }
     if (here === false) toast('Nu plecați din locul obișnuit: am calculat ruta de unde sunteți, fără ora obișnuită de sosire.'); };
   if (!navigator.geolocation) return go(h.o, null);
   let done = false; const fallback = setTimeout(() => { if (!done) { done = true; go(h.o, null); } }, 7000);
@@ -1108,8 +1168,13 @@ function reportNow(kind) {
   save(); enqueue('report', S.reports[S.reports.length - 1]); rebuild(); TRIPDRAW = 0; drawTrip();
   toast(`Vă mulțumim! ${KIND_LABEL[kind]}${e.name ? ' pe ' + e.name : ''}, ${PLT.dirName(E, NET, eid)}${est ? ' (poziție estimată, fără GPS)' : ''}.`);
 }
-function arrive(auto) {
-  const L = S.live; if (!L) return; const arr = nowMin(); let dur = arr - L.dep; if (dur <= 0) dur += 1440;
+/* locul exact în care se încheie de obicei un drum spre o localitate (casa din Corbeanca, nu centrul comunei) */
+function learnDest(L, p) {
+  const h = L.hid != null ? (S.habits || []).find(x => x.id === L.hid) : null;
+  if (h) { h.destPt = { lat: Math.round(p.lat * 1e5) / 1e5, lon: Math.round(p.lon * 1e5) / 1e5 }; toast(`Am reținut unde ajungeți de obicei (${h.name.toLowerCase()}): data viitoare drumul se încheie acolo.`); }
+}
+function arrive(auto, tArr) {   // tArr: ora reală a sosirii (când mașina s-a oprit), nu ora la care am confirmat-o
+  const L = S.live; if (!L) return; const arr = tArr != null ? tArr : nowMin(); let dur = arr - L.dep; if (dur <= 0) dur += 1440;
   stopGeo();
   if (L.local) { S.lastSummary = { at: Date.now(), name: 'Drum scurt spre ' + placeName(L.dest), dur: Math.round(nowMin() - L.dep), usual: null, idle: L.idle || 0, fuel: fuelTxt(L) }; S.live = null; save(); famEndTrip(true); renderTrip(); toast((auto ? 'Am detectat sosirea. ' : '') + 'Ați ajuns.'); return; }
   const mm = L.mm || {}, driven = mm.driven && mm.driven.length ? mm.driven : null;
@@ -1236,12 +1301,13 @@ async function pullFamily() {
   } catch (e) { console.warn('family', e.message); }
 }
 async function famCall(fn, args) { const s = await session(); if (!s) throw new Error('offline'); const r = await s.c.rpc(fn, args); if (r.error) throw r.error; return r.data; }
-/* în timpul drumului: ultima poziție (nu traseul), cel mult o dată la 15 secunde */
+/* în timpul drumului: ultima poziție (nu traseul), cel mult o dată la 10 secunde */
 async function famPushPosition(L, ls) {
-  if (!S.fam || !S.fam.me || !S.fam.me.approved || !S.fam.me.sharing || !L.gps || Date.now() - FAMPOS < 15000) return;
+  if (!S.fam || !S.fam.me || !S.fam.me.approved || !S.fam.me.sharing || !L.gps || Date.now() - FAMPOS < 10000) return;
   FAMPOS = Date.now();
   try { const s = await session(); if (!s) return;
-    await s.c.from('live_positions').upsert({ participant: s.uid, lat: Math.round(L.gps.lat * 1e5) / 1e5, lon: Math.round(L.gps.lon * 1e5) / 1e5, acc: L.gps.acc, speed_kmh: ls.v != null ? Math.round(ls.v) : null,
+    const P = ls && ls.ok && ls.pos && !ls.pos.raw ? ls.pos : L.gps;   // pe drum: poziția pusă pe stradă (mai clară pe hartă decât punctul GPS brut)
+    await s.c.from('live_positions').upsert({ participant: s.uid, lat: Math.round(P.lat * 1e5) / 1e5, lon: Math.round(P.lon * 1e5) / 1e5, acc: L.gps.acc, speed_kmh: ls.v != null ? Math.round(ls.v) : null,
       dest_name: placeName(L.dest), eta_min: Math.round(ls.eta), ta_min: L.ta, status: 'pe drum', day: todayStr(), updated_at: new Date().toISOString() });
   } catch (e) { }
 }
@@ -1253,23 +1319,50 @@ async function famEndTrip(arrived) {
   } catch (e) { }
 }
 function famAgo(ts) { const m = Math.round((Date.now() - new Date(ts).getTime()) / 60000); return m < 1 ? 'acum' : m < 60 ? `acum ${m} min` : `acum ${Math.floor(m / 60)} h`; }
+/* harta familiei: urmărește un membru (implicit cel aflat pe drum), la nivel de stradă, orientată în sensul lui de mers */
+const FV = { sel: null, km: 1.2, north: false }, FAMH = {};
+function famTrack(pos) { // istoricul pozițiilor primite (doar în memoria acestui telefon): direcția de mers și urma
+  for (const p of pos) { const h = FAMH[p.participant] || (FAMH[p.participant] = []), last = h[h.length - 1];
+    if (last && last.u === p.updated_at) continue;
+    if (!last || E.haversine(last, p) > 0.015) h.push({ lat: p.lat, lon: p.lon, u: p.updated_at }); if (h.length > 40) h.shift(); }
+}
+function famAng(pid) { const h = FAMH[pid] || []; const b = h[h.length - 1]; if (!b) return null;
+  for (let i = h.length - 2; i >= 0; i--) { const a = h[i]; if (E.haversine(a, b) >= 0.025) return Math.atan2(-(b.lat - a.lat), (b.lon - a.lon) * Math.cos(b.lat * Math.PI / 180)); } return null; }
+function whereTxt(lat, lon) { // „pe Calea Bucureștilor, lângă Otopeni”
+  let road = null, bd = 0.08; for (const eid of trk().near(lat, lon)) { const e = NET.edges[eid]; if (!e.name) continue; const p = trk().projEdge(eid, lat, lon); if (p && p.d < bd) { bd = p.d; road = e.name; } }
+  const loc = nearestPlaceName(lat, lon); return (road ? 'pe ' + road : 'pe o stradă locală') + (loc ? ', ' + (road ? 'lângă ' : 'lângă ') + loc : '');
+}
 function drawFamMap(cv, pts) {
   const r = cv.getBoundingClientRect(); if (!r.width || !pts.length) return;
   const dpr = devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr;
-  const g = cv.getContext('2d'), W = cv.width, H = cv.height;
-  let la0 = Math.min(...pts.map(p => p.lat)), la1 = Math.max(...pts.map(p => p.lat)), lo0 = Math.min(...pts.map(p => p.lon)), lo1 = Math.max(...pts.map(p => p.lon));
-  const pad = 0.01; la0 -= pad; la1 += pad; lo0 -= pad * 1.4; lo1 += pad * 1.4;
-  const kx = Math.cos((la0 + la1) / 2 * Math.PI / 180), sx = W / ((lo1 - lo0) * kx), sy = H / (la1 - la0), sc = Math.min(sx, sy);
-  const cx = (lo0 + lo1) / 2, cy = (la0 + la1) / 2, X = lon => W / 2 + (lon - cx) * kx * sc, Y = lat => H / 2 - (lat - cy) * sc;
-  g.fillStyle = '#e9edf1'; g.fillRect(0, 0, W, H); g.lineCap = 'round';
-  drawBase(g, X, Y, la0, la1, lo0, lo1, dpr, (lo1 - lo0) * kx * 111.32, () => { const c2 = $(cv.id); if (c2) drawFamMap(c2, pts); });
-  const seen = new Set();
-  for (const eid of trk().inBox(la0, la1, lo0, lo1)) { const e = NET.edges[eid], k = e.from < e.to ? e.from + e.to : e.to + e.from; if (seen.has(k)) continue; seen.add(k);
-    g.strokeStyle = '#fff'; g.lineWidth = (['A', 'C', 'N', 'M'].includes(e.cls) ? 3.5 : 1.6) * dpr; g.beginPath(); strokeEdge(g, eid, X, Y, true); g.stroke(); }
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (const p of pts) { const x = X(p.lon), y = Y(p.lat);
-    g.fillStyle = p.me ? '#0b4ea2' : p.status === 'a ajuns' ? '#147a42' : '#c3242f'; g.beginPath(); g.arc(x, y, 17 * dpr, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 3 * dpr; g.stroke();
-    g.fillStyle = '#fff'; g.font = `800 ${14 * dpr}px "Overpass"`; g.fillText((p.name || '?').slice(0, 1).toUpperCase(), x, y + 1); }
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height, sel = pts.find(p => p.pid === FV.sel);
+  let c, km, rot = 0, cx = W / 2, cy = H / 2;
+  if (sel) { c = sel; km = FV.km; if (!FV.north && sel.ang != null) { rot = -Math.PI / 2 - sel.ang; cy = H * 0.62; } }
+  else { let la0 = Math.min(...pts.map(p => p.lat)), la1 = Math.max(...pts.map(p => p.lat)), lo0 = Math.min(...pts.map(p => p.lon)), lo1 = Math.max(...pts.map(p => p.lon));
+    c = { lat: (la0 + la1) / 2, lon: (lo0 + lo1) / 2 }; const kx0 = Math.cos(c.lat * Math.PI / 180);
+    km = Math.max(1.2, (lo1 - lo0) * 111.32 * kx0 * 1.35, (la1 - la0) * 110.57 * 1.35 * W / H); }
+  const kx = Math.cos(c.lat * Math.PI / 180), sc = W / (km / 111.32 / kx), sy = W / (km / 110.57);
+  const X = lon => cx + (lon - c.lon) * sc, Y = lat => cy - (lat - c.lat) * sy;
+  const R = km * Math.max(1, H / W) * 0.95, latR = R / 110.57, lonR = R / 111.32 / kx;
+  g.fillStyle = '#e9edf1'; g.fillRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'round';
+  g.save(); rotView(g, cx, cy, rot);
+  drawBase(g, X, Y, c.lat - latR, c.lat + latR, c.lon - lonR, c.lon + lonR, dpr, km, () => { const c2 = $(cv.id); if (c2) drawFamMap(c2, pts); });
+  const seen = new Set(), inView = trk().inBox(c.lat - latR, c.lat + latR, c.lon - lonR, c.lon + lonR);
+  for (const eid of inView) { const e = NET.edges[eid], k = e.from < e.to ? e.from + e.to : e.to + e.from; if (seen.has(k)) continue; seen.add(k);
+    g.strokeStyle = ['A', 'C'].includes(e.cls) ? '#ffe3a8' : ['N', 'M'].includes(e.cls) ? '#fff7d6' : '#fff'; g.lineWidth = (['A', 'C', 'N', 'M'].includes(e.cls) ? (km < 3 ? 6 : 4) : (km < 3 ? 3.5 : 1.8)) * dpr; g.beginPath(); strokeEdge(g, eid, X, Y, true); g.stroke(); }
+  for (const p of pts) { const h = FAMH[p.pid] || []; if (h.length < 2 || p.status === 'a ajuns') continue;   // urma ultimelor minute
+    g.strokeStyle = p.me ? 'rgba(11,78,162,.55)' : 'rgba(195,36,47,.55)'; g.lineWidth = 4 * dpr; g.setLineDash([2 * dpr, 6 * dpr]); g.beginPath(); h.forEach((q, i) => i ? g.lineTo(X(q.lon), Y(q.lat)) : g.moveTo(X(q.lon), Y(q.lat))); g.stroke(); g.setLineDash([]); }
+  g.restore();
+  roadLabels(g, inView, X, Y, rot, cx, cy, dpr, W, H, pts.flatMap(p => { const q = rotPt(X(p.lon), Y(p.lat), cx, cy, rot); return [q, { x: q.x + 60 * dpr, y: q.y }]; }));
+  for (const p of pts) { const q = rotPt(X(p.lon), Y(p.lat), cx, cy, rot), col = p.me ? '#0b4ea2' : p.status === 'a ajuns' ? '#147a42' : '#c3242f';
+    const accPx = p.acc ? Math.min(70 * dpr, p.acc / 1000 * W / km) : 0; if (accPx > 8 * dpr) { g.fillStyle = 'rgba(195,36,47,.10)'; g.beginPath(); g.arc(q.x, q.y, accPx, 0, 7); g.fill(); }
+    if (p.ang != null && p.status !== 'a ajuns') navArrow(g, q.x, q.y, dpr, p.ang + Math.PI / 2 + rot, col);
+    else { g.fillStyle = col; g.beginPath(); g.arc(q.x, q.y, 13 * dpr, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 3 * dpr; g.stroke(); }
+    const nm = (p.name || '?').split(' ')[0]; g.font = `800 ${12 * dpr}px "Overpass"`; g.textAlign = 'left'; g.textBaseline = 'middle';
+    const tw = g.measureText(nm).width; g.fillStyle = col; g.beginPath(); g.roundRect ? g.roundRect(q.x + 20 * dpr, q.y - 10 * dpr, tw + 12 * dpr, 20 * dpr, 10 * dpr) : g.rect(q.x + 20 * dpr, q.y - 10 * dpr, tw + 12 * dpr, 20 * dpr); g.fill();
+    g.fillStyle = '#fff'; g.fillText(nm, q.x + 26 * dpr, q.y + 1); }
+  if (rot) { const bx = 24 * dpr, by = 24 * dpr; g.save(); g.translate(bx, by); g.rotate(rot); g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.arc(0, 0, 14 * dpr, 0, 7); g.fill();
+    g.fillStyle = '#dc2626'; g.beginPath(); g.moveTo(0, -11 * dpr); g.lineTo(5 * dpr, 0); g.lineTo(-5 * dpr, 0); g.closePath(); g.fill(); g.fillStyle = '#1f262e'; g.font = `800 ${8 * dpr}px "Overpass"`; g.textAlign = 'center'; g.fillText('N', 0, 6 * dpr); g.restore(); }
   g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillStyle = 'rgba(31,38,46,.55)'; g.font = `600 ${10 * dpr}px "Overpass"`; g.fillText('© OpenStreetMap contributors', 8 * dpr, H - 8 * dpr);
 }
 function renderFam() {
@@ -1298,7 +1391,11 @@ function renderFam() {
   }
   const me = F.me, owner = F.owner === F.uid, pos = Object.fromEntries((F.pos || []).map(p => [p.participant, p]));
   const pending = F.members.filter(m => m.minor && !m.approved);
-  const pts = F.members.map(m => { const p = pos[m.participant]; return p ? { lat: p.lat, lon: p.lon, name: m.display_name, status: p.status, me: m.participant === F.uid } : null; }).filter(Boolean);
+  famTrack(F.pos || []);
+  const pts = F.members.map(m => { const p = pos[m.participant]; return p ? { pid: m.participant, lat: p.lat, lon: p.lon, acc: p.acc, name: m.display_name, status: p.status, me: m.participant === F.uid, ang: famAng(m.participant), speed: p.speed_kmh, at: p.updated_at } : null; }).filter(Boolean);
+  // implicit urmăresc pe cineva aflat pe drum (altcineva decât mine, dacă există)
+  if (!FV.picked || !pts.some(p => p.pid === FV.sel)) { const t = pts.filter(p => p.status !== 'a ajuns'); FV.sel = FV.picked === 'all' ? null : ((t.find(p => !p.me) || t[0] || pts.find(p => !p.me) || pts[0] || {}).pid || null); }
+  const selP = pts.find(p => p.pid === FV.sel);
   el.innerHTML = `<div class="card"><div class="kicker">Familia</div>
       ${!me.approved ? '<div class="alertline" style="background:var(--ybg);display:block">⏳ <span>Așteptăm acordul părintelui sau tutorelui. Până atunci, datele dumneavoastră nu se trimit și poziția nu e afișată.</span><button class="btn ghost" id="fAge2" style="margin-top:8px">Am 18 ani sau mai mult: am ales greșit</button></div>' : ''}
       ${me.approved && !me.minor && pending.map(m => `<div class="alertline" style="background:var(--ybg);display:block"><b>${esc(m.display_name)}</b> (sub 18 ani) vrea să intre în grup.
@@ -1307,13 +1404,19 @@ function renderFam() {
       ${F.members.map(m => { const p = pos[m.participant], isMe = m.participant === F.uid;
         const st = !m.approved ? 'așteaptă acordul părintelui' : !m.sharing ? 'partajarea e oprită' : p ? (p.status === 'a ajuns' ? `a ajuns la ${esc(p.dest_name || 'destinație')}, ${famAgo(p.updated_at)}` : `pe drum spre ${esc(p.dest_name || '?')}, sosire ~${fmt(Math.round(p.eta_min))}${p.speed_kmh != null ? `, ${Math.round(p.speed_kmh)} km/h` : ''} · ${famAgo(p.updated_at)}`) : 'nu e pe drum acum';
         return `<div class="next" style="cursor:default"><i class="lamp" style="margin:0;background:${p && m.sharing && m.approved ? (p.status === 'a ajuns' ? 'var(--gl)' : 'var(--rl)') : '#c4ccd4'}"></i><div><b>${esc(m.display_name)}${isMe ? ' (dumneavoastră)' : ''}${m.minor ? ', sub 18 ani' : ''}</b><span>${st}</span></div></div>`; }).join('')}
-      ${pts.length ? '<canvas class="rmap" id="famMap" style="height:260px"></canvas>' : ''}
-      <p class="muted" style="font-size:13px">Pozițiile se actualizează la 15 secunde în timpul unui drum. Serverul păstrează doar ultima poziție; dacă nu se mai actualizează 10 minute, nu mai e afișată și se șterge.</p></div>
+      ${pts.length ? `<div style="display:flex;gap:6px;overflow-x:auto;margin:10px 0 6px">${pts.map(p => `<button class="btn ${p.pid === FV.sel ? 'dark' : 'ghost'} fSel" data-p="${p.pid}" style="flex:none;width:auto;padding:7px 13px;margin:0;font-size:14px">${esc((p.name || '?').split(' ')[0])}</button>`).join('')}${pts.length > 1 ? `<button class="btn ${!FV.sel ? 'dark' : 'ghost'} fSel" data-p="all" style="flex:none;width:auto;padding:7px 13px;margin:0;font-size:14px">Toți</button>` : ''}</div>
+        ${selP ? `<div class="note" style="margin:0 0 6px"><b>${esc((selP.name || '').split(' ')[0])}</b> ${esc(whereTxt(selP.lat, selP.lon))}${selP.status !== 'a ajuns' && selP.speed != null ? ` · ${Math.round(selP.speed)} km/h` : ''} · ${famAgo(selP.at)}${selP.acc ? ` · precizie ~${Math.round(selP.acc)} m` : ''}</div>` : ''}
+        <div class="mapwrap"><canvas class="rmap" id="famMap" style="height:340px"></canvas><div class="mapbtns"><button id="fZin" aria-label="Mărește">+</button><button id="fZout" aria-label="Micșorează">−</button>${selP ? '<button id="fNorth" aria-label="Orientarea hărții">🧭</button>' : ''}</div></div>` : ''}
+      <p class="muted" style="font-size:13px">Pozițiile se actualizează la 10 secunde în timpul unui drum; harta urmărește persoana aleasă, în sensul ei de mers. Serverul păstrează doar ultima poziție; dacă nu se mai actualizează 10 minute, nu mai e afișată și se șterge.</p></div>
     <div class="card"><div class="kicker">Codul grupului</div><div style="font-size:30px;font-weight:900;letter-spacing:.08em;margin:4px 0">${esc(F.code || '—')}</div>
       <p class="muted">Trimiteți codul membrilor familiei. Fiecare îl introduce în aplicație, la Familie.</p><button class="btn ghost" id="fShare">Trimiteți codul</button></div>
     <div class="card"><label class="chk"><input type="checkbox" id="fShareOn" ${me.sharing ? 'checked' : ''}><span>Familia îmi vede poziția în timpul drumurilor</span></label>
       <button class="btn red" id="fLeave">Ieșiți din grup</button>${owner ? '<p class="muted" style="font-size:13px">Ați creat grupul: dacă ieșiți, grupul se închide pentru toți.</p>' : ''}</div>`;
-  if (pts.length) setTimeout(() => drawFamMap($('famMap'), pts), 30);
+  if (pts.length) { setTimeout(() => drawFamMap($('famMap'), pts), 30);
+    el.querySelectorAll('.fSel').forEach(b => b.onclick = () => { FV.picked = b.dataset.p; FV.sel = b.dataset.p === 'all' ? null : b.dataset.p; renderFam(); });
+    const zoom = k => { FV.km = Math.min(30, Math.max(0.4, FV.km * k)); if (!FV.sel) { FV.picked = (pts.find(p => !p.me) || pts[0]).pid; FV.sel = FV.picked; } renderFam(); };
+    $('fZin').onclick = () => zoom(1 / 1.6); $('fZout').onclick = () => zoom(1.6);
+    if ($('fNorth')) $('fNorth').onclick = () => { FV.north = !FV.north; renderFam(); toast(FV.north ? 'Harta: nordul în sus.' : 'Harta: în sensul de mers.'); }; }
   if ($('fAge2')) $('fAge2').onclick = () => fixAge($('fAge2'));
   el.querySelectorAll('.fApprove').forEach(b => b.onclick = async () => { const cb = el.querySelector(`.fOk[data-p="${b.dataset.p}"]`); if (!cb.checked) { toast('Bifați acordul înainte.'); return; }
     try { await famCall('approve_minor', { p_participant: b.dataset.p }); await pullFamily(); renderFam(); toast('Acordul a fost înregistrat.'); } catch (e) { toast(famErr(e)); } });
@@ -1466,7 +1569,7 @@ if (isIOS && !standalone) setTimeout(showInstall, 1500);
   speakFromUrl();
   bindMapPick();
   pullTraffic(true); setInterval(() => pullTraffic(), 300000);
-  if (S.consent) pullFamily(); setInterval(() => { if (!S.consent) return; if ($('s-fam').classList.contains('on')) pullFamily().then(() => { if ($('s-fam').classList.contains('on') && !document.activeElement.closest('#s-fam input')) renderFam(); }); else if (Date.now() - ((S.fam && S.fam.at) || 0) > 120000) pullFamily(); }, 20000);
+  if (S.consent) pullFamily(); setInterval(() => { if (!S.consent) return; if ($('s-fam').classList.contains('on')) pullFamily().then(() => { if ($('s-fam').classList.contains('on') && !document.activeElement.closest('#s-fam input')) renderFam(); }); else if (Date.now() - ((S.fam && S.fam.at) || 0) > 120000) pullFamily(); }, 10000);
   checkAlerts(); setInterval(checkAlerts, 30000); setInterval(() => { if (S.live && $('s-trip').classList.contains('on')) drawTrip(); if ($('s-map').classList.contains('on')) { LMT = 0; drawLiveMap(); } }, 5000); setInterval(() => { if ($('s-map').classList.contains('on')) $('mapPanel').innerHTML = mapPanel(); }, 60000);
 })();
 </script>
