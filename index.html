@@ -845,6 +845,15 @@ function liveState(L) {
     if (d >= 0.4 && t > 0) road = { name: nm, v: d / t * 60, vTyp: d / tt * 60, drop: 1 - tt / t }; }
   const elapsed = Math.max(0.01, now - L.dep), dist = mm.dist || 0;
   const v = mm.v != null && now - mm.vAt < 0.5 ? mm.v : null;
+  if (gpsFresh(L) && L.gps.lat && L.gps.acc <= 40) {
+    const me = { lat: L.gps.lat, lon: L.gps.lon }, dMain = pos ? E.haversine(me, pos) * 1000 : 1e9;
+    if (dMain > Math.max(15, Math.min(30, L.gps.acc * 1.5))) {   // nu sunt pe drumul principal: probabil pe o stradă mică, într-o curte sau într-o parcare
+      const loc = localSnap(me.lat, me.lon, Math.max(12, Math.min(25, L.gps.acc)), L.viewAng);
+      pos = loc && loc.kind !== 'm' && loc.kind !== 'p' ? loc : { lat: me.lat, lon: me.lon, ang: L.viewAng, raw: true, local: true };
+      if (L.viewAt && E.haversine(L.viewAt, me) > 0.008) L.viewAng = Math.atan2(-(me.lat - L.viewAt.lat), (me.lon - L.viewAt.lon) * Math.cos(me.lat * Math.PI / 180));
+      if (!L.viewAt || E.haversine(L.viewAt, me) > 0.008) L.viewAt = me;
+    } else { L.viewAt = null; if (pos && pos.ang != null) L.viewAng = pos.ang; }
+  }
   if (!L.area && L.destPt && NET.nodes[L.dest]) { const tail = E.haversine(NET.nodes[L.dest], L.destPt) * 1.3; if (tail > 0.1) { remKm += tail; remMod += tail / 25 * 60; } }   // de la drumul principal până la adresă
   // ora de sosire afișată se schimbă lin (constantă de ~1 minut), ca să nu sară la fiecare semafor
   let eta = now + remAdj; const tNow = Date.now();
@@ -889,7 +898,7 @@ function onFix(pos) {
 }
 function startGeo() {
   if (!navigator.geolocation || GEO != null) return;
-  GEO = navigator.geolocation.watchPosition(onFix, err => { if (S.live) { S.live.gpsDenied = err.code === 1; save(); drawTrip(); } }, { enableHighAccuracy: true, maximumAge: 2000, timeout: 20000 });
+  GEO = navigator.geolocation.watchPosition(onFix, err => { if (S.live) { S.live.gpsDenied = err.code === 1; save(); drawTrip(); } }, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });   // cea mai bună precizie pe care o poate da telefonul, fără poziții refolosite
 }
 function stopGeo() { if (GEO != null) { navigator.geolocation.clearWatch(GEO); GEO = null; } try { WAKE && WAKE.release(); } catch (e) { } WAKE = null; }
 async function keepAwake() { try { if ('wakeLock' in navigator && S.live) WAKE = await navigator.wakeLock.request('screen'); } catch (e) { } }
@@ -1328,9 +1337,11 @@ function famTrack(pos) { // istoricul pozițiilor primite (doar în memoria aces
 }
 function famAng(pid) { const h = FAMH[pid] || []; const b = h[h.length - 1]; if (!b) return null;
   for (let i = h.length - 2; i >= 0; i--) { const a = h[i]; if (E.haversine(a, b) >= 0.025) return Math.atan2(-(b.lat - a.lat), (b.lon - a.lon) * Math.cos(b.lat * Math.PI / 180)); } return null; }
-function whereTxt(lat, lon) { // „pe Calea Bucureștilor, lângă Otopeni”
+function whereTxt(lat, lon) { // „pe Calea Bucureștilor, lângă Otopeni” / „pe Strada Trotușului, lângă Domenii”
   let road = null, bd = 0.08; for (const eid of trk().near(lat, lon)) { const e = NET.edges[eid]; if (!e.name) continue; const p = trk().projEdge(eid, lat, lon); if (p && p.d < bd) { bd = p.d; road = e.name; } }
-  const loc = nearestPlaceName(lat, lon); return (road ? 'pe ' + road : 'pe o stradă locală') + (loc ? ', ' + (road ? 'lângă ' : 'lângă ') + loc : '');
+  const loc = localSnap(lat, lon, 25), mainM = road ? bd * 1000 : 1e9;
+  let where = road && (!loc || mainM <= loc.d + 6) ? 'pe ' + road : loc && loc.name ? 'pe ' + loc.name : loc && loc.kind === 's' ? 'pe o alee sau într-o incintă' : road ? 'lângă ' + road : 'pe o stradă locală';
+  const pl = nearestPlaceName(lat, lon); return where + (pl ? ', lângă ' + pl : '');
 }
 function drawFamMap(cv, pts) {
   const r = cv.getBoundingClientRect(); if (!r.width || !pts.length) return;
@@ -1437,7 +1448,7 @@ function confirmTwice(btn, msg) { if (btn.dataset.armed) return true; btn.datase
 /* ---------- Fundalul hărții: toate străzile, căile ferate, apele și parcurile (OpenStreetMap), în dale ~4,5 km ---------- */
 const TILES = new Map(); let TIDX = null, TIDXP = null;
 function tileIndex() { if (TIDX || TIDXP) return TIDXP; TIDXP = fetch('tiles/index.json').then(r => r.json()).then(j => { TIDX = j; TIDX.set = new Set(j.tiles); return TIDX; }).catch(() => { TIDXP = null; }); return TIDXP; }
-function decodeTile(d) { const o = {}; for (const k in d) o[k] = d[k].map(a => { const p = new Float64Array(a.length); let la = 0, lo = 0; for (let i = 0; i < a.length; i += 2) { la += a[i]; lo += a[i + 1]; p[i] = la / 1e5; p[i + 1] = lo / 1e5; } return p; }); return o; }
+function decodeTile(d) { const o = {}, nm = d.nm; delete d.nm; if (Array.isArray(nm)) { o.nm = {}; for (const [k, v] of nm) o.nm[k] = v; } for (const k in d) o[k] = d[k].map(a => { const p = new Float64Array(a.length); let la = 0, lo = 0; for (let i = 0; i < a.length; i += 2) { la += a[i]; lo += a[i + 1]; p[i] = la / 1e5; p[i + 1] = lo / 1e5; } return p; }); return o; }
 function needTiles(la0, la1, lo0, lo1, redraw) {
   if (!TIDX) { const p = tileIndex(); if (p) p.then(() => redraw && redraw()); return []; }
   const out = []; let n = 0;
@@ -1447,6 +1458,29 @@ function needTiles(la0, la1, lo0, lo1, redraw) {
     else if (t) out.push(t);
   }
   return out;
+}
+/* lipirea poziției pe străzile mici (din dalele hărții): străzi de cartier, alei din campusuri și din parcări.
+   Rețeaua de calcul a traficului rămâne a drumurilor principale; străzile mici servesc la afișarea și transmiterea poziției. */
+const SNAPK = ['r', 's', 't', 'p', 'm'], CELL = 0.0015;
+function tileGrid(t) { if (t._g) return t._g; const G = new Map();
+  for (const k of SNAPK) (t[k] || []).forEach((p, li) => { for (let i = 0; i + 3 < p.length; i += 2) {
+    const a0 = Math.floor(Math.min(p[i], p[i + 2]) / CELL), a1 = Math.floor(Math.max(p[i], p[i + 2]) / CELL), b0 = Math.floor(Math.min(p[i + 1], p[i + 3]) / CELL), b1 = Math.floor(Math.max(p[i + 1], p[i + 3]) / CELL);
+    for (let a = a0; a <= a1; a++) for (let b = b0; b <= b1; b++) { const key = a * 100000 + b; let c = G.get(key); if (!c) G.set(key, c = []); c.push(k, li, i); } } });
+  return (t._g = G); }
+function localSnap(lat, lon, maxM, prevAng) {
+  if (!TIDX) { tileIndex(); return null; }
+  const ts = needTiles(lat - 0.001, lat + 0.001, lon - 0.0015, lon + 0.0015); if (!ts.length) return null;
+  const kx = Math.cos(lat * Math.PI / 180), A = Math.floor(lat / CELL), B = Math.floor(lon / CELL); let best = null;
+  for (const t of ts) { const G = tileGrid(t);
+    for (let a = A - 1; a <= A + 1; a++) for (let b = B - 1; b <= B + 1; b++) { const c = G.get(a * 100000 + b); if (!c) continue;
+      for (let q = 0; q < c.length; q += 3) { const k = c[q], p = t[k][c[q + 1]], i = c[q + 2];
+        const ax = (p[i + 1] - lon) * kx * 111320, ay = (p[i] - lat) * 110570, bx = (p[i + 3] - lon) * kx * 111320, by = (p[i + 2] - lat) * 110570;
+        const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-9, u = Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)), px = ax + u * dx, py = ay + u * dy, d = Math.hypot(px, py);
+        if (!best || d < best.d) best = { d, lat: lat + py / 110570, lon: lon + px / (kx * 111320), dx, dy, kind: k, name: t.nm && t.nm[k] ? t.nm[k][c[q + 1]] || '' : '' }; } } }
+  if (!best || best.d > maxM) return null;
+  let ang = Math.atan2(-best.dy, best.dx);   // unghi pe ecran; aleg sensul străzii cel mai apropiat de direcția de mers
+  if (prevAng != null) { let df = Math.abs(((ang - prevAng + 3 * Math.PI) % (2 * Math.PI)) - Math.PI); if (df > Math.PI / 2) ang += Math.PI; }
+  return { lat: best.lat, lon: best.lon, ang, d: best.d, name: best.name, kind: best.kind, local: true };
 }
 function drawBase(g, X, Y, la0, la1, lo0, lo1, dpr, widthKm, redraw) {
   if (widthKm > 16) return;

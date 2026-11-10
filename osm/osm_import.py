@@ -194,11 +194,11 @@ class Collector(osmium.SimpleHandler):
         base = LINK.get(hw, hw)
         bk = BASE_LINE.get(hw) or ('rail' if w.tags.get('railway') == 'rail' and not w.tags.get('service') else None) or ('river' if w.tags.get('waterway') in ('river', 'canal') else None) \
             or ('stream' if w.tags.get('waterway') == 'stream' else None)
-        if bk and not (hw == 'service' and w.tags.get('service') in ('parking_aisle', 'driveway')):
+        if bk and not (hw == 'service' and w.tags.get('service') == 'driveway'):   # aleile din parcări rămân: acolo se oprește mașina
             try:
                 ll = [(nd.location.lat, nd.location.lon) for nd in w.nodes]
                 if ll and any(self.inside(*p) for p in ll[::max(1, len(ll) // 4)]):
-                    self.base.append((bk, ll))
+                    self.base.append((bk, ll, w.tags.get('name') or ''))
             except Exception:
                 pass
         if hw in STREET_KINDS and w.tags.get('name'):
@@ -261,7 +261,10 @@ def write_tiles(base, folder):
     """Map background in tiles (~4.4 x 4.8 km): simplified lines/polygons, coordinates as 1e-5 deg integers, delta-encoded."""
     tiles = defaultdict(lambda: defaultdict(list))
     tol = {'m': 0.006, 'p': 0.006, 't': 0.006, 'r': 0.005, 's': 0.005, 'k': 0.008, 'rail': 0.008, 'river': 0.01, 'stream': 0.008, 'water': 0.01, 'green': 0.012}
-    for kind, ll in base:
+    names = defaultdict(lambda: defaultdict(list))   # numele străzilor, în aceeași ordine ca liniile (pentru „pe Strada …”)
+    for item in base:
+        kind, ll = item[0], item[1]
+        nm = item[2] if len(item) > 2 else ''
         if kind in ('water', 'green'):
             pts = [ll[0]] + simplify(ll, tol[kind]) + [ll[-1]]
             if len(pts) < 4:
@@ -283,10 +286,10 @@ def write_tiles(base, folder):
             cur.append(p)
             k = (int(p[0] // TILE_LAT), int(p[1] // TILE_LON))
             if k != key:   # the line crosses into another tile: close it here and start again from this point
-                tiles[key][kind].append(cur)
+                tiles[key][kind].append(cur); names[key][kind].append(nm)
                 cur, key = [p], k
         if len(cur) >= 2:
-            tiles[key][kind].append(cur)
+            tiles[key][kind].append(cur); names[key][kind].append(nm)
     os.makedirs(folder, exist_ok=True)
     for f in os.listdir(folder):
         os.remove(os.path.join(folder, f))
@@ -302,6 +305,9 @@ def write_tiles(base, folder):
     idx = []
     for (i, j), kinds in tiles.items():
         data = {k: [enc(p) for p in v] for k, v in kinds.items()}
+        nm = [[k, v] for k, v in names[(i, j)].items() if k in ('m', 'p', 't', 'r', 's') and any(v)]
+        if nm:
+            data['nm'] = nm   # [[tip, [nume pe linie]]] - listă, ca versiunile vechi ale aplicației să o poată ignora
         path = os.path.join(folder, f'{i}_{j}.json')
         with open(path, 'w') as f:
             json.dump(data, f, separators=(',', ':'))
