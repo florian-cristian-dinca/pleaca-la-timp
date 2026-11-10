@@ -124,6 +124,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px
 .road .parts{display:flex;flex-direction:column;min-height:236px}
 .road .part{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #47505a}.road .part:last-child{border:none}
 .road .part svg{width:40px;height:40px;flex:none}.road .part b{display:block;font-size:15px}.road .part span{font-size:13.5px;color:#d5dce3}
+.fb{display:flex;gap:8px;margin:4px 0 10px 40px}.fb button{flex:1;padding:9px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:inherit;font:700 14px 'Overpass',sans-serif}
 .inc{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #47505a;font-size:14.5px}.inc svg{width:24px;height:24px;flex:none}
 .trip .note{border-radius:10px;padding:9px 11px;margin-top:10px;font-size:14.5px;font-weight:600}
 .trip .rmap{background:#e9edf1;margin-top:12px}
@@ -227,7 +228,7 @@ const DEFAULT_RESTR = [{ id: 'r-20261106-dn1', segId: 'OTO>cPOD', closedLanes: 1
 function rebuild() {
   NET = JSON.parse(JSON.stringify(S.net || window.__OSM_GRAPH__ || E.buildSkeleton()));
   if (S.pack && S.pack.edgeEdits) for (const [k, v] of Object.entries(S.pack.edgeEdits)) if (NET.edges[k]) Object.assign(NET.edges[k], v);
-  const restr = ((S.pack && S.pack.restrictions) || DEFAULT_RESTR).concat(S.reports.filter(r => r.closedLanes)).filter(r => NET.edges[r.segId]);
+  const restr = ((S.pack && S.pack.restrictions) || DEFAULT_RESTR).concat(S.reports.filter(r => r.closedLanes)).filter(r => NET.edges[r.segId] && !(S.cleared || {})[r.id]);
   M = new E.Model(NET, restr);      // ce știm pentru ziua respectivă
   M0 = new E.Model(NET, []);        // o zi obișnuită, fără restricții – pentru „neobișnuit”
   FC = PLT.createForecaster({ E, net: NET, model: M, model0: M0, pack: S.pack, weatherFor, weatherSpan, version: (S.pack ? S.pack.version : '') + '|' + S.reports.length + '|' + wxSig() });
@@ -981,8 +982,9 @@ function warnSVG(kind) { return `<svg viewBox="0 0 48 44" aria-hidden="true"><pa
 const SEVERE = { accident: 1, banda: 1, lucrari: 1 };
 function noticesOn(eid) { // semnalările active pe acest tronson, în acest sens: ale mele + ale celorlalți (din serverul de trafic)
   const t = nowMin(), out = [], today = todayStr();
-  for (const r of S.reports || []) if (r.segId === eid && r.startDate === today && t >= r.startMin && t < r.endMin) out.push({ kind: r.kind, mine: true });
-  const T = S.traffic; if (T && T.date === today) for (const n of T.notices || []) if (n.segId === eid && !out.some(x => x.kind === n.kind)) out.push({ kind: n.kind });
+  const gone = S.cleared || {};
+  for (const r of S.reports || []) if (r.segId === eid && r.startDate === today && t >= r.startMin && t < r.endMin && !gone[r.id]) out.push({ kind: r.kind, mine: true, id: r.id });
+  const T = S.traffic; if (T && T.date === today) for (const n of T.notices || []) if (n.segId === eid && !gone[n.id] && !out.some(x => x.kind === n.kind)) out.push({ kind: n.kind, id: n.id, start: n.startMin });
   return out;
 }
 function aheadInfo(L, ls) {
@@ -995,8 +997,8 @@ function aheadInfo(L, ls) {
     const live = T[eid], fk = Math.pow(ls.factor, pos < 3 ? 1 : pos < 6 ? 0.5 : 0.35);   // abaterea de azi contează mai ales în apropiere
     const med = (live ? e.len / live[0] * 60 : M.segState(eid, L.date, tt, ctx).med * bias(eid, L.date, tt) * fk) * part, free = len / e.v0 * 60;
     if (live) ch.forEach(c => { if (pos < c.b && pos + len > c.a) c.live = true; });
-    for (const n of noticesOn(eid)) if (!incs.some(x => x.kind === n.kind && Math.abs(x.at - pos) < 0.5)) incs.push({ kind: n.kind, at: pos, eid, mine: n.mine });
-    for (const r of M.activeRestr(eid, E.dayIndex(L.date) * 1440 + tt).list) { const kd = restrKind(r); if (!incs.some(x => x.kind === kd && Math.abs(x.at - pos) < 0.5)) incs.push({ kind: kd, at: pos, eid }); }
+    for (const n of noticesOn(eid)) if (!incs.some(x => x.kind === n.kind && Math.abs(x.at - pos) < 0.5)) incs.push({ kind: n.kind, at: pos, eid, mine: n.mine, id: n.id, start: n.start });
+    for (const r of M.activeRestr(eid, E.dayIndex(L.date) * 1440 + tt).list) { const kd = restrKind(r); if ((S.cleared || {})[r.id]) continue; if (!incs.some(x => x.kind === kd && Math.abs(x.at - pos) < 0.5)) incs.push({ kind: kd, at: pos, eid, id: r.id && !String(r.id).startsWith('r-2026') ? r.id : null, mine: (S.reports || []).some(q => q.id === r.id) }); }
     for (const c of ch) { const o = Math.max(0, Math.min(pos + len, c.b) - Math.max(pos, c.a)); if (o > 0) { const w = o / len; c.t += med * w; c.f += free * w; c.km += o; } }
     pos += len; tt += med;
   });
@@ -1046,7 +1048,9 @@ function drawTrip() {
   const pos0 = L.mm && L.mm.eid && ls.ok ? (() => { let c = 0; for (const e of L.path) { if (e === L.mm.eid) return c + L.mm.s; c += NET.edges[e].len; } return null; })() : null;
   const hz = pos0 == null ? [] : hazardsOnPath(L.path).filter(h => h.at > pos0 && h.at - pos0 <= 3 && (h.kind === 'lx' || schoolTime(L.date, ls.now))).slice(0, 3);
   set('tvHz', hz.map(h => `<div class="inc"><span style="font-size:22px">${h.kind === 'lx' ? '🚆' : '🚸'}</span><span><b>${h.kind === 'lx' ? 'Trecere la nivel cu calea ferată' : 'Școală'}</b> în ${h.at - pos0 < 1 ? Math.round((h.at - pos0) * 100) * 10 + ' m' : kmTxt(h.at - pos0)}${h.kind === 'school' ? ': atenție la copii' : ''}</span></div>`).join(''));
-  set('tvInc', ah.incs.slice(0, 4).map(x => { const e = NET.edges[x.eid]; return `<div class="inc">${warnSVG(x.kind)}<span><b>${KIND_LABEL[x.kind] || 'Problemă'}</b> peste ${kmTxt(x.at)}${e.name ? ', pe ' + esc(e.name) : ''}, ${PLT.dirName(E, NET, x.eid)}${x.mine ? ' (semnalarea dumneavoastră)' : ''}</span></div>`; }).join(''));
+  { const t = nowMin(), mine = (S.reports || []).filter(r => r.startDate === todayStr() && t >= r.startMin && t < r.endMin && !(S.cleared || {})[r.id]);
+    set('tvMine', mine.length ? `<div class="kicker" style="margin-top:12px">Semnalările dumneavoastră încă active</div>${mine.map(r => { const e = NET.edges[r.segId]; return `<div class="inc">${warnSVG(r.kind)}<span><b>${KIND_LABEL[r.kind]}</b>${e && e.name ? ' pe ' + esc(e.name) : ''}, acum ${durTxt(Math.max(1, t - r.startMin))}; dispare singură la ${fmt(r.endMin)}</span></div>${fbBtns(r.id, true)}`; }).join('')}` : ''); }
+  set('tvInc', ah.incs.slice(0, 4).map(x => { const e = NET.edges[x.eid]; return `<div class="inc">${warnSVG(x.kind)}<span><b>${KIND_LABEL[x.kind] || 'Problemă'}</b> peste ${kmTxt(x.at)}${e.name ? ', pe ' + esc(e.name) : ''}, ${PLT.dirName(E, NET, x.eid)}${x.mine ? ' (semnalarea dumneavoastră)' : ''}${x.start != null && !x.mine ? ` · semnalat acum ${durTxt(Math.max(1, nowMin() - x.start))}` : ''}</span></div>${x.id && x.at <= 3 && !x.mine ? fbBtns(x.id, false) : ''}`; }).join(''));
   set('tripInfo', (ls.ok ? `📡 GPS ±${L.gps.acc} m` : L.gpsDenied ? '⚠️ Fără acces la locație · poziție estimată' : (L.gps && L.gps.at && Date.now() - L.gps.at < 45000) ? `📡 GPS ±${L.gps.acc} m · caut drumul pe hartă` : '⏳ Caut semnalul GPS · poziție estimată') + (ls.km >= 1 ? ` · traficul de azi: ${ls.factor >= 1.05 ? 'cu ' + Math.round((ls.factor - 1) * 100) + '% mai lent' : ls.factor <= 0.95 ? 'cu ' + Math.round((1 - ls.factor) * 100) + '% mai rapid' : 'ca de obicei'} decât estimarea` : ''));
   { const W = WXD(), d = W && W[L.date], hr = Math.min(23, Math.floor(ls.now / 60)), c = d ? d.h[hr] : 'senin';
     const hn = Math.min(23, hr + 1), tmin = d && d.t ? Math.min(d.t[hr] ?? 99, d.t[hn] ?? 99) : 99, ice = d && d.t && tmin <= 1 && ((d.rh && Math.max(d.rh[hr] || 0, d.rh[hn] || 0) >= 85) || c !== 'senin');
@@ -1102,6 +1106,7 @@ function renderTrip() {
     <div class="kicker" style="margin-top:14px">Semnalați pe sensul dumneavoastră de mers</div>
     <div class="rep">${REPORTS.map(([e, t, k]) => `<button class="repb" data-r="${k}"><span class="e">${e}</span>${t}</button>`).join('')}</div>
     <p class="muted" style="margin-top:6px;font-size:13px">Doar pasagerul sau când sunteți oprit în siguranță.</p>
+    <div id="tvMine"></div>
     <details class="routes"><summary>Rute de aici până la destinație (${opts.length})</summary>${opts.map((o, i) => `<div class="ropt ${i === (L.sel || 0) ? 'sel' : ''}" data-i="${i}"><i style="background:${RCOL[i % 3]}"></i><div><b>${i === (L.sel || 0) ? '✓ ' : ''}${i === 0 ? (L.altAt ? 'Drumul pe care sunteți' : 'Ruta recomandată') : 'Alternativa ' + i}, ~${durTxt(o.med)}</b><span>${kmTxt(o.km)}${o.via.length ? ', prin ' + o.via.map(esc).join(', ') : ''}</span></div></div>`).join('')}</details>
     <button class="btn go" id="bArr">Am ajuns</button>
     <div class="row2" style="margin-top:8px"><button class="btn ghost" id="bDest">Altă destinație</button><button class="btn ghost" id="bCan">Anulați drumul</button></div>${tripDestForm()}
@@ -1166,6 +1171,18 @@ function changeDest(d) {
   if (!alts.length) { toast('Nu găsesc un drum până acolo.'); return; }
   setRoutes(alts); save(); renderTrip(); toast('Am schimbat destinația: ' + placeName(d) + '.');
 }
+/* „Mai e” / „Nu mai e”: oricine trece pe acolo poate confirma sau încheia o semnalare (autorul o încheie oricând) */
+function fbBtns(id, mine) { return `<div class="fb">${mine ? '' : `<button data-fb="1" data-rid="${esc(id)}">👍 Mai e</button>`}<button data-fb="0" data-rid="${esc(id)}">✓ Nu mai e</button></div>`; }
+async function feedback(id, still) {
+  const t = nowMin(), own = (S.reports || []).find(r => r.id === id);
+  S.cleared = Object.fromEntries(Object.entries(S.cleared || {}).filter(([, d]) => d === todayStr()));
+  if (!still) { S.cleared[id] = todayStr(); if (own) own.endMin = Math.max(own.startMin, t); }
+  else if (own) own.endMin = Math.max(own.endMin, Math.min(1439, t + 30));
+  save(); rebuild(); TRIPDRAW = 0; drawTrip();
+  toast(still ? 'Mulțumim! Semnalarea rămâne activă pentru ceilalți.' : 'Mulțumim! Semnalarea a fost scoasă de pe drum.');
+  try { const sb = await session(); if (sb) { const r = await sb.c.rpc('report_feedback', { rid: id, still }); if (r.error && own && !still) enqueue('report', own); } } catch (e) { if (own) enqueue('report', own); }
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-fb]'); if (b) { e.preventDefault(); b.disabled = true; feedback(b.dataset.rid, b.dataset.fb === '1'); } });
 function reportNow(kind) {
   const L = S.live, t = nowMin(), mm = L.mm || {};
   let eid = null, est = false;
