@@ -847,13 +847,20 @@ function liveState(L) {
   const elapsed = Math.max(0.01, now - L.dep), dist = mm.dist || 0;
   const v = mm.v != null && now - mm.vAt < 0.5 ? mm.v : null;
   if (gpsFresh(L) && L.gps.lat && L.gps.acc <= 40) {
-    const me = { lat: L.gps.lat, lon: L.gps.lon }, dMain = pos ? E.haversine(me, pos) * 1000 : 1e9;
-    if (dMain > Math.max(15, Math.min(30, L.gps.acc * 1.5))) {   // nu sunt pe drumul principal: probabil pe o stradă mică, într-o curte sau într-o parcare
+    // Ieșirea de pe drumul principal se acceptă doar dacă e clară și durează: bulevardele late (3 benzi pe sens + tramvai)
+    // pun punctul GPS și la 20–30 m de axul drumului, iar pe lângă ele sunt alei paralele în care NU trebuie să sară poziția.
+    const me = { lat: L.gps.lat, lon: L.gps.lon }, dMain = pos ? E.haversine(me, pos) * 1000 : 1e9, tNow = Date.now();
+    const off = L.offMain ? dMain > 20 : dMain > Math.max(35, 2 * L.gps.acc);
+    if (off) { if (L.offSince == null) L.offSince = tNow; } else { L.offSince = null; L.offMain = false; }
+    if (off && tNow - L.offSince >= 6000) L.offMain = true;
+    if (L.viewAt && E.haversine(L.viewAt, me) > 0.008) L.viewAng = Math.atan2(-(me.lat - L.viewAt.lat), (me.lon - L.viewAt.lon) * Math.cos(me.lat * Math.PI / 180));
+    if (!L.viewAt || E.haversine(L.viewAt, me) > 0.008) L.viewAt = me;
+    if (L.offMain) {   // nu sunt pe drumul principal: stradă mică, curte, parcare
       const loc = localSnap(me.lat, me.lon, Math.max(12, Math.min(25, L.gps.acc)), L.viewAng);
-      pos = loc && loc.kind !== 'm' && loc.kind !== 'p' ? loc : { lat: me.lat, lon: me.lon, ang: L.viewAng, raw: true, local: true };
-      if (L.viewAt && E.haversine(L.viewAt, me) > 0.008) L.viewAng = Math.atan2(-(me.lat - L.viewAt.lat), (me.lon - L.viewAt.lon) * Math.cos(me.lat * Math.PI / 180));
-      if (!L.viewAt || E.haversine(L.viewAt, me) > 0.008) L.viewAt = me;
-    } else { L.viewAt = null; if (pos && pos.ang != null) L.viewAng = pos.ang; }
+      // trec pe strada mică doar dacă există una clar mai aproape decât drumul principal; fără stradă în apropiere, doar dacă sunt departe de tot (>60 m)
+      if (loc && loc.kind !== 'm' && loc.kind !== 'p' && loc.d + 8 < dMain) pos = Object.assign(loc, { ang: L.viewAng != null ? L.viewAng : loc.ang });
+      else if (!loc && dMain > 60) pos = { lat: me.lat, lon: me.lon, ang: L.viewAng, raw: true, local: true };
+    } else if (pos && pos.ang != null && !pos.raw) L.viewAng = pos.ang;
   }
   if (!L.area && L.destPt && NET.nodes[L.dest]) { const tail = E.haversine(NET.nodes[L.dest], L.destPt) * 1.3; if (tail > 0.1) { remKm += tail; remMod += tail / 25 * 60; } }   // de la drumul principal până la adresă
   // ora de sosire afișată se schimbă lin (constantă de ~1 minut), ca să nu sară la fiecare semafor
@@ -939,7 +946,7 @@ function drawTripMap(cv, L, ls) {
   const kx = Math.cos(c.lat * Math.PI / 180), sc = W / (TV.km / 111.32 / kx), cx = W / 2, cy = H * 0.66;
   const X = lon => cx + (lon - c.lon) * sc, Y = lat => cy - (lat - c.lat) * (W / (TV.km / 110.57));
   // sensul de mers în sus (netezit, ca harta să nu se zbată); fără direcție sigură rămâne cum era
-  if (ls.pos && ls.ok && ls.pos.ang != null && !ls.pos.raw) TV.rot = smoothAng(TV.rot, -Math.PI / 2 - ls.pos.ang, TV.rot == null ? 1 : 0.35);
+  if (ls.pos && ls.ok && ls.pos.ang != null && (!ls.pos.raw || ls.pos.local)) TV.rot = smoothAng(TV.rot, -Math.PI / 2 - ls.pos.ang, TV.rot == null ? 1 : 0.35);
   const rot = TV.north ? 0 : (TV.rot || 0);
   const R = TV.km * Math.max(1, H / W) * 0.95, latR = R / 110.57, lonR = R / 111.32 / kx;   // destul cât să acopere colțurile după rotire
   g.fillStyle = '#e9edf1'; g.fillRect(0, 0, W, H); g.lineCap = 'round'; g.lineJoin = 'round';
@@ -964,7 +971,7 @@ function drawTripMap(cv, L, ls) {
   const B = L.destPt && !L.area ? L.destPt : NET.nodes[L.dest]; if (B) { const p = rotPt(X(B.lon), Y(B.lat), cx, cy, rot); g.fillStyle = '#dc2626'; g.beginPath(); g.arc(p.x, p.y, 11 * dpr, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = `800 ${12 * dpr}px "Overpass"`; g.fillText('B', p.x, p.y + 1); }
   if (ls.pos) { const p = rotPt(X(ls.pos.lon), Y(ls.pos.lat), cx, cy, rot), est = !ls.ok, accPx = L.gps && L.gps.acc ? Math.min(60 * dpr, L.gps.acc / 1000 * W / TV.km) : 0;
     if (!est && accPx > 6 * dpr) { g.fillStyle = 'rgba(21,128,61,.12)'; g.beginPath(); g.arc(p.x, p.y, accPx, 0, 7); g.fill(); }
-    navArrow(g, p.x, p.y, dpr, ls.pos.ang != null && !ls.pos.raw ? ls.pos.ang + Math.PI / 2 + rot : 0, est ? '#1d4ed8' : '#15803d'); }
+    navArrow(g, p.x, p.y, dpr, ls.pos.ang != null && (!ls.pos.raw || ls.pos.local) ? ls.pos.ang + Math.PI / 2 + rot : 0, est ? '#1d4ed8' : '#15803d'); }
   if (rot) { // busola: unde e nordul
     const bx = 24 * dpr, by = 24 * dpr; g.save(); g.translate(bx, by); g.rotate(rot); g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.arc(0, 0, 14 * dpr, 0, 7); g.fill();
     g.fillStyle = '#dc2626'; g.beginPath(); g.moveTo(0, -11 * dpr); g.lineTo(5 * dpr, 0); g.lineTo(-5 * dpr, 0); g.closePath(); g.fill(); g.fillStyle = '#1f262e'; g.font = `800 ${8 * dpr}px "Overpass"`; g.fillText('N', 0, 6 * dpr); g.restore(); }
