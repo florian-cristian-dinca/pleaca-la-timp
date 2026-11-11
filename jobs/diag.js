@@ -41,6 +41,21 @@ const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
     e0 += Math.abs(Math.log(t.dur / w.total)); e1 += Math.abs(Math.log(t.dur / learned));
     console.log(`fit ${i + 1}: measured ${t.dur.toFixed(0)} · a-priori ${w.total.toFixed(0)} · learned ${learned.toFixed(0)} min`); });
   console.log(`mean |log error|: a-priori ${(e0 / T.length).toFixed(3)}, learned ${(e1 / T.length).toFixed(3)} (in-sample)`);
+  // evaluare „ca în realitate” (walk-forward): fiecare drum e prezis DOAR din datele de dinainte de el
+  const ord = T.map((t, i) => ({ t, i })).sort((a, b) => a.t.date.localeCompare(b.t.date) || a.t.dep - b.t.dep);
+  const before = (d, m) => x => x.date < d || (x.date === d && x.t < m);
+  const wf = [];
+  ord.forEach(({ t }, k) => {
+    const Tp = ord.slice(0, k).map(o => o.t), Sp = S.filter(before(t.date, t.dep)), ctx = E.ctxFor(t.date, t.weather, false), w = m0.walk(t.path, t.date, t.dep, ctx);
+    const Lk = Tp.length || Sp.length ? E.train(m0, Tp, Sp, { tau: 0.95 }) : null, pred = w.total * (Lk ? Math.exp(E.pathShift(Lk.lr, w.parts, t.date)) : 1);
+    const arch = (trips.find(x => x.id === t.id) || {}).pred || {};
+    wf.push({ date: t.date, dep: t.dep, dur: t.dur, prior: w.total, pred, arch: arch.median != null ? arch.median : null, nPrev: Tp.length, nSeg: Sp.length });
+  });
+  const e = (a, b) => Math.abs(a - b) / b;
+  wf.forEach((x, k) => console.log(`wf ${k + 1}: ${E.dayType(x.date)} ${String(Math.floor(x.dep / 60)).padStart(2, '0')}h · learned from ${x.nPrev} trips/${x.nSeg} seg · measured ${x.dur.toFixed(0)} · a-priori ${x.prior.toFixed(0)} (${Math.round(e(x.prior, x.dur) * 100)}%) · learned ${x.pred.toFixed(0)} (${Math.round(e(x.pred, x.dur) * 100)}%)${x.arch != null ? ` · app said then ${x.arch.toFixed(0)} (${Math.round(e(x.arch, x.dur) * 100)}%)` : ''}`));
+  const med = a => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : NaN; };
+  for (const [nm, part] of [['first half', wf.slice(0, Math.ceil(wf.length / 2))], ['second half', wf.slice(Math.ceil(wf.length / 2))], ['all', wf]])
+    console.log(`wf summary ${nm} (${part.length} trips): median abs error a-priori ${Math.round(med(part.map(x => e(x.prior, x.dur))) * 100)}%, learned ${Math.round(med(part.map(x => e(x.pred, x.dur))) * 100)}%; within ±15%: a-priori ${part.filter(x => e(x.prior, x.dur) <= 0.15).length}, learned ${part.filter(x => e(x.pred, x.dur) <= 0.15).length}; app at the time: median ${Math.round(med(part.filter(x => x.arch != null).map(x => e(x.arch, x.dur))) * 100)}%`);
   console.log('\nlearned road factors (×): ' + Object.entries(L.lr.R || {}).sort((a, b) => b[1].w - a[1].w).slice(0, 15).map(([k, v]) => `${k.split(':').slice(1).join(':')} ${Math.exp(v.b).toFixed(2)} (n=${v.w})`).join('; '));
   console.log('\nroad · km · measured min · model min · measured km/h · model km/h · ratio');
   Object.entries(road).sort((a, b) => b[1].km - a[1].km).forEach(([k, r]) => console.log(`${k} · ${r.km.toFixed(2)} · ${r.obs.toFixed(1)} · ${r.mod.toFixed(1)} · ${(r.km / r.obs * 60).toFixed(1)} · ${(r.km / r.mod * 60).toFixed(1)} · ${(r.obs / r.mod).toFixed(2)}`));
