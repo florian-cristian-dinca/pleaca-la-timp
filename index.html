@@ -770,11 +770,16 @@ function lastTripHTML() { const r = S.lastSummary; if (!r || Date.now() - r.at >
 function carSettingsHTML() { const C = car();
   return `<div class="card"><div class="kicker">Mașina dumneavoastră</div><p class="muted">Pentru estimarea consumului, a costului și a emisiilor de CO₂ la fiecare drum.</p>
     <div class="field"><small>Combustibil</small><select id="cFuel">${Object.entries(CARS).map(([k, v]) => `<option value="${k}" ${k === C.fuel ? 'selected' : ''}>${v.label}</option>`).join('')}</select></div>
-    <div class="field"><small>Consum mediu (${C.unit}/100 km)</small><input id="cCons" type="number" step="0.1" min="1" max="40" value="${C.cons}"></div>
-    <div class="field"><small>Preț (lei/${C.unit})</small><input id="cPrice" type="number" step="0.01" min="0.1" max="30" value="${C.price}"></div>
+    <div class="field"><small>Consum mediu (${C.unit}/100 km)</small><input id="cCons" type="text" inputmode="decimal" autocomplete="off" value="${String(C.cons).replace('.', ',')}"></div>
+    <div class="field"><small>Preț (lei/${C.unit})</small><input id="cPrice" type="text" inputmode="decimal" autocomplete="off" value="${String(C.price).replace('.', ',')}"></div>
     <p class="muted" style="font-size:12.5px">CO₂ la ardere: benzină 2,29 kg/L, motorină 2,65 kg/L, GPL 1,61 kg/L (factori impliciți IPCC 2006); electric 0,17 kg/kWh (mixul național 2025, eticheta ANRE). Consumul pe fiecare porțiune ține cont de viteză și de staționare.</p></div>`; }
-function bindCarSettings() { const upd = () => { const f = $('cFuel').value, same = (S.car || {}).fuel === f;
-  S.car = { fuel: f, cons: same ? +$('cCons').value || CARS[f].cons : CARS[f].cons, price: same ? +$('cPrice').value || CARS[f].price : CARS[f].price }; save(); if (!same) renderSet(); };
+function bindCarSettings() { const upd = () => { const f = $('cFuel').value, same = (S.car || { fuel: 'benzina' }).fuel === f;
+  // se acceptă și virgula, și punctul (7,5 = 7.5); o valoare greșită nu se salvează, ci se semnalează
+  const num = (id, lo, hi) => { const v = parseFloat(String($(id).value).trim().replace(/\s/g, '').replace(',', '.')); return isFinite(v) && v >= lo && v <= hi ? Math.round(v * 100) / 100 : null; };
+  const cons = same ? num('cCons', 1, 40) : CARS[f].cons, price = same ? num('cPrice', 0.1, 30) : CARS[f].price, old = S.car || {};
+  if (cons == null || price == null) { toast(cons == null ? 'Consumul trebuie să fie între 1 și 40 (ex. 7,5).' : 'Prețul trebuie să fie între 0,1 și 30 lei (ex. 10,45).'); }
+  S.car = { fuel: f, cons: cons != null ? cons : (old.cons || CARS[f].cons), price: price != null ? price : (old.price || CARS[f].price) }; save();
+  if (!same) renderSet(); else { $('cCons').value = String(S.car.cons).replace('.', ','); $('cPrice').value = String(S.car.price).replace('.', ','); if (cons != null && price != null) toast('Salvat: ' + n1(S.car.cons) + ' ' + CARS[f].unit + '/100 km, ' + String(S.car.price).replace('.', ',') + ' lei/' + CARS[f].unit + '.'); } };
   ['cFuel', 'cCons', 'cPrice'].forEach(i => $(i) && ($(i).onchange = upd)); }
 
 /* ---------- Pe drum: potrivirea GPS pe toată rețeaua (track.js), viteza, distanța rămasă, sosirea estimată ---------- */
