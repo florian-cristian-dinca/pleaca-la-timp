@@ -231,9 +231,29 @@ function rebuild() {
   const restr = ((S.pack && S.pack.restrictions) || DEFAULT_RESTR).concat(S.reports.filter(r => r.closedLanes)).filter(r => NET.edges[r.segId] && !(S.cleared || {})[r.id]);
   M = new E.Model(NET, restr);      // ce știm pentru ziua respectivă
   M0 = new E.Model(NET, []);        // o zi obișnuită, fără restricții – pentru „neobișnuit”
-  FC = PLT.createForecaster({ E, net: NET, model: M, model0: M0, pack: S.pack, weatherFor, weatherSpan, version: (S.pack ? S.pack.version : '') + '|' + S.reports.length + '|' + wxSig() });
+  PERS = {};
+  FC = PLT.createForecaster({ E, net: NET, model: M, model0: M0, pack: S.pack, weatherFor, weatherSpan, personal: personalK, version: (S.pack ? S.pack.version : '') + '|' + S.reports.length + '|' + (S.trips || []).length + '|' + wxSig() });
 }
 const LR = () => (S.pack && S.pack.lr ? S.pack : null);
+/* Corecția din drumurile PROPRII pe același traseu, în aceeași zi a săptămânii (lucrătoare / weekend) și la aceeași oră (±40 min):
+   raportul dintre durata măsurată și cea estimată de model. Se învață repede (2 drumuri → ~57% din abatere, 5 drumuri → ~77%),
+   pentru că e chiar drumul dumneavoastră, la ora dumneavoastră. Abaterile extreme (opriri lungi, GPS pierdut) sunt limitate. */
+let PERS = {};
+function personalK(h, date, t) {
+  const key = h.o + '|' + h.d + '|' + E.dayClass(date) + '|' + Math.round(t / 10); if (PERS[key]) return PERS[key];
+  const near = (a, b) => a === b || (NET.nodes[a] && NET.nodes[b] && E.haversine(NET.nodes[a], NET.nodes[b]) < 1.5), dc = E.dayClass(date), today = E.dayIndex(date), L = LR();
+  const rs = [];
+  for (const tr of (S.trips || []).slice().reverse()) {
+    if (rs.length >= 8) break;
+    if (!tr.path || !tr.path.length || !tr.dur || !near(tr.dest, h.d) || !near(tr.orig, h.o) || E.dayClass(tr.date) !== dc || Math.abs(tr.dep - t) > 40 || today - E.dayIndex(tr.date) > 45 || today - E.dayIndex(tr.date) < 0) continue;
+    if (tr.path.some(e => !NET.edges[e])) continue;
+    const km = E.pathLen(NET, tr.path), v = km / tr.dur * 60; if (v < 5 || v > 130 || (tr.pred && tr.pred.offRoute)) continue;
+    const w = M.walk(tr.path, tr.date, tr.dep, E.ctxFor(tr.date, tr.weather || 'senin', false)), m = w.total * Math.exp(E.pathShift(L && L.lr, w.parts, tr.date));
+    rs.push(Math.max(-0.7, Math.min(0.9, Math.log(tr.dur / m))));
+  }
+  const n = rs.length, mean = n ? rs.reduce((a, b) => a + b, 0) / n : 0, k = n / (n + 1.5);
+  return (PERS[key] = { n, f: Math.exp(k * mean) });
+}
 /* corecția învățată din drumurile participanților, pe un tronson, la o anumită oră (×) */
 const bias = (eid, date, t) => { const L = LR(); return L ? Math.exp(E.edgeBias(L.lr, eid, date, t)) : 1; };
 /* durata unui traseu după modelul învățat (minute) */
@@ -633,6 +653,8 @@ function card(h, date, idx, compact) {
   if (f.extra >= 8) why += `Este <b>neobișnuit</b>: cu ${mins(f.extra)} mai mult decât într-o zi obișnuită de ${WD[wday(date)]}.${(cs => cs.length ? (cs.length > 1 ? ' Cauze: ' : ' Cauza: ') + cs.map(esc).join('; ') + '.' : '')(f.causes.filter(c => !c.startsWith('vremea')))}`;
   else if (f.wxOnly) why += `Prognoza meteo: ${esc(f.wx ? f.wx.txt : '')}. Prognozele de ceață sau ploaie nu se confirmă mereu; recomandarea ține cont doar de efectul mediu al vremii.`;
   else if (f.level !== 'g') why += `Este aglomerația obișnuită pentru o zi de ${WD[wday(date)]}, la această oră.`;
+  if (f.personal && f.personal.n && Math.abs(f.personal.f - 1) >= 0.05) { const p = f.personal, one = p.n === 1, pc = Math.round(Math.abs(p.f - 1) * 100);
+    why += ` Estimarea ține cont de ${one ? 'ultimul dumneavoastră drum' : 'ultimele ' + p.n + ' drumuri ale dumneavoastră'} pe acest traseu, la ora aceasta: ${one ? (p.f > 1 ? 'a durat' : 'a fost') : (p.f > 1 ? 'au durat' : 'au fost')} cu ~${pc}% ${p.f > 1 ? 'mai mult' : 'mai rapid' + (one ? '' : 'e')} decât estimarea generală.`; }
   const opts = [];
   const gain = f.early ? f.cur.idle - f.early.idle : 0;
   if (f.early && f.early.t0 < f.usual - 4 && (gain >= 5 || f.lateBy > 0 || f.wxOnly)) opts.push({ best: true, t: f.early.t0, b: f.wxOnly ? 'Plecați puțin mai devreme' : gain >= 5 ? 'Plecați mai devreme' : 'Plecați puțin mai devreme', s: (f.wxOnly ? `din cauza vremii (~${mins(f.wxDelta)} în plus pe drum)` : gain >= 5 ? `stați doar ~${mins(f.early.idle)} pe loc (cu ${mins(gain)} mai puțin)` : 'mai multă siguranță că ajungeți la timp') + ` · sosire în jur de ${fmt(f.early.t0 + f.early.med)}` + chance(f.early) });
@@ -844,6 +866,7 @@ function liveState(L) {
   // încrederea crește treptat cu distanța măsurată (un semafor sau o coadă scurtă la început nu schimbă tot drumul),
   // iar abaterea se aplică întreagă doar pe următoarele ~15 minute: mai departe traficul poate fi cu totul altul
   const w = km / (km + 4), ratio = sm > 0 ? so / sm : 1, factor = Math.min(1.6, Math.max(0.85, Math.exp(w * Math.log(ratio))));
+  remMod *= Math.pow(L.pf || 1, 1 - w);   // corecția din drumurile proprii, cât încă nu s-a măsurat nimic azi; apoi contează măsurătoarea de azi
   const near = Math.min(remMod, 15), remAdj = remMod + (factor - 1) * (near + 0.35 * Math.max(0, remMod - near));
   // viteza pe drumul pe care sunteți (ultimii ~1,5 km) față de o zi obișnuită
   let road = null; { let d = 0, t = 0, tt = 0; const nm = mm.eid ? NET.edges[mm.eid].name : '';
@@ -1144,7 +1167,7 @@ function startTrip(o, d, name, ta, h, hd) {   // hd: obiceiul a cărui destinaț
   const order = alts.map((pth, i) => ({ i, t: M.walk(pth, date, dep, ctx).total })).sort((a, b) => a.t - b.t).map(x => alts[x.i]);
   const f = h ? forecast(h, date) : null, rec = f && (f.early ? f.early.t0 : f.usual);
   const usual = usualDur(o, d) || (f && f.typ ? Math.round(f.typ.med) : null);
-  S.live = { id: S.pid + '-' + Date.now(), name, orig: o, dest: d, ta, usual, usualMed: f && f.cur ? f.cur.med : null, lvl: f ? f.level : null, alts: order, sel: 0, path: order[0], date, dep, weather: weatherFor(date, dep), destPt: { lat: dpt.lat, lon: dpt.lon }, area: !known, hid: hd ? hd.id : null, mm: {}, obs: [],
+  S.live = { id: S.pid + '-' + Date.now(), name, orig: o, dest: d, ta, usual, usualMed: f && f.cur ? f.cur.med : null, lvl: f ? f.level : null, alts: order, sel: 0, path: order[0], date, dep, weather: weatherFor(date, dep), destPt: { lat: dpt.lat, lon: dpt.lon }, area: !known, hid: hd ? hd.id : null, pf: hd && hd.o === o ? personalK(hd, date, dep).f : 1, mm: {}, obs: [],
     pred: { madeAt: new Date().toISOString(), median: s.med, q: s.q, tau: 0.95, deadline: ta, ta, recT0: rec, version: LR() ? LR().version : 'a-priori', followed: rec != null && dep <= rec + 2 } };
   save(); keepAwake(); renderTrip(); toast('Drum bun! Puneți telefonul în suport.');
 }

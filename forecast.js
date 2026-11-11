@@ -67,11 +67,11 @@ function createForecaster(o) {
   const LR = () => (o.pack && o.pack.lr ? o.pack : null);
   const weatherFor = o.weatherFor || (() => 'senin');
   const CACHE = {}, PATHS = {};
-  function slotEval(m, paths, date, t0, ctx, withQ) {
+  function slotEval(m, paths, date, t0, ctx, withQ, pk) {
     let best = null;
     for (const path of paths) { const w = m.walk(path, date, t0, ctx); if (!best || w.total < best.w.total) best = { path, w }; }
     if (!best) return null;
-    const { path, w } = best, L = LR(), eb = Math.exp(E.pathShift(L && L.lr, w.parts, date));
+    const { path, w } = best, L = LR(), eb = Math.exp(E.pathShift(L && L.lr, w.parts, date)) * (pk ? pk(t0) : 1);   // pk: corecția din drumurile proprii, pe același traseu și la aceeași oră
     const free = path.reduce((s, e) => s + NET.edges[e].len / NET.edges[e].v0 * 60, 0);
     const med = w.total * eb; let q;
     let samp = null, cal = false, medOut = med;
@@ -100,12 +100,13 @@ function createForecaster(o) {
     const ctx = E.ctxFor(date, dry ? 'senin' : weatherFor(date, parseT(h.usual)), false), ctx0 = E.ctxFor(date, 'senin', false), ta = parseT(h.ta), usual = parseT(h.usual), deadline = ta - (o.bufferMin || 0); // ora aleasă de utilizator, fără rezerve ascunse
     const from = Math.min(usual - 60, ta - 150), to = Math.max(usual + 60, ta + 30), slots = [];
     const paths = pathsFor(h.o, h.d, date, usual, ctx); if (!paths.length) return (CACHE[key] = null);
-    for (let t = Math.round(from / 10) * 10; t <= to; t += 10) { const s = slotEval(M, paths, date, t, ctx, !light); if (s) slots.push(s); }
+    const pk = o.personal ? t => o.personal(h, date, t).f : null;   // și în varianta „vreme bună”, ca diferența să rămână doar efectul vremii
+    for (let t = Math.round(from / 10) * 10; t <= to; t += 10) { const s = slotEval(M, paths, date, t, ctx, !light, pk); if (s) slots.push(s); }
     if (!slots.length) return (CACHE[key] = null);
     const pOn = s => { if (!s || !s.samp) return; let k = 0; for (const x of s.samp) if (s.t0 + x <= deadline) k++; s.pOn = k / s.samp.length; s.samp = null; };
   slots.forEach(pOn);
   const near = t => slots.reduce((a, b) => Math.abs(b.t0 - t) < Math.abs(a.t0 - t) ? b : a);
-    const cur = slotEval(M, paths, date, usual, ctx, !light), typ = slotEval(M0, paths, date, usual, ctx0, false);
+    const cur = slotEval(M, paths, date, usual, ctx, !light, pk), typ = slotEval(M0, paths, date, usual, ctx0, false);
   pOn(cur);
     // „la timp” = probabilitatea calculată față de ora aleasă ≥ 95% (≥ 97% cât timp modelul nu e verificat pe date reale)
     const safe = s => s.pOn != null ? s.pOn >= (s.cal ? 0.95 : 0.97) : s.t0 + s.q <= deadline;
@@ -130,7 +131,7 @@ function createForecaster(o) {
       causes.push(m ? `${KIND_TXT[m[1]] || 'o problemă'}${road ? ' pe ' + road : ''}, ${dir} (semnalare de la participanți)` : (r.note || ('o bandă închisă' + (road ? ' pe ' + road : ''))) + (m ? '' : ', ' + dir));
     }
     const wx = !dry && o.weatherSpan ? o.weatherSpan(date, Math.min(usual, early ? early.t0 : usual) - 30, ta) : null;
-    const res = { date, slots, cur, typ, early, calm, lateBy, extra, level, jam, causes: [...new Set(causes)], ta, usual, deadline, near, wx, wxDelta: 0 };
+    const res = { date, slots, cur, typ, early, calm, lateBy, extra, level, jam, causes: [...new Set(causes)], ta, usual, deadline, near, wx, wxDelta: 0, personal: o.personal ? o.personal(h, date, usual) : null };
     if (!dry && ctx.weather !== 'senin') {
       /* Vremea NU decide singură prin marja de siguranță de 95–97% (prognoza de ceață/ploaie e adesea greșită, iar
          marja ar amplifica efectul). Decizia se ia ca pe vreme bună, apoi se pleacă mai devreme cu exact minutele
