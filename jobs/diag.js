@@ -37,7 +37,7 @@ const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
     const k = (e.name || '(fără nume)') + ' [' + e.cls + ']'; road[k] = road[k] || { km: 0, obs: 0, mod: 0, n: 0 }; road[k].km += e.len; road[k].obs += s.dur_min; road[k].mod += ex; road[k].n++; }
   // ce a învățat modelul din aceleași date (aceeași selecție ca serverul)
   const VMAX = { A: 150, C: 130, N: 120, J: 100, M: 90, B: 80 };
-  const T = trips.filter(t => t.path && t.path.every(e => graph.edges[e]) && !(t.pred && t.pred.offRoute) && t.dur_min >= 2 && E.pathLen(graph, t.path) / t.dur_min * 60 <= 130).map(t => ({ id: t.id, date: t.trip_date, dep: t.dep_min, dur: t.dur_min, path: t.path, weather: t.weather || 'senin', vacation: false }));
+  const T = trips.filter(t => t.path && t.path.every(e => graph.edges[e]) && !(t.pred && t.pred.offRoute) && t.dur_min >= 2 && E.pathLen(graph, t.path) / t.dur_min * 60 <= 130).map(t => ({ id: t.id, who: t.participant, o: t.origin_node, d: t.dest_node, date: t.trip_date, dep: t.dep_min, dur: t.dur_min, path: t.path, weather: t.weather || 'senin', vacation: false }));
   const S = segs.filter(s => graph.edges[s.seg_id] && s.dur_min > 0.02 && graph.edges[s.seg_id].len / s.dur_min * 60 <= (VMAX[graph.edges[s.seg_id].cls] || 100) && graph.edges[s.seg_id].len / s.dur_min * 60 >= 2).map(s => ({ segId: s.seg_id, date: s.obs_date, t: s.entry_min, dur: s.dur_min, weather: s.weather || 'senin' }));
   const L = E.train(m0, T, S, { tau: 0.95 });
   console.log(`\nlearned: ${Object.keys(L.lr.R || {}).length} roads, ${Object.keys(L.lr.L1).length} segments; calibrated: ${L.conf && L.conf.calibrated}`);
@@ -53,14 +53,22 @@ const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
   ord.forEach(({ t }, k) => {
     const Tp = ord.slice(0, k).map(o => o.t), Sp = S.filter(before(t.date, t.dep)), ctx = E.ctxFor(t.date, t.weather, false), w = m0.walk(t.path, t.date, t.dep, ctx);
     const Lk = Tp.length || Sp.length ? E.train(m0, Tp, Sp, { tau: 0.95 }) : null, pred = w.total * (Lk ? Math.exp(E.pathShift(Lk.lr, w.parts, t.date)) : 1);
+    // corecția din drumurile proprii (aceeași regulă ca în aplicație): același participant, traseu, tip de zi, oră ±40 min
+    const near = (a, b) => a === b || (graph.nodes[a] && graph.nodes[b] && E.haversine(graph.nodes[a], graph.nodes[b]) < 1.5), rs = [];
+    for (const p of Tp.slice().reverse()) { if (rs.length >= 8) break;
+      if (p.who !== t.who || !near(p.o, t.o) || !near(p.d, t.d) || E.dayClass(p.date) !== E.dayClass(t.date) || Math.abs(p.dep - t.dep) > 40 || E.dayIndex(t.date) - E.dayIndex(p.date) > 45) continue;
+      const v = E.pathLen(graph, p.path) / p.dur * 60; if (v < 5 || v > 130) continue;
+      const wp = m0.walk(p.path, p.date, p.dep, E.ctxFor(p.date, p.weather, false)), mp = wp.total * (Lk ? Math.exp(E.pathShift(Lk.lr, wp.parts, p.date)) : 1);
+      rs.push(Math.max(-0.7, Math.min(0.9, Math.log(p.dur / mp)))); }
+    const pf = rs.length ? Math.exp(rs.length / (rs.length + 1.5) * rs.reduce((a, b) => a + b, 0) / rs.length) : 1, predP = pred * pf;
     const arch = (trips.find(x => x.id === t.id) || {}).pred || {};
-    wf.push({ date: t.date, dep: t.dep, dur: t.dur, prior: w.total, pred, arch: arch.median != null ? arch.median : null, nPrev: Tp.length, nSeg: Sp.length });
+    wf.push({ date: t.date, dep: t.dep, dur: t.dur, prior: w.total, pred, predP, nP: rs.length, arch: arch.median != null ? arch.median : null, nPrev: Tp.length, nSeg: Sp.length });
   });
   const e = (a, b) => Math.abs(a - b) / b;
-  wf.forEach((x, k) => console.log(`wf ${k + 1}: ${E.dayType(x.date)} ${String(Math.floor(x.dep / 60)).padStart(2, '0')}h · learned from ${x.nPrev} trips/${x.nSeg} seg · measured ${x.dur.toFixed(0)} · a-priori ${x.prior.toFixed(0)} (${Math.round(e(x.prior, x.dur) * 100)}%) · learned ${x.pred.toFixed(0)} (${Math.round(e(x.pred, x.dur) * 100)}%)${x.arch != null ? ` · app said then ${x.arch.toFixed(0)} (${Math.round(e(x.arch, x.dur) * 100)}%)` : ''}`));
+  wf.forEach((x, k) => console.log(`wf ${k + 1}: ${E.dayType(x.date)} ${String(Math.floor(x.dep / 60)).padStart(2, '0')}h · learned from ${x.nPrev} trips/${x.nSeg} seg · measured ${x.dur.toFixed(0)} · a-priori ${x.prior.toFixed(0)} (${Math.round(e(x.prior, x.dur) * 100)}%) · learned ${x.pred.toFixed(0)} (${Math.round(e(x.pred, x.dur) * 100)}%) · +own ${x.predP.toFixed(0)} (${Math.round(e(x.predP, x.dur) * 100)}%, n=${x.nP})${x.arch != null ? ` · app said then ${x.arch.toFixed(0)} (${Math.round(e(x.arch, x.dur) * 100)}%)` : ''}`));
   const med = a => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : NaN; };
   for (const [nm, part] of [['first half', wf.slice(0, Math.ceil(wf.length / 2))], ['second half', wf.slice(Math.ceil(wf.length / 2))], ['all', wf]])
-    console.log(`wf summary ${nm} (${part.length} trips): median abs error a-priori ${Math.round(med(part.map(x => e(x.prior, x.dur))) * 100)}%, learned ${Math.round(med(part.map(x => e(x.pred, x.dur))) * 100)}%; within ±15%: a-priori ${part.filter(x => e(x.prior, x.dur) <= 0.15).length}, learned ${part.filter(x => e(x.pred, x.dur) <= 0.15).length}; app at the time: median ${Math.round(med(part.filter(x => x.arch != null).map(x => e(x.arch, x.dur))) * 100)}%`);
+    console.log(`wf summary ${nm} (${part.length} trips): median abs error a-priori ${Math.round(med(part.map(x => e(x.prior, x.dur))) * 100)}%, learned ${Math.round(med(part.map(x => e(x.pred, x.dur))) * 100)}%, +own ${Math.round(med(part.map(x => e(x.predP, x.dur))) * 100)}%; mean: learned ${Math.round(part.reduce((a, x) => a + e(x.pred, x.dur), 0) / part.length * 100)}%, +own ${Math.round(part.reduce((a, x) => a + e(x.predP, x.dur), 0) / part.length * 100)}%; within ±15%: a-priori ${part.filter(x => e(x.prior, x.dur) <= 0.15).length}, learned ${part.filter(x => e(x.pred, x.dur) <= 0.15).length}, +own ${part.filter(x => e(x.predP, x.dur) <= 0.15).length}; app at the time: median ${Math.round(med(part.filter(x => x.arch != null).map(x => e(x.arch, x.dur))) * 100)}%`);
   // ambuteiajele pe tronsoane: ce culoare (verde/galben/roșu) ar fi arătat aplicația, învățând doar din zilele de dinainte, față de ce s-a măsurat
   const lvl = r => r >= 3 ? 'r' : r >= 2 ? 'y' : 'g', days = [...new Set(S.map(o => o.date))].sort(), cm = {};
   for (const d of days) {
