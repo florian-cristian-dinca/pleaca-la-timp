@@ -11,6 +11,16 @@ const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
   const [trips, segs] = await Promise.all([q('trips'), q('segment_observations')]);
   const m0 = new E.Model(graph, []);
   console.log(`trips: ${trips.length}, segment observations: ${segs.length}`);
+  // de unde vin măsurătorile: pe participant, ANONIMIZAT (P1, P2… după volum) – fără coduri, nume, locuri sau date (jurnalul e public)
+  let fam = [], fams = []; try { fam = await q('family_members'); fams = await q('families'); } catch (e) { }
+  const per = {};
+  for (const t of trips) { const p = per[t.participant] || (per[t.participant] = { trips: 0, obs: 0, km: 0, min: 0, hours: {} }); p.trips++; p.min += t.dur_min || 0; const h = Math.floor(t.dep_min / 60); p.hours[h] = (p.hours[h] || 0) + 1; }
+  for (const o of segs) { const p = per[o.participant] || (per[o.participant] = { trips: 0, obs: 0, km: 0, min: 0, hours: {} }); p.obs++; if (graph.edges[o.seg_id]) p.km += graph.edges[o.seg_id].len; }
+  const tot = Object.values(per).reduce((a, p) => a + p.obs, 0) || 1;
+  Object.entries(per).sort((a, b) => b[1].obs - a[1].obs).forEach(([id, p], i) => {
+    const fm = fam.find(f => f.participant === id);
+    console.log(`source P${i + 1}: ${p.trips} trips (${Math.round(p.min)} min), ${p.obs} segment observations (${Math.round(p.obs / tot * 100)}%), ${p.km.toFixed(0)} km measured · departures at ${Object.keys(p.hours).sort((a, b) => a - b).map(h => h + 'h×' + p.hours[h]).join(' ')} · ${fm ? 'family group member' + (fm.minor ? ' (under 18)' : '') + (fams.some(f => f.id === fm.family && (f.owner === id || f.created_by === id)) ? ', group creator' : '') : 'not in a family group'}`);
+  });
   trips.forEach((t, i) => {
     const ok = t.path && t.path.every(e => graph.edges[e]); if (!ok) { console.log(`trip ${i + 1}: route not in graph`); return; }
     const ctx = E.ctxFor(t.trip_date, t.weather || 'senin', false), w = m0.walk(t.path, t.trip_date, t.dep_min, ctx), km = E.pathLen(graph, t.path);

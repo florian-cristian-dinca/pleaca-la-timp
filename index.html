@@ -1216,6 +1216,7 @@ function arrive(auto, tArr) {   // tArr: ora reală a sosirii (când mașina s-a
   const path = driven || L.path, orig = NET.edges[path[0]].from;
   S.trips.push({ id: L.id, date: L.date, dep: L.dep, dur, orig, dest: L.dest, path, weather: L.weather, vacation: false, source: 'participant', participant: S.pid,
     pred: Object.assign({}, L.pred, { idle: Math.round((L.idle || 0) * 10) / 10, fuel: Math.round((L.fuel || 0) * 100) / 100, fuelType: car().fuel, saved: L.usualMed && L.pred.followed && L.lvl && L.lvl !== 'g' ? Math.max(0, Math.round(L.usualMed - dur)) : 0, offRoute: !driven, gps: !!(L.gps && L.gps.fixes), segments: (L.obs || []).length, driven: !!driven, gaps: mm.gaps || 0, km: Math.round((mm.km || 0) * 10) / 10 }), onTime });
+  S.lastMoney = (() => { const C = car(); return { driven_km: Math.round(((L.mm && L.mm.dist) || L.dist || 0) * 10) / 10, cost_lei: Math.round((L.fuel || 0) * C.price * 10) / 10 }; })();
   S.lastSummary = { at: Date.now(), name: L.name, dur: Math.round(dur), usual: L.usual, idle: L.idle || 0, fuel: fuelTxt(L) };
   S.live = null; save(); enqueue('trip', S.trips[S.trips.length - 1]); famEndTrip(true);
   renderTrip(); toast((auto ? 'Am detectat sosirea. ' : '') + (onTime ? 'Ați ajuns la timp! 🎉' : 'Ați ajuns. Vă mulțumim, aplicația învață din acest drum.'));
@@ -1335,19 +1336,34 @@ async function pullFamily() {
 }
 async function famCall(fn, args) { const s = await session(); if (!s) throw new Error('offline'); const r = await s.c.rpc(fn, args); if (r.error) throw r.error; return r.data; }
 /* în timpul drumului: ultima poziție (nu traseul), cel mult o dată la 10 secunde */
+/* distanța rămasă, distanța parcursă și costul drumului (până acum și estimat pentru tot drumul), pentru familie */
+const kmTxtPlain = k => (k < 10 ? String(Math.round(k * 10) / 10).replace('.', ',') : Math.round(k)) + ' km';
+function tripMoney(L, ls) {
+  const C = car(), soFar = (L.fuel || 0) * C.price, rem = Math.max(0, ls.remKm || 0), remMin = Math.max(1, (ls.eta || 0) - (ls.now || 0)), vRem = Math.min(120, rem / remMin * 60);
+  const remCost = C.cons / 100 * rem * fuelFactor(Math.max(5, vRem), C.curve) * C.price;
+  return { rem_km: Math.round(rem * 10) / 10, driven_km: Math.round((ls.dist || 0) * 10) / 10, cost_lei: Math.round(soFar * 10) / 10, cost_total_lei: Math.round((soFar + remCost) * 10) / 10 };
+}
 async function famPushPosition(L, ls) {
   if (!S.fam || !S.fam.me || !S.fam.me.approved || !S.fam.me.sharing || !L.gps || Date.now() - FAMPOS < 10000) return;
+  if (S.famNoExtra && Date.now() - S.famNoExtra > 3600000) S.famNoExtra = 0;   // reîncerc din oră în oră (poate s-au adăugat coloanele)
   FAMPOS = Date.now();
   try { const s = await session(); if (!s) return;
     const P = ls && ls.ok && ls.pos && !ls.pos.raw ? ls.pos : L.gps;   // pe drum: poziția pusă pe stradă (mai clară pe hartă decât punctul GPS brut)
-    await s.c.from('live_positions').upsert({ participant: s.uid, lat: Math.round(P.lat * 1e5) / 1e5, lon: Math.round(P.lon * 1e5) / 1e5, acc: L.gps.acc, speed_kmh: ls.v != null ? Math.round(ls.v) : null,
-      dest_name: placeName(L.dest), eta_min: Math.round(ls.eta), ta_min: L.ta, status: 'pe drum', day: todayStr(), updated_at: new Date().toISOString() });
+    const row = { participant: s.uid, lat: Math.round(P.lat * 1e5) / 1e5, lon: Math.round(P.lon * 1e5) / 1e5, acc: L.gps.acc, speed_kmh: ls.v != null ? Math.round(ls.v) : null,
+      dest_name: placeName(L.dest), eta_min: Math.round(ls.eta), ta_min: L.ta, status: 'pe drum', day: todayStr(), updated_at: new Date().toISOString() };
+    if (!S.famNoExtra) Object.assign(row, tripMoney(L, ls));
+    let r = await s.c.from('live_positions').upsert(row);
+    if (r.error && !S.famNoExtra && /rem_km|cost_|driven_km|column/i.test(r.error.message || '')) {   // baza de date nu are încă noile coloane: trimit ca înainte
+      S.famNoExtra = Date.now(); for (const k of ['rem_km', 'driven_km', 'cost_lei', 'cost_total_lei']) delete row[k]; r = await s.c.from('live_positions').upsert(row); }
   } catch (e) { }
 }
 async function famEndTrip(arrived) {
   if (!S.fam || !S.fam.me) return;
   try { const s = await session(); if (!s) return;
-    if (arrived && S.fam.me.sharing && S.fam.me.approved) await s.c.from('live_positions').update({ status: 'a ajuns', speed_kmh: 0, updated_at: new Date().toISOString() }).eq('participant', s.uid);
+    if (arrived && S.fam.me.sharing && S.fam.me.approved) { const fin = { status: 'a ajuns', speed_kmh: 0, updated_at: new Date().toISOString() }, x = S.lastMoney;
+      if (x && !S.famNoExtra) Object.assign(fin, { rem_km: 0, driven_km: x.driven_km, cost_lei: x.cost_lei, cost_total_lei: x.cost_lei });
+      let r = await s.c.from('live_positions').update(fin).eq('participant', s.uid);
+      if (r.error && x) { for (const k of ['rem_km', 'driven_km', 'cost_lei', 'cost_total_lei']) delete fin[k]; await s.c.from('live_positions').update(fin).eq('participant', s.uid); } }
     else await s.c.from('live_positions').delete().eq('participant', s.uid);
   } catch (e) { }
 }
@@ -1427,7 +1443,7 @@ function renderFam() {
   const me = F.me, owner = F.owner === F.uid, pos = Object.fromEntries((F.pos || []).map(p => [p.participant, p]));
   const pending = F.members.filter(m => m.minor && !m.approved);
   famTrack(F.pos || []);
-  const pts = F.members.map(m => { const p = pos[m.participant]; return p ? { pid: m.participant, lat: p.lat, lon: p.lon, acc: p.acc, name: m.display_name, status: p.status, me: m.participant === F.uid, ang: famAng(m.participant), speed: p.speed_kmh, at: p.updated_at } : null; }).filter(Boolean);
+  const pts = F.members.map(m => { const p = pos[m.participant]; return p ? { pid: m.participant, lat: p.lat, lon: p.lon, acc: p.acc, name: m.display_name, status: p.status, me: m.participant === F.uid, ang: famAng(m.participant), speed: p.speed_kmh, at: p.updated_at, rem: p.rem_km } : null; }).filter(Boolean);
   // implicit urmăresc pe cineva aflat pe drum (altcineva decât mine, dacă există)
   if (!FV.picked || !pts.some(p => p.pid === FV.sel)) { const t = pts.filter(p => p.status !== 'a ajuns'); FV.sel = FV.picked === 'all' ? null : ((t.find(p => !p.me) || t[0] || pts.find(p => !p.me) || pts[0] || {}).pid || null); }
   const selP = pts.find(p => p.pid === FV.sel);
@@ -1437,10 +1453,10 @@ function renderFam() {
         <label class="chk"><input type="checkbox" class="fOk" data-p="${m.participant}"><span>Sunt părintele sau tutorele lui/ei și sunt de acord ca PRO SMART WORK S.R.L. să îi prelucreze datele în acest pilot (drumurile, fără nume, și poziția în timpul drumurilor, vizibilă doar familiei), conform informării privind datele personale.</span></label>
         <button class="btn go fApprove" data-p="${m.participant}">Îmi dau acordul</button></div>`).join('') || ''}
       ${F.members.map(m => { const p = pos[m.participant], isMe = m.participant === F.uid;
-        const st = !m.approved ? 'așteaptă acordul părintelui' : !m.sharing ? 'partajarea e oprită' : p ? (p.status === 'a ajuns' ? `a ajuns la ${esc(p.dest_name || 'destinație')}, ${famAgo(p.updated_at)}` : `pe drum spre ${esc(p.dest_name || '?')}, sosire ~${fmt(Math.round(p.eta_min))}${p.speed_kmh != null ? `, ${Math.round(p.speed_kmh)} km/h` : ''} · ${famAgo(p.updated_at)}`) : 'nu e pe drum acum';
+        const st = !m.approved ? 'așteaptă acordul părintelui' : !m.sharing ? 'partajarea e oprită' : p ? (p.status === 'a ajuns' ? `a ajuns la ${esc(p.dest_name || 'destinație')}, ${famAgo(p.updated_at)}${p.cost_lei != null && p.driven_km ? `<br>${kmTxtPlain(p.driven_km)}, cost ~${n1(p.cost_lei)} lei` : ''}` : `pe drum spre ${esc(p.dest_name || '?')}, sosire ~${fmt(Math.round(p.eta_min))}${p.rem_km != null ? `, mai are ${kmTxtPlain(p.rem_km)}` : ''}${p.speed_kmh != null ? `, ${Math.round(p.speed_kmh)} km/h` : ''}${p.cost_lei != null ? `<br>⛽ cost până acum ~${n1(p.cost_lei)} lei, tot drumul ~${Math.round(p.cost_total_lei)} lei${p.driven_km != null ? ` · parcurși ${kmTxtPlain(p.driven_km)}` : ''}` : ''} · ${famAgo(p.updated_at)}`) : 'nu e pe drum acum';
         return `<div class="next" style="cursor:default"><i class="lamp" style="margin:0;background:${p && m.sharing && m.approved ? (p.status === 'a ajuns' ? 'var(--gl)' : 'var(--rl)') : '#c4ccd4'}"></i><div><b>${esc(m.display_name)}${isMe ? ' (dumneavoastră)' : ''}${m.minor ? ', sub 18 ani' : ''}</b><span>${st}</span></div></div>`; }).join('')}
       ${pts.length ? `<div style="display:flex;gap:6px;overflow-x:auto;margin:10px 0 6px">${pts.map(p => `<button class="btn ${p.pid === FV.sel ? 'dark' : 'ghost'} fSel" data-p="${p.pid}" style="flex:none;width:auto;padding:7px 13px;margin:0;font-size:14px">${esc((p.name || '?').split(' ')[0])}</button>`).join('')}${pts.length > 1 ? `<button class="btn ${!FV.sel ? 'dark' : 'ghost'} fSel" data-p="all" style="flex:none;width:auto;padding:7px 13px;margin:0;font-size:14px">Toți</button>` : ''}</div>
-        ${selP ? `<div class="note" style="margin:0 0 6px"><b>${esc((selP.name || '').split(' ')[0])}</b> ${esc(whereTxt(selP.lat, selP.lon))}${selP.status !== 'a ajuns' && selP.speed != null ? ` · ${Math.round(selP.speed)} km/h` : ''} · ${famAgo(selP.at)}${selP.acc ? ` · precizie ~${Math.round(selP.acc)} m` : ''}</div>` : ''}
+        ${selP ? `<div class="note" style="margin:0 0 6px"><b>${esc((selP.name || '').split(' ')[0])}</b> ${esc(whereTxt(selP.lat, selP.lon))}${selP.status !== 'a ajuns' && selP.speed != null ? ` · ${Math.round(selP.speed)} km/h` : ''}${selP.status !== 'a ajuns' && selP.rem != null ? ` · mai are ${kmTxtPlain(selP.rem)}` : ''} · ${famAgo(selP.at)}${selP.acc ? ` · precizie ~${Math.round(selP.acc)} m` : ''}</div>` : ''}
         <div class="mapwrap"><canvas class="rmap" id="famMap" style="height:340px"></canvas><div class="mapbtns"><button id="fZin" aria-label="Mărește">+</button><button id="fZout" aria-label="Micșorează">−</button>${selP ? '<button id="fNorth" aria-label="Orientarea hărții">🧭</button>' : ''}</div></div>` : ''}
       <p class="muted" style="font-size:13px">Pozițiile se actualizează la 10 secunde în timpul unui drum; harta urmărește persoana aleasă, în sensul ei de mers. Serverul păstrează doar ultima poziție; dacă nu se mai actualizează 10 minute, nu mai e afișată și se șterge.</p></div>
     <div class="card"><div class="kicker">Codul grupului</div><div style="font-size:30px;font-weight:900;letter-spacing:.08em;margin:4px 0">${esc(F.code || '—')}</div>
