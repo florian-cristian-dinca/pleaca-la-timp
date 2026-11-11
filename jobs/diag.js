@@ -56,6 +56,16 @@ const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
   const med = a => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[Math.floor((b.length - 1) / 2)] : NaN; };
   for (const [nm, part] of [['first half', wf.slice(0, Math.ceil(wf.length / 2))], ['second half', wf.slice(Math.ceil(wf.length / 2))], ['all', wf]])
     console.log(`wf summary ${nm} (${part.length} trips): median abs error a-priori ${Math.round(med(part.map(x => e(x.prior, x.dur))) * 100)}%, learned ${Math.round(med(part.map(x => e(x.pred, x.dur))) * 100)}%; within ±15%: a-priori ${part.filter(x => e(x.prior, x.dur) <= 0.15).length}, learned ${part.filter(x => e(x.pred, x.dur) <= 0.15).length}; app at the time: median ${Math.round(med(part.filter(x => x.arch != null).map(x => e(x.arch, x.dur))) * 100)}%`);
+  // ambuteiajele pe tronsoane: ce culoare (verde/galben/roșu) ar fi arătat aplicația, învățând doar din zilele de dinainte, față de ce s-a măsurat
+  const lvl = r => r >= 3 ? 'r' : r >= 2 ? 'y' : 'g', days = [...new Set(S.map(o => o.date))].sort(), cm = {};
+  for (const d of days) {
+    const Tp = T.filter(t => t.date < d), Sp = S.filter(o => o.date < d), Lk = Tp.length || Sp.length ? E.train(m0, Tp, Sp, { tau: 0.95 }) : null;
+    for (const o of S.filter(x => x.date === d)) { const ed = graph.edges[o.segId], free = ed.len / ed.v0 * 60, ctx = E.ctxFor(o.date, o.weather, false);
+      const p = m0.segState(o.segId, o.date, o.t, ctx).med * (Lk ? Math.exp(E.edgeBias(Lk.lr, o.segId, o.date, o.t)) : 1);
+      const k = lvl(o.dur / free) + lvl(p / free); cm[k] = (cm[k] || 0) + ed.len; }
+  }
+  const g = k => (cm[k] || 0), tot2 = Object.values(cm).reduce((a, b) => a + b, 0) || 1;
+  console.log(`jam km (measured→predicted): g→g ${g('gg').toFixed(0)}, g→y ${g('gy').toFixed(0)}, g→r ${g('gr').toFixed(0)} | y→g ${g('yg').toFixed(0)}, y→y ${g('yy').toFixed(0)}, y→r ${g('yr').toFixed(0)} | r→g ${g('rg').toFixed(0)}, r→y ${g('ry').toFixed(0)}, r→r ${g('rr').toFixed(0)} | agreement ${Math.round((g('gg') + g('yy') + g('rr')) / tot2 * 100)}%`);
   console.log('\nlearned road factors (×): ' + Object.entries(L.lr.R || {}).sort((a, b) => b[1].w - a[1].w).slice(0, 15).map(([k, v]) => `${k.split(':').slice(1).join(':')} ${Math.exp(v.b).toFixed(2)} (n=${v.w})`).join('; '));
   console.log('\nroad · km · measured min · model min · measured km/h · model km/h · ratio');
   Object.entries(road).sort((a, b) => b[1].km - a[1].km).forEach(([k, r]) => console.log(`${k} · ${r.km.toFixed(2)} · ${r.obs.toFixed(1)} · ${r.mod.toFixed(1)} · ${(r.km / r.obs * 60).toFixed(1)} · ${(r.km / r.mod * 60).toFixed(1)} · ${(r.obs / r.mod).toFixed(2)}`));
