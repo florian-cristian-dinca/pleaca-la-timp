@@ -13,6 +13,7 @@ const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
   console.log(`trips: ${trips.length}, segment observations: ${segs.length}`);
   { const c = await db.from('live_positions').select('rem_km,cost_lei,cost_total_lei,driven_km').limit(1); console.log('schema family2 (rem_km, cost_lei…):', c.error ? 'MISSING – ' + c.error.message : 'ok');
     const f = await db.rpc('report_feedback', { rid: '__none__', still: true }); console.log('schema feedback:', f.error && /function|exist/i.test(f.error.message) && !/neautentificat/.test(f.error.message) ? 'MISSING – ' + f.error.message : 'ok');
+    const mm = await db.from('family_messages').select('id').limit(1); console.log('schema messages:', mm.error ? 'MISSING – ' + mm.error.message : 'ok');
     const lt = await db.rpc('live_traffic'); console.log('schema live_traffic:', lt.error ? 'MISSING – ' + lt.error.message : 'ok');
     const last = trips.slice().sort((a, b) => (a.trip_date + String(a.dep_min).padStart(5, '0')).localeCompare(b.trip_date + String(b.dep_min).padStart(5, '0'))).slice(-3);
     last.forEach(t => console.log(`recent trip: ${E.dayType(t.trip_date)} ${String(Math.floor(t.dep_min / 60)).padStart(2, '0')}h, ${t.dur_min.toFixed(0)} min, segments ${(t.path || []).length}, pred keys: ${Object.keys(t.pred || {}).join(',')}, uploaded ${String(t.created_at || '').slice(11, 16)}Z`)); }

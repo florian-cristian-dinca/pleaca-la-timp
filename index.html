@@ -124,6 +124,10 @@ textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px
 .road .parts{display:flex;flex-direction:column;min-height:236px}
 .road .part{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #47505a}.road .part:last-child{border:none}
 .road .part svg{width:40px;height:40px;flex:none}.road .part b{display:block;font-size:15px}.road .part span{font-size:13.5px;color:#d5dce3}
+.msgs{max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin:8px 0}.bub{align-self:flex-start;max-width:85%;background:#eef2f6;border-radius:14px 14px 14px 4px;padding:7px 11px;display:flex;flex-direction:column;font-size:15px}.bub.me{align-self:flex-end;background:#dbe8fb;border-radius:14px 14px 4px 14px}.bub b{font-size:12px;color:#0b4ea2}.bub small{font-size:11px;color:#6b7785;margin-top:2px}.bub small a{color:#9b2c2c}
+.qmsg{display:flex;gap:6px;overflow-x:auto;padding:4px 0}.qmsg button{flex:none;border:1px solid #cfd8e2;background:#fff;border-radius:18px;padding:8px 12px;font:600 14px 'Overpass',sans-serif}
+.msgin{display:flex;gap:6px;margin-top:6px}.msgin input{flex:1;padding:11px 12px;border:1px solid #cfd8e2;border-radius:12px;font:500 16px 'Overpass',sans-serif}.msgin button{width:48px;border:0;border-radius:12px;background:#0b4ea2;color:#fff;font-size:20px}
+nav button{position:relative}nav .dot{position:absolute;top:4px;right:22%;min-width:18px;height:18px;border-radius:9px;background:#c3242f;color:#fff;font:800 11px/18px 'Overpass',sans-serif;font-style:normal;text-align:center;padding:0 4px}
 .fb{display:flex;gap:8px;margin:4px 0 10px 40px}.fb button{flex:1;padding:9px 6px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:inherit;font:700 14px 'Overpass',sans-serif}
 .inc{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #47505a;font-size:14.5px}.inc svg{width:24px;height:24px;flex:none}
 .trip .note{border-radius:10px;padding:9px 11px;margin-top:10px;font-size:14.5px;font-weight:600}
@@ -1348,6 +1352,44 @@ function banner(t) { const b = $('banner'); b.textContent = t; b.classList.add('
 /* ---------- Familie: poziția se vede doar în timpul drumurilor pornite cu „Am plecat” ---------- */
 let FAMPOS = 0;
 const famErr = e => { const m = String(e && e.message || e); return /already_in_family/.test(m) ? 'Sunteți deja într-un grup de familie.' : /bad_code/.test(m) ? 'Codul nu e corect. Verificați-l și încercați din nou.' : /not_allowed/.test(m) ? 'Doar un adult din grup poate da acordul.' : /relation .* does not exist|function .* does not exist|schema cache/.test(m) ? 'Funcția Familie nu e încă activată pe server.' : 'Nu am putut contacta serverul. Verificați conexiunea la internet.'; };
+/* ---------- Mesaje în familie ---------- */
+const QUICK = ['🚗 Am plecat', '🏁 Am ajuns', '⏱️ Întârzii ~10 min', '📞 Sună-mă când poți', '👍 OK'];
+function quickText(i) { const L = S.live; if (i === 0 && L) { const ls = liveState(L); return `🚗 Am plecat spre ${placeName(L.dest)}, ajung pe la ${fmt(Math.round(ls.eta))}`; } return QUICK[i]; }
+const famName = pid => { const m = ((S.fam && S.fam.members) || []).find(x => x.participant === pid); return m ? m.display_name : 'Cineva'; };
+function msgsHTML() {
+  const ms = (S.fam && S.fam.msgs) || []; if (!ms.length) return '<p class="muted" style="margin:6px 0">Încă nu sunt mesaje.</p>';
+  return '<div class="msgs">' + ms.slice(-30).map(m => { const mine = m.sender === S.fam.uid, d = new Date(m.created_at);
+    const when = (d.toDateString() === new Date().toDateString() ? '' : d.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' }) + ' ') + d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' });
+    return `<div class="bub ${mine ? 'me' : ''}">${mine ? '' : `<b>${esc(famName(m.sender))}</b>`}<span>${esc(m.body)}</span><small>${when}${mine ? ` · <a href="#" data-del="${m.id}">șterge</a>` : ''}</small></div>`; }).join('') + '</div>';
+}
+async function pullMsgs(silent) {
+  const F = S.fam; if (!F || !F.id || !F.me || !F.me.approved || S.famMsgOff) return;
+  try { const s = await session(); if (!s) return;
+    const { data, error } = await s.c.from('family_messages').select('id,sender,body,quick,created_at').eq('family', F.id).order('created_at', { ascending: false }).limit(50);
+    if (error) { if (/family_messages|relation|exist/i.test(error.message || '')) S.famMsgOff = Date.now(); return; }
+    const ms = (data || []).reverse(), old = new Set((F.msgs || []).map(m => m.id)), fresh = ms.filter(m => !old.has(m.id) && m.sender !== F.uid);
+    F.msgs = ms; save();
+    if (fresh.length && F.msgsSeen) { const m = fresh[fresh.length - 1], txt = `${famName(m.sender)}: ${m.body}`;
+      if (!$('s-fam').classList.contains('on')) { toast('💬 ' + txt); if (navigator.vibrate) navigator.vibrate([120, 60, 120]); }
+      if (S.live) speak(`Mesaj de la ${famName(m.sender)}: ${m.body.replace(/[\u{1F300}-\u{1FAFF}☀-➿]/gu, '')}`);   // la volan: citit cu voce tare
+    }
+    F.msgsSeen = true; badge();
+    if ($('fMsgs')) { $('fMsgs').innerHTML = msgsHTML(); $('fMsgs').querySelectorAll('[data-del]').forEach(b => b.onclick = e => { e.preventDefault(); delMsg(+b.dataset.del); }); if ($('s-fam').classList.contains('on')) { markRead(); const l = $('fMsgs').querySelector('.msgs'); if (l) l.scrollTop = l.scrollHeight; } }
+  } catch (e) { }
+}
+function markRead() { if (S.fam && S.fam.msgs && S.fam.msgs.length) { S.famRead = S.fam.msgs[S.fam.msgs.length - 1].id; save(); badge(); } }
+function badge() { const b = document.querySelector('nav button[data-s="fam"]'); if (!b) return; const F = S.fam, n = F && F.msgs ? F.msgs.filter(m => m.sender !== F.uid && m.id > (S.famRead || 0)).length : 0;
+  let d = b.querySelector('.dot'); if (n && !d) { d = document.createElement('i'); d.className = 'dot'; b.appendChild(d); } if (d) { d.textContent = n > 9 ? '9+' : n; d.style.display = n ? '' : 'none'; } }
+async function sendMsg(body, quick) {
+  const F = S.fam; if (!F || !F.id) return;
+  if (!quick && S.live && S.live.mm && S.live.mm.v > 10) { toast('Cât conduceți, folosiți butoanele rapide; mesajele scrise, doar cu mașina oprită.'); return; }
+  try { const s = await session(); if (!s) { toast('Fără conexiune: mesajul nu a fost trimis.'); return; }
+    const { error } = await s.c.from('family_messages').insert({ family: F.id, body: body.slice(0, 500), quick: !!quick });
+    if (error) { toast(/family_messages|relation|exist/i.test(error.message || '') ? 'Mesajele nu sunt încă activate pe server.' : 'Mesajul nu a fost trimis. Încercați din nou.'); return; }
+    toast('Trimis.'); S.famMsgOff = 0; await pullMsgs(true);
+  } catch (e) { toast('Mesajul nu a fost trimis. Încercați din nou.'); }
+}
+async function delMsg(id) { try { const s = await session(); if (!s) return; await s.c.from('family_messages').delete().eq('id', id); S.fam.msgs = (S.fam.msgs || []).filter(m => m.id !== id); save(); if ($('fMsgs')) $('fMsgs').innerHTML = msgsHTML(); renderFam(); } catch (e) { } }
 async function pullFamily() {
   try {
     const s = await session(); if (!s) return;
@@ -1357,7 +1399,7 @@ async function pullFamily() {
     const me = mem.find(m => m.participant === s.uid);
     const { data: fam } = await s.c.from('families').select('id,code,created_by').limit(1);
     const { data: pos0 } = await s.c.from('live_positions').select('*'), pos = (pos0 || []).filter(p => Date.now() - new Date(p.updated_at).getTime() < 10 * 60000);
-    S.fam = { uid: s.uid, code: fam && fam[0] ? fam[0].code : null, owner: fam && fam[0] ? fam[0].created_by : null, me, members: mem, pos: pos || [], at: Date.now() };
+    S.fam = { uid: s.uid, id: me ? me.family : null, msgs: S.fam && S.fam.msgs, msgsSeen: S.fam && S.fam.msgsSeen, code: fam && fam[0] ? fam[0].code : null, owner: fam && fam[0] ? fam[0].created_by : null, me, members: mem, pos: pos || [], at: Date.now() };
     const was = S.famApproved; S.famApproved = !!(me && me.approved); save();
     if (S.minor && S.famApproved && !was) { toast('Părintele dumneavoastră și-a dat acordul. Aplicația funcționează complet.'); flush(); }
   } catch (e) { console.warn('family', e.message); }
@@ -1487,10 +1529,18 @@ function renderFam() {
         ${selP ? `<div class="note" style="margin:0 0 6px"><b>${esc((selP.name || '').split(' ')[0])}</b> ${esc(whereTxt(selP.lat, selP.lon))}${selP.status !== 'a ajuns' && selP.speed != null ? ` · ${Math.round(selP.speed)} km/h` : ''}${selP.status !== 'a ajuns' && selP.rem != null ? ` · mai are ${kmTxtPlain(selP.rem)}` : ''} · ${famAgo(selP.at)}${selP.acc ? ` · precizie ~${Math.round(selP.acc)} m` : ''}</div>` : ''}
         <div class="mapwrap"><canvas class="rmap" id="famMap" style="height:340px"></canvas><div class="mapbtns"><button id="fZin" aria-label="Mărește">+</button><button id="fZout" aria-label="Micșorează">−</button>${selP ? '<button id="fNorth" aria-label="Orientarea hărții">🧭</button>' : ''}</div></div>` : ''}
       <p class="muted" style="font-size:13px">Pozițiile se actualizează la 10 secunde în timpul unui drum; harta urmărește persoana aleasă, în sensul ei de mers. Serverul păstrează doar ultima poziție; dacă nu se mai actualizează 10 minute, nu mai e afișată și se șterge.</p></div>
+    ${me.approved ? `<div class="card" id="fMsgCard"><div class="kicker">Mesaje în familie</div><div id="fMsgs">${msgsHTML()}</div>
+      <div class="qmsg">${QUICK.map((q, i) => `<button data-q="${i}">${q}</button>`).join('')}</div>
+      <div class="msgin"><input id="fMsgIn" maxlength="500" placeholder="Scrieți un mesaj…" autocomplete="off"><button id="fMsgSend" aria-label="Trimite">➤</button></div>
+      <p class="muted" style="font-size:12px;margin:6px 0 0">Le văd doar membrii grupului; se șterg automat după 7 zile. La volan folosiți doar butoanele rapide, cu mașina oprită.</p></div>` : ''}
     <div class="card"><div class="kicker">Codul grupului</div><div style="font-size:30px;font-weight:900;letter-spacing:.08em;margin:4px 0">${esc(F.code || '—')}</div>
       <p class="muted">Trimiteți codul membrilor familiei. Fiecare îl introduce în aplicație, la Familie.</p><button class="btn ghost" id="fShare">Trimiteți codul</button></div>
     <div class="card"><label class="chk"><input type="checkbox" id="fShareOn" ${me.sharing ? 'checked' : ''}><span>Familia îmi vede poziția în timpul drumurilor</span></label>
       <button class="btn red" id="fLeave">Ieșiți din grup</button>${owner ? '<p class="muted" style="font-size:13px">Ați creat grupul: dacă ieșiți, grupul se închide pentru toți.</p>' : ''}</div>`;
+  if ($('fMsgSend')) { const send = () => { const v = $('fMsgIn').value.trim(); if (v) { sendMsg(v, false); $('fMsgIn').value = ''; } };
+    $('fMsgSend').onclick = send; $('fMsgIn').onkeydown = e => { if (e.key === 'Enter') send(); };
+    el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => sendMsg(quickText(+b.dataset.q), true));
+    el.querySelectorAll('[data-del]').forEach(b => b.onclick = e => { e.preventDefault(); delMsg(+b.dataset.del); }); markRead(); const l = el.querySelector('.msgs'); if (l) l.scrollTop = l.scrollHeight; pullMsgs(); }
   if (pts.length) { setTimeout(() => drawFamMap($('famMap'), pts), 30);
     el.querySelectorAll('.fSel').forEach(b => b.onclick = () => { FV.picked = b.dataset.p; FV.sel = b.dataset.p === 'all' ? null : b.dataset.p; renderFam(); });
     const zoom = k => { FV.km = Math.min(30, Math.max(0.4, FV.km * k)); if (!FV.sel) { FV.picked = (pts.find(p => !p.me) || pts[0]).pid; FV.sel = FV.picked; } renderFam(); };
@@ -1672,6 +1722,7 @@ if (isIOS && !standalone) setTimeout(showInstall, 1500);
   bindMapPick();
   pullTraffic(true); setInterval(() => pullTraffic(), 300000);
   if (S.consent) pullFamily(); setInterval(() => { if (!S.consent) return; if ($('s-fam').classList.contains('on')) pullFamily().then(() => { if ($('s-fam').classList.contains('on') && !document.activeElement.closest('#s-fam input')) renderFam(); }); else if (Date.now() - ((S.fam && S.fam.at) || 0) > 120000) pullFamily(); }, 10000);
+setInterval(() => { if (!S.consent || !S.fam || document.hidden) return; if (S.famMsgOff && Date.now() - S.famMsgOff > 3600000) S.famMsgOff = 0; if ($('s-fam').classList.contains('on') || Date.now() - (S.famMsgAt || 0) > 30000) { S.famMsgAt = Date.now(); pullMsgs(); } }, 10000);
   checkAlerts(); setInterval(checkAlerts, 30000); setInterval(() => { if (S.live && $('s-trip').classList.contains('on')) drawTrip(); if ($('s-map').classList.contains('on')) { LMT = 0; drawLiveMap(); } }, 5000); setInterval(() => { if ($('s-map').classList.contains('on')) $('mapPanel').innerHTML = mapPanel(); }, 60000);
 })();
 </script>
