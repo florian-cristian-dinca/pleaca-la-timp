@@ -1515,7 +1515,7 @@ function famTrack(pos) { // istoricul pozițiilor primite (doar în memoria aces
 }
 function famAng(pid) { const h = FAMH[pid] || []; const b = h[h.length - 1]; if (!b) return null;
   for (let i = h.length - 2; i >= 0; i--) { const a = h[i]; if (E.haversine(a, b) >= 0.025) return Math.atan2(-(b.lat - a.lat), (b.lon - a.lon) * Math.cos(b.lat * Math.PI / 180)); } return null; }
-function whereTxt(lat, lon) { const mp = myPlaceAt(lat, lon); if (mp) return 'la ' + mp.name; const en = encAt(lat, lon); if (en) return 'la ' + en + ' (în incintă)';   // numele nu se pot declina automat („Universitatea…”), deci „la X (în incintă)” return whereRoad(lat, lon); }
+function whereTxt(lat, lon) { const mp = myPlaceAt(lat, lon); if (mp) return 'la ' + mp.name; const en = encAt(lat, lon); if (en) return 'la ' + en + ' (în incintă)'; /* numele nu se pot declina automat, deci „la X (în incintă)” */ return whereRoad(lat, lon); }
 function whereRoad(lat, lon) { // „pe Calea Bucureștilor, lângă Otopeni” / „pe Strada Trotușului, lângă Domenii”
   let road = null, bd = 0.08; for (const eid of trk().near(lat, lon)) { const e = NET.edges[eid]; if (!e.name) continue; const p = trk().projEdge(eid, lat, lon); if (p && p.d < bd) { bd = p.d; road = e.name; } }
   const loc = localSnap(lat, lon, 25), mainM = road ? bd * 1000 : 1e9;
