@@ -174,6 +174,18 @@ class Collector(osmium.SimpleHandler):
                         self.base.append((ak, ll))
             except Exception:
                 pass
+        # incinte cu nume (campusuri, spitale, școli, zone de birouri/industriale, firme): pentru „Sunt în incinta …”
+        en = t.get('name')
+        if en and (c or t.get('landuse') in ('industrial', 'commercial', 'retail', 'military') or t.get('amenity') in ('school', 'kindergarten', 'university', 'college', 'hospital', 'clinic', 'townhall', 'police', 'fire_station', 'courthouse', 'place_of_worship', 'marketplace', 'parking')
+                   or t.get('office') or t.get('building') in ('office', 'commercial', 'industrial', 'retail', 'university', 'school', 'hospital', 'public', 'civic', 'warehouse')
+                   or t.get('leisure') in ('sports_centre', 'stadium', 'park') or t.get('tourism') in ('hotel', 'museum', 'attraction')):
+            try:
+                for ring in a.outer_rings():
+                    ll = [(nd.lat, nd.lon) for nd in ring]
+                    if len(ll) >= 4 and self.inside(sum(p[0] for p in ll) / len(ll), sum(p[1] for p in ll) / len(ll)):
+                        self.base.append(('en', ll, en[:60]))
+            except Exception:
+                pass
         if not (c and poi_name(a.tags)) and not (hn and st):
             return
         try:
@@ -260,12 +272,12 @@ TILE_LAT, TILE_LON = 0.04, 0.06
 def write_tiles(base, folder):
     """Map background in tiles (~4.4 x 4.8 km): simplified lines/polygons, coordinates as 1e-5 deg integers, delta-encoded."""
     tiles = defaultdict(lambda: defaultdict(list))
-    tol = {'m': 0.006, 'p': 0.006, 't': 0.006, 'r': 0.005, 's': 0.005, 'k': 0.008, 'rail': 0.008, 'river': 0.01, 'stream': 0.008, 'water': 0.01, 'green': 0.012}
+    tol = {'m': 0.006, 'p': 0.006, 't': 0.006, 'r': 0.005, 's': 0.005, 'k': 0.008, 'rail': 0.008, 'river': 0.01, 'stream': 0.008, 'water': 0.01, 'green': 0.012, 'en': 0.004}
     names = defaultdict(lambda: defaultdict(list))   # numele străzilor, în aceeași ordine ca liniile (pentru „pe Strada …”)
     for item in base:
         kind, ll = item[0], item[1]
         nm = item[2] if len(item) > 2 else ''
-        if kind in ('water', 'green'):
+        if kind in ('water', 'green', 'en'):
             pts = [ll[0]] + simplify(ll, tol[kind]) + [ll[-1]]
             if len(pts) < 4:
                 continue
@@ -279,6 +291,8 @@ def write_tiles(base, folder):
             for i in range(i0, i1 + 1):
                 for j in range(j0, j1 + 1):
                     tiles[(i, j)][kind].append(pts)
+                    if kind == 'en':
+                        names[(i, j)][kind].append(nm)
             continue
         pts = [ll[0]] + simplify(ll, tol.get(kind, 0.006)) + [ll[-1]]
         cur, key = [pts[0]], (int(pts[0][0] // TILE_LAT), int(pts[0][1] // TILE_LON))
@@ -305,7 +319,7 @@ def write_tiles(base, folder):
     idx = []
     for (i, j), kinds in tiles.items():
         data = {k: [enc(p) for p in v] for k, v in kinds.items()}
-        nm = [[k, v] for k, v in names[(i, j)].items() if k in ('m', 'p', 't', 'r', 's') and any(v)]
+        nm = [[k, v] for k, v in names[(i, j)].items() if k in ('m', 'p', 't', 'r', 's', 'en') and any(v)]
         if nm:
             data['nm'] = nm   # [[tip, [nume pe linie]]] - listă, ca versiunile vechi ale aplicației să o poată ignora
         path = os.path.join(folder, f'{i}_{j}.json')

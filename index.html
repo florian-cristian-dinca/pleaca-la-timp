@@ -323,19 +323,20 @@ function bindPickers(root) {
   (root || document).querySelectorAll('.pk').forEach(el => {
     if (el._bound) return; el._bound = true;
     const hid = el.querySelector('input[type=hidden]'), q = el.querySelector('.pkq'), list = el.querySelector('.pkl');
-    const pick = p => { const nm = p.kind === 'addr' && p.near ? p.name + ', ' + p.near : p.name; if (p.kind === 'addr' || p.kind === 'poi') { setLabel(p.node, nm); if (p.lat != null) setPoint(p.node, p); } hid.value = p.node; hid.dataset.name = nm; q.value = nm; list.innerHTML = ''; hid.dispatchEvent(new Event('change')); };
+    const pick = p => { const nm = p.kind === 'addr' && p.near ? p.name + ', ' + p.near : p.name; if (p.kind === 'addr' || p.kind === 'poi' || p.kind === 'mine') { setLabel(p.node, nm); if (p.lat != null && p.kind !== 'mine') setPoint(p.node, p); } hid.value = p.node; hid.dataset.name = nm; if (p.lat != null) hid.dataset.pt = JSON.stringify({ lat: +p.lat, lon: +p.lon }); else delete hid.dataset.pt; q.value = nm; list.innerHTML = ''; hid.dispatchEvent(new Event('change')); };
     const render = () => {
       const t = norm(q.value); if (t.length < 2) { list.innerHTML = ''; return; }
       const words = t.split(' ');
       if (!ADR && t.length >= 3) loadAdr().then(() => { if (document.activeElement === q) render(); });
       const pl = placesList().filter(p => words.every(w => p.n.includes(w)))
         .sort((a, b) => (b.n.startsWith(t) - a.n.startsWith(t)) || (rk(a) - rk(b)) || a.name.length - b.name.length);
-      const ad = adrSearch(t), res = (/\d/.test(t) ? ad.concat(pl) : pl.slice(0, 5).concat(ad)).slice(0, 8);
-      list.innerHTML = res.length ? res.map((p, i) => `<button type="button" data-i="${i}"><b>${esc(p.name)}</b><span>${p.kind === 'addr' ? (p.exact ? 'adresă' : p.approx ? 'stradă (numărul nu e pe hartă, aproximativ)' : 'stradă') + (p.near ? ', ' + esc(p.near) : '') : (p.kind === 'poi' ? (CAT[p.cat] || 'loc important') : (KIND[p.kind] || 'loc')) + ', ' + (p.near ? 'lângă ' + esc(p.near) : p.zone)}</span></button>`).join('') : '<div class="pke">Nu găsesc acest loc. Încercați localitatea sau cartierul.</div>';
+      const mine = myPlaces().filter(p => words.every(w => norm(p.name).includes(w))).map(p => Object.assign({ kind: 'mine' }, p));
+      const ad = adrSearch(t), res = mine.concat(/\d/.test(t) ? ad.concat(pl) : pl.slice(0, 5).concat(ad)).slice(0, 8);
+      list.innerHTML = res.length ? res.map((p, i) => `<button type="button" data-i="${i}"><b>${esc(p.name)}</b><span>${p.kind === 'mine' ? '⭐ locul dumneavoastră, punct exact' : p.kind === 'addr' ? (p.exact ? 'adresă' : p.approx ? 'stradă (numărul nu e pe hartă, aproximativ)' : 'stradă') + (p.near ? ', ' + esc(p.near) : '') : (p.kind === 'poi' ? (CAT[p.cat] || 'loc important') : (KIND[p.kind] || 'loc')) + ', ' + (p.near ? 'lângă ' + esc(p.near) : p.zone)}</span></button>`).join('') : '<div class="pke">Nu găsesc acest loc. Încercați localitatea sau cartierul.</div>';
       list.querySelectorAll('button').forEach(b => b.onmousedown = e => { e.preventDefault(); pick(res[+b.dataset.i]); });
     };
     q.oninput = () => { if (hid.value) { hid.value = ''; hid.dispatchEvent(new Event('change')); } render(); };
-    q.onfocus = () => { q.select(); };
+    q.onfocus = () => { q.select(); const ms = myPlaces(); if (ms.length && !list.innerHTML) { list.innerHTML = ms.map((p, i) => `<button type="button" data-m="${i}"><b>⭐ ${esc(p.name)}</b><span>locul dumneavoastră, punct exact</span></button>`).join(''); list.querySelectorAll('[data-m]').forEach(b => b.onmousedown = e => { e.preventDefault(); pick(Object.assign({ kind: 'mine' }, ms[+b.dataset.m])); }); } };
     q.onkeydown = e => { if (e.key === 'Enter') { const b = list.querySelector('button'); if (b) { e.preventDefault(); b.dispatchEvent(new Event('mousedown')); } } };
     q.onblur = () => setTimeout(() => { list.innerHTML = ''; if (!hid.value && hid.dataset.name) q.value = hid.dataset.name; }, 150);
     el._geoFill = () => { // completează automat cu poziția GPS (punctul de drum cel mai apropiat)
@@ -348,7 +349,7 @@ function bindPickers(root) {
         pick({ node, name }); q.placeholder = '';
       }, () => { q.placeholder = 'Nu am acces la locație. Scrieți locul de plecare.'; }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
     };
-    const mapBtn = el.querySelector('.pkmap'); if (mapBtn) mapBtn.onclick = () => openMapPick(p => { setPoint(p.node, p); pick({ node: p.node, name: p.name, kind: 'poi' }); });
+    const mapBtn = el.querySelector('.pkmap'); if (mapBtn) mapBtn.onclick = () => openMapPick(p => pick({ node: p.node, name: p.name, kind: 'poi', lat: p.lat, lon: p.lon }));
     const geoBtn = el.querySelector('.pkgeo'); if (geoBtn) geoBtn.onclick = () => {
       if (!navigator.geolocation) { toast('Telefonul nu oferă locația.'); return; }
       toast('Caut locul cel mai apropiat…');
@@ -1160,7 +1161,7 @@ function renderTrip() {
   TRIPDRAW = 0; setTimeout(drawTrip, 30); startGeo(); pullTraffic();
 }
 function startTrip(o, d, name, ta, h, hd) {   // hd: obiceiul a cărui destinație este (pentru locul exact învățat), chiar dacă plecarea e din alt loc
-  hd = hd || h; const known = (hd && hd.d === d && hd.destPt) || (S.pts && S.pts[d]), date = todayStr(), dep = nowMin(), dpt = known || destPoint(d), opt = S.lastFix && Date.now() - S.lastFix.at < 180000 ? S.lastFix : NET.nodes[o];
+  hd = hd || h; const mineD = myPlaces().find(p => p.node === d && (!S.labels || !S.labels[d] || S.labels[d] === p.name)), known = (hd && hd.d === d && hd.destPt) || mineD || (S.pts && S.pts[d]), date = todayStr(), dep = nowMin(), dpt = known || destPoint(d), opt = S.lastFix && Date.now() - S.lastFix.at < 180000 ? S.lastFix : NET.nodes[o];
   if (o === d || E.haversine(opt, dpt) < 2) { // drum scurt, pe străzi locale (care nu sunt în rețeaua de drumuri principale)
     S.live = { local: true, id: S.pid + '-' + Date.now(), name, orig: o, dest: d, destPt: { lat: dpt.lat, lon: dpt.lon }, ta, date, dep, weather: weatherFor(date, dep), path: [], alts: [], mm: {}, obs: [], pred: { madeAt: new Date().toISOString(), deadline: ta, ta } };
     save(); keepAwake(); renderTrip(); toast('Drum scurt: urmăresc distanța până la destinație. Drum bun!'); return;
@@ -1267,13 +1268,47 @@ function bindSend() {
 /* ---------- Setări ---------- */
 function habitForm(h, i) {
   return `<div class="card" data-hf="${i}"><div class="kicker">${esc(h.name)}</div>
-    <div style="margin-top:8px">${picker('ho' + i, h.o, 'De unde')}</div>
-    ${picker('hd' + i, h.d, 'Unde', 'Localitate, cartier, spital, mall, gară…', true)}
+    <div style="margin-top:8px">${picker('ho' + i, h.o, 'De unde' + (h.origPt ? ' · 📍 punct exact' : ''))}</div>
+    ${picker('hd' + i, h.d, 'Unde' + (h.destPt ? ' · 📍 punct exact' : ''), 'Localitate, cartier, spital, mall, gară…', true)}
     <div style="display:flex;gap:10px"><div class="field" style="flex:1"><small>Trebuie să ajung la</small><input type="time" data-k="ta" value="${h.ta}"></div><div class="field" style="flex:1"><small>De obicei plec la</small><input type="time" data-k="usual" value="${h.usual}"></div></div>
     <div class="days">${[1, 2, 3, 4, 5, 6, 0].map(d => `<button data-d="${d}" class="${h.days.includes(d) ? 'on' : ''}">${WD[d].slice(0, 2)}</button>`).join('')}</div></div>`;
 }
+function myPlacesHTML() { const ms = myPlaces(); return ms.length ? ms.map((p, i) => `<div class="next" style="cursor:default"><span style="font-size:22px">⭐</span><div style="flex:1"><b>${esc(p.name)}</b><span>${esc(whereRoad(p.lat, p.lon))}${p.acc ? ` · precizie ~${Math.round(p.acc)} m` : ''}</span></div><button class="btn ghost mpView" data-i="${i}" style="width:auto;margin:0 4px 0 0;padding:8px 10px">🗺️</button><button class="btn ghost mpDel" data-i="${i}" style="width:auto;margin:0;padding:8px 10px">🗑</button></div>`).join('') : '<p class="muted">Încă nu ați salvat niciun loc.</p>'; }
+function addMyPlace(p) {
+  const name = ($('mpName') && $('mpName').value.trim()) || p.suggest || 'Locul meu';
+  const node = nearestRoadNode(p.lat, p.lon) || (nearestNode(p.lat, p.lon) || {}).node; if (!node) { toast('Punctul e în afara zonei pilotului (București + Ilfov).'); return; }
+  S.myPlaces = myPlaces().filter(x => x.name.toLowerCase() !== name.toLowerCase());
+  S.myPlaces.push({ name, lat: Math.round(p.lat * 1e6) / 1e6, lon: Math.round(p.lon * 1e6) / 1e6, node, acc: p.acc || null });
+  // obiceiurile care pornesc sau ajung lângă acest loc îl folosesc ca punct exact
+  for (const h of S.habits) { if (h.o === node || (NET.nodes[h.o] && E.haversine(NET.nodes[h.o], p) < 0.3)) { h.origPt = { lat: p.lat, lon: p.lon }; } if (h.d === node || (NET.nodes[h.d] && E.haversine(NET.nodes[h.d], p) < 0.3)) h.destPt = { lat: p.lat, lon: p.lon }; }
+  setLabel(node, name); save(); toast(`Am salvat „${name}”${p.acc ? ` (precizie ~${Math.round(p.acc)} m)` : ''}.`); if ($('mpName')) $('mpName').value = '';
+  if ($('myPlList')) { $('myPlList').innerHTML = myPlacesHTML(); bindMyPlaces(); }
+}
+function bindMyPlaces() {
+  document.querySelectorAll('.mpDel').forEach(b => b.onclick = () => { const p = myPlaces()[+b.dataset.i]; if (!confirmTwice(b, 'Apăsați din nou pentru a șterge.')) return; S.myPlaces = myPlaces().filter(x => x !== p); save(); $('myPlList').innerHTML = myPlacesHTML(); bindMyPlaces(); });
+  document.querySelectorAll('.mpView').forEach(b => b.onclick = () => { const p = myPlaces()[+b.dataset.i]; openMapPick(q => { p.lat = q.lat; p.lon = q.lon; p.node = q.node; p.acc = null; save(); toast(`Am mutat „${p.name}” în punctul ales.`); $('myPlList').innerHTML = myPlacesHTML(); bindMyPlaces(); }, { lat: p.lat, lon: p.lon }, true); });
+}
+/* „Sunt aici acum”: câteva citiri GPS, mediate după precizie (cel mult 15 s) */
+function gpsAverage(done) {
+  if (!navigator.geolocation) { toast('Telefonul nu oferă locația.'); return; }
+  const fx = []; let over = false, id = null, tm = null; toast('Țineți telefonul nemișcat câteva secunde, cât mai aproape de ușă / intrare…');
+  const finish = () => { if (over) return; over = true; clearTimeout(tm); if (id != null) navigator.geolocation.clearWatch(id);
+    const good = fx.filter(f => f.acc <= 15), use = good.length >= 3 ? good : fx; if (!use.length) { toast('Nu am primit o poziție destul de precisă. Ieșiți afară sau alegeți pe hartă.'); return; }
+    let W = 0, la = 0, lo = 0; for (const f of use) { const w = 1 / (f.acc * f.acc); W += w; la += f.lat * w; lo += f.lon * w; }
+    const acc = Math.min(...use.map(f => f.acc)); done({ lat: la / W, lon: lo / W, acc }); if (acc > 25) toast('Precizia e slabă (' + Math.round(acc) + ' m). Verificați punctul pe hartă (🗺️).'); };
+  id = navigator.geolocation.watchPosition(p => { const c = p.coords; if (c.accuracy <= 60) fx.push({ lat: c.latitude, lon: c.longitude, acc: c.accuracy }); if (fx.filter(f => f.acc <= 15).length >= 5) finish(); },
+    () => { if (!fx.length) { over = true; clearTimeout(tm); toast('Nu am primit acces la locație.'); } }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
+  tm = setTimeout(finish, 12000);   // cel mult 12 secunde
+}
 function renderSet() {
   $('s-set').innerHTML = `${S.habits.map(habitForm).join('')}
+    <div class="card" id="myPl"><div class="kicker">Locurile mele (adrese exacte)</div>
+      <p class="muted" style="margin:6px 0">Salvați locul exact: casa, serviciul, școala. Apoi îl alegeți la „De unde” / „Unde” (apare cu ⭐), iar drumul pornește și se încheie exact acolo.</p>
+      <div id="myPlList">${myPlacesHTML()}</div>
+      <div class="field" style="margin-top:8px"><small>Numele locului nou</small><input id="mpName" maxlength="30" placeholder="ex. Acasă, Serviciu, Școala" list="mpNames"></div>
+      <datalist id="mpNames"><option value="Acasă"><option value="Serviciu"><option value="Școala"><option value="Facultatea"></datalist>
+      <div style="display:flex;gap:8px"><button class="btn ghost" id="mpHere" style="flex:1;margin:0">📍 Sunt aici acum</button><button class="btn ghost" id="mpMap" style="flex:1;margin:0">🗺️ Aleg pe hartă</button></div>
+      <div style="margin-top:8px">${picker('mpAddr', null, 'sau căutați adresa (stradă și număr)', 'ex. Aviatorilor 21 Corbeanca', true)}</div></div>
     <div class="card"><div class="kicker">Când să vă anunțăm</div>
       <p class="muted" style="margin:8px 0 4px">Cu cât timp înainte de ora la care trebuie să plecați</p>
       <div class="seg" id="leadSeg">${[15, 30, 45, 60].map(v => `<button data-v="${v}" class="${S.lead === v ? 'on' : ''}">${v} min</button>`).join('')}</div>
@@ -1286,11 +1321,14 @@ function renderSet() {
     <p class="muted" style="text-align:center;font-size:12.5px">Hărți: © OpenStreetMap contributors (ODbL). Date meteo: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0).</p>
     <div class="card"><div class="kicker">Probleme?</div><p class="muted">Dacă aplicația arată ciudat sau nu se actualizează, apăsați aici. Datele dumneavoastră rămân.</p><button class="btn ghost" onclick="window.__pltRepair()">Actualizează aplicația</button></div>`;
   document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; c.querySelectorAll('[data-d]').forEach(b => b.onclick = () => b.classList.toggle('on')); });
-  bindPickers($('s-set'));
+  bindPickers($('s-set')); bindMyPlaces();
+  $('mpHere').onclick = () => gpsAverage(addMyPlace);
+  $('mpMap').onclick = () => openMapPick(p => addMyPlace({ lat: p.lat, lon: p.lon }), null, true);
+  $('mpAddr').addEventListener('change', () => { const h = $('mpAddr'); if (!h.value) return; const pt = h.dataset.pt ? JSON.parse(h.dataset.pt) : NET.nodes[h.value]; addMyPlace({ lat: pt.lat, lon: pt.lon, suggest: (h.dataset.name || '').split(',')[0] }); });
   $('leadSeg').querySelectorAll('button').forEach(b => b.onclick = () => { $('leadSeg').querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on'); });
   $('bVoice').onclick = () => { const was = S.voice; S.voice = true; speak('Dacă plecați la ora stabilită, șapte și patruzeci și cinci, ajungeți cu aproximativ zece minute întârziere! Plecați la șapte și douăzeci și cinci. Cauza: o bandă închisă pe Șoseaua București-Ploiești.'); S.voice = was; if (!('speechSynthesis' in window)) toast('Telefonul nu are funcția de citire cu voce.'); };
   $('bSave').onclick = () => {
-    document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; const o = $('ho' + c.dataset.hf).value, d = $('hd' + c.dataset.hf).value; if (o) h.o = o; if (d) h.d = d; h.ta = c.querySelector('[data-k=ta]').value; h.usual = c.querySelector('[data-k=usual]').value; h.days = [...c.querySelectorAll('[data-d].on')].map(b => +b.dataset.d); });
+    document.querySelectorAll('[data-hf]').forEach(c => { const h = S.habits[+c.dataset.hf]; const ho = $('ho' + c.dataset.hf), hd = $('hd' + c.dataset.hf), o = ho.value, d = hd.value; if (o) { if (o !== h.o || ho.dataset.pt) h.origPt = ho.dataset.pt ? JSON.parse(ho.dataset.pt) : null; h.o = o; } if (d) { if (d !== h.d || hd.dataset.pt) h.destPt = hd.dataset.pt ? JSON.parse(hd.dataset.pt) : null; h.d = d; } h.ta = c.querySelector('[data-k=ta]').value; h.usual = c.querySelector('[data-k=usual]').value; h.days = [...c.querySelectorAll('[data-d].on')].map(b => +b.dataset.d); });
     S.voice = $('vOn').checked;
     S.lead = +($('leadSeg').querySelector('.on') || { dataset: { v: 30 } }).dataset.v; S.evening = $('evOn').checked; S.eveningAt = $('evAt').value || '21:00';
     save(); enqueue('participant'); enqueue('habits'); rebuild(); toast('Am salvat.'); show('home');
@@ -1350,11 +1388,20 @@ function checkAlerts() {
 function banner(t) { const b = $('banner'); b.textContent = t; b.classList.add('on'); try { navigator.vibrate && navigator.vibrate(200); } catch (e) { } b.onclick = () => b.classList.remove('on'); }
 
 /* ---------- Familie: poziția se vede doar în timpul drumurilor pornite cu „Am plecat” ---------- */
-let FAMPOS = 0;
+let FAMPOS = 0, FAMLAST = null, FAMBUSY = false;
 const famErr = e => { const m = String(e && e.message || e); return /already_in_family/.test(m) ? 'Sunteți deja într-un grup de familie.' : /bad_code/.test(m) ? 'Codul nu e corect. Verificați-l și încercați din nou.' : /not_allowed/.test(m) ? 'Doar un adult din grup poate da acordul.' : /relation .* does not exist|function .* does not exist|schema cache/.test(m) ? 'Funcția Familie nu e încă activată pe server.' : 'Nu am putut contacta serverul. Verificați conexiunea la internet.'; };
 /* ---------- Mesaje în familie ---------- */
-const QUICK = ['🚗 Am plecat', '🏁 Am ajuns', '⏱️ Întârzii ~10 min', '📞 Sună-mă când poți', '👍 OK'];
-function quickText(i) { const L = S.live; if (i === 0 && L) { const ls = liveState(L); return `🚗 Am plecat spre ${placeName(L.dest)}, ajung pe la ${fmt(Math.round(ls.eta))}`; } return QUICK[i]; }
+const QUICK = ['📍 Unde sunt', '🚗 Am plecat', '🏁 Am ajuns', '⏱️ Întârzii ~10 min', '📞 Sună-mă când poți', '👍 OK'];
+async function hereNow() {   // poziția de acum, cât mai precisă (cel mult 8 s)
+  const L = S.live; if (L && L.gps && L.gps.lat && Date.now() - (L.gpsAt || Date.now()) < 15000) return { lat: L.gps.lat, lon: L.gps.lon, acc: L.gps.acc };
+  return new Promise(ok => { if (!navigator.geolocation) return ok(null); navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy }), () => ok(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 }); });
+}
+async function quickText(i) {
+  const L = S.live;
+  if (i === 0 || i === 2) { const h = await hereNow(); if (h) { const w = whereTxt(h.lat, h.lon); return i === 0 ? `📍 Sunt ${w}` : `🏁 Am ajuns ${w.startsWith('pe ') ? w.replace(/^pe /, 'pe ') : w}`; } }
+  if (i === 1 && L) { const ls = liveState(L); return `🚗 Am plecat spre ${placeName(L.dest)}, ajung pe la ${fmt(Math.round(ls.eta))}`; }
+  return QUICK[i];
+}
 const famName = pid => { const m = ((S.fam && S.fam.members) || []).find(x => x.participant === pid); return m ? m.display_name : 'Cineva'; };
 function msgsHTML() {
   const ms = (S.fam && S.fam.msgs) || []; if (!ms.length) return '<p class="muted" style="margin:6px 0">Încă nu sunt mesaje.</p>';
@@ -1390,6 +1437,23 @@ async function sendMsg(body, quick) {
   } catch (e) { toast('Mesajul nu a fost trimis. Încercați din nou.'); }
 }
 async function delMsg(id) { try { const s = await session(); if (!s) return; await s.c.from('family_messages').delete().eq('id', id); S.fam.msgs = (S.fam.msgs || []).filter(m => m.id !== id); save(); if ($('fMsgs')) $('fMsgs').innerHTML = msgsHTML(); renderFam(); } catch (e) { } }
+/* timp real (Supabase Realtime): pozițiile și mesajele familiei sosesc imediat, fără interogări repetate.
+   Regulile de acces (RLS) se aplică și aici: fiecare primește doar ce are voie să vadă. */
+let FAMRT = null, FAMRT_OK = false;
+async function famRealtime() {
+  const F = S.fam; if (!F || !F.id || !F.me || !F.me.approved || FAMRT) return;
+  try { const s = await session(); if (!s) return;
+    FAMRT = s.c.channel('fam-' + F.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'live_positions' }, ev => {
+        const G = S.fam; if (!G) return; const row = ev.new && ev.new.participant ? ev.new : null, gone = ev.eventType === 'DELETE' ? (ev.old || {}).participant : null;
+        G.pos = (G.pos || []).filter(p => p.participant !== (row ? row.participant : gone)); if (row) G.pos.push(row); famLive(); })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'family_messages', filter: 'family=eq.' + F.id }, () => pullMsgs())
+      .subscribe(st => { FAMRT_OK = st === 'SUBSCRIBED'; if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') { try { s.c.removeChannel(FAMRT); } catch (e) { } FAMRT = null; } });
+  } catch (e) { FAMRT = null; }
+}
+/* rezervă: dacă timpul real nu e disponibil, cer pozițiile la 2 secunde cât ecranul Familie e deschis */
+setInterval(async () => { if (!S.consent || document.hidden || FAMRT_OK || !S.fam || !S.fam.me || !$('s-fam').classList.contains('on')) return;
+  try { const s = await session(); if (!s) return; const { data } = await s.c.from('live_positions').select('*'); if (data) { S.fam.pos = data.filter(p => Date.now() - new Date(p.updated_at).getTime() < 10 * 60000); famLive(); } } catch (e) { } }, 2000);
 async function pullFamily() {
   try {
     const s = await session(); if (!s) return;
@@ -1401,6 +1465,7 @@ async function pullFamily() {
     const { data: pos0 } = await s.c.from('live_positions').select('*'), pos = (pos0 || []).filter(p => Date.now() - new Date(p.updated_at).getTime() < 10 * 60000);
     S.fam = { uid: s.uid, id: me ? me.family : null, msgs: S.fam && S.fam.msgs, msgsSeen: S.fam && S.fam.msgsSeen, code: fam && fam[0] ? fam[0].code : null, owner: fam && fam[0] ? fam[0].created_by : null, me, members: mem, pos: pos || [], at: Date.now() };
     const was = S.famApproved; S.famApproved = !!(me && me.approved); save();
+    famRealtime();
     if (S.minor && S.famApproved && !was) { toast('Părintele dumneavoastră și-a dat acordul. Aplicația funcționează complet.'); flush(); }
   } catch (e) { console.warn('family', e.message); }
 }
@@ -1414,11 +1479,13 @@ function tripMoney(L, ls) {
   return { rem_km: Math.round(rem * 10) / 10, driven_km: Math.round((ls.dist || 0) * 10) / 10, cost_lei: Math.round(soFar * 10) / 10, cost_total_lei: Math.round((soFar + remCost) * 10) / 10 };
 }
 async function famPushPosition(L, ls) {
-  if (!S.fam || !S.fam.me || !S.fam.me.approved || !S.fam.me.sharing || !L.gps || Date.now() - FAMPOS < 10000) return;
+  // la fiecare secundă cât mașina se mișcă (cel puțin 3 m), altfel la 10 secunde; fără cereri suprapuse
+  if (!S.fam || !S.fam.me || !S.fam.me.approved || !S.fam.me.sharing || !L.gps || FAMBUSY || Date.now() - FAMPOS < 1000) return;
+  const P = ls && ls.ok && ls.pos && !ls.pos.raw ? ls.pos : L.gps;   // pe drum: poziția pusă pe stradă (mai clară pe hartă decât punctul GPS brut)
+  if (FAMLAST && E.haversine(FAMLAST, P) < 0.003 && Date.now() - FAMPOS < 10000) return;
   if (S.famNoExtra && Date.now() - S.famNoExtra > 3600000) S.famNoExtra = 0;   // reîncerc din oră în oră (poate s-au adăugat coloanele)
-  FAMPOS = Date.now();
+  FAMPOS = Date.now(); FAMLAST = { lat: P.lat, lon: P.lon }; FAMBUSY = true;
   try { const s = await session(); if (!s) return;
-    const P = ls && ls.ok && ls.pos && !ls.pos.raw ? ls.pos : L.gps;   // pe drum: poziția pusă pe stradă (mai clară pe hartă decât punctul GPS brut)
     const row = { participant: s.uid, lat: Math.round(P.lat * 1e5) / 1e5, lon: Math.round(P.lon * 1e5) / 1e5, acc: L.gps.acc, speed_kmh: ls.v != null ? Math.round(ls.v) : null,
       dest_name: placeName(L.dest), eta_min: Math.round(ls.eta), ta_min: L.ta, status: 'pe drum', day: todayStr(), updated_at: new Date().toISOString() };
     if (!S.famNoExtra) Object.assign(row, tripMoney(L, ls));
@@ -1426,6 +1493,7 @@ async function famPushPosition(L, ls) {
     if (r.error && !S.famNoExtra && /rem_km|cost_|driven_km|column/i.test(r.error.message || '')) {   // baza de date nu are încă noile coloane: trimit ca înainte
       S.famNoExtra = Date.now(); for (const k of ['rem_km', 'driven_km', 'cost_lei', 'cost_total_lei']) delete row[k]; r = await s.c.from('live_positions').upsert(row); }
   } catch (e) { }
+  finally { FAMBUSY = false; }
 }
 async function famEndTrip(arrived) {
   if (!S.fam || !S.fam.me) return;
@@ -1447,7 +1515,8 @@ function famTrack(pos) { // istoricul pozițiilor primite (doar în memoria aces
 }
 function famAng(pid) { const h = FAMH[pid] || []; const b = h[h.length - 1]; if (!b) return null;
   for (let i = h.length - 2; i >= 0; i--) { const a = h[i]; if (E.haversine(a, b) >= 0.025) return Math.atan2(-(b.lat - a.lat), (b.lon - a.lon) * Math.cos(b.lat * Math.PI / 180)); } return null; }
-function whereTxt(lat, lon) { // „pe Calea Bucureștilor, lângă Otopeni” / „pe Strada Trotușului, lângă Domenii”
+function whereTxt(lat, lon) { const mp = myPlaceAt(lat, lon); if (mp) return 'la ' + mp.name; const en = encAt(lat, lon); if (en) return 'în incinta ' + en + (() => { const pl = nearestPlaceName(lat, lon); return pl ? ', ' + pl : ''; })(); return whereRoad(lat, lon); }
+function whereRoad(lat, lon) { // „pe Calea Bucureștilor, lângă Otopeni” / „pe Strada Trotușului, lângă Domenii”
   let road = null, bd = 0.08; for (const eid of trk().near(lat, lon)) { const e = NET.edges[eid]; if (!e.name) continue; const p = trk().projEdge(eid, lat, lon); if (p && p.d < bd) { bd = p.d; road = e.name; } }
   const loc = localSnap(lat, lon, 25), mainM = road ? bd * 1000 : 1e9;
   let where = road && (!loc || mainM <= loc.d + 6) ? 'pe ' + road : loc && loc.name ? 'pe ' + loc.name : loc && loc.kind === 's' ? 'pe o alee sau într-o incintă' : road ? 'lângă ' + road : 'pe o stradă locală';
@@ -1486,6 +1555,21 @@ function drawFamMap(cv, pts) {
     g.fillStyle = '#dc2626'; g.beginPath(); g.moveTo(0, -11 * dpr); g.lineTo(5 * dpr, 0); g.lineTo(-5 * dpr, 0); g.closePath(); g.fill(); g.fillStyle = '#1f262e'; g.font = `800 ${8 * dpr}px "Overpass"`; g.textAlign = 'center'; g.fillText('N', 0, 6 * dpr); g.restore(); }
   g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillStyle = 'rgba(31,38,46,.55)'; g.font = `600 ${10 * dpr}px "Overpass"`; g.fillText('© OpenStreetMap contributors', 8 * dpr, H - 8 * dpr);
 }
+function famListHTML(F, pos) { return F.members.map(m => { const p = pos[m.participant], isMe = m.participant === F.uid;
+        const st = !m.approved ? 'așteaptă acordul părintelui' : !m.sharing ? 'partajarea e oprită' : p ? (p.status === 'a ajuns' ? `a ajuns la ${esc(p.dest_name || 'destinație')}, ${famAgo(p.updated_at)}${p.cost_lei != null && p.driven_km ? `<br>${kmTxtPlain(p.driven_km)}, cost ~${n1(p.cost_lei)} lei` : ''}` : `pe drum spre ${esc(p.dest_name || '?')}, sosire ~${fmt(Math.round(p.eta_min))}${p.rem_km != null ? `, mai are ${kmTxtPlain(p.rem_km)}` : ''}${p.speed_kmh != null ? `, ${Math.round(p.speed_kmh)} km/h` : ''}${p.cost_lei != null ? `<br>⛽ cost până acum ~${n1(p.cost_lei)} lei, tot drumul ~${Math.round(p.cost_total_lei)} lei${p.driven_km != null ? ` · parcurși ${kmTxtPlain(p.driven_km)}` : ''}` : ''} · ${famAgo(p.updated_at)}`) : 'nu e pe drum acum';
+        return `<div class="next" style="cursor:default"><i class="lamp" style="margin:0;background:${p && m.sharing && m.approved ? (p.status === 'a ajuns' ? 'var(--gl)' : 'var(--rl)') : '#c4ccd4'}"></i><div><b>${esc(m.display_name)}${isMe ? ' (dumneavoastră)' : ''}${m.minor ? ', sub 18 ani' : ''}</b><span>${st}</span></div></div>`; }).join(''); }
+function famInfoHTML(selP) { return selP ? `<div class="note" style="margin:0 0 6px"><b>${esc((selP.name || '').split(' ')[0])}</b> ${esc(whereTxt(selP.lat, selP.lon))}${selP.status !== 'a ajuns' && selP.speed != null ? ` · ${Math.round(selP.speed)} km/h` : ''}${selP.status !== 'a ajuns' && selP.rem != null ? ` · mai are ${kmTxtPlain(selP.rem)}` : ''} · ${famAgo(selP.at)}${selP.acc ? ` · precizie ~${Math.round(selP.acc)} m` : ''}</div>` : ''; }
+/* actualizare la secundă, fără a reconstrui ecranul (păstrează textul scris în câmpul de mesaj) */
+let FAMLIVE = 0;
+function famLive() {
+  const F = S.fam, el = $('s-fam'); if (!F || !F.me || !el.classList.contains('on') || !$('famMap')) return;
+  if (Date.now() - FAMLIVE < 500) return; FAMLIVE = Date.now();
+  const pos = Object.fromEntries((F.pos || []).map(p => [p.participant, p])); famTrack(F.pos || []);
+  const pts = F.members.map(m => { const p = pos[m.participant]; return p ? { pid: m.participant, lat: p.lat, lon: p.lon, acc: p.acc, name: m.display_name, status: p.status, me: m.participant === F.uid, ang: famAng(m.participant), speed: p.speed_kmh, at: p.updated_at, rem: p.rem_km } : null; }).filter(Boolean);
+  const selP = pts.find(p => p.pid === FV.sel);
+  if ($('fList')) $('fList').innerHTML = famListHTML(F, pos); if ($('fInfo')) $('fInfo').innerHTML = famInfoHTML(selP);
+  drawFamMap($('famMap'), pts);
+}
 function renderFam() {
   const F = S.fam, el = $('s-fam');
   if (!F || !F.me) {
@@ -1522,13 +1606,11 @@ function renderFam() {
       ${me.approved && !me.minor && pending.map(m => `<div class="alertline" style="background:var(--ybg);display:block"><b>${esc(m.display_name)}</b> (sub 18 ani) vrea să intre în grup.
         <label class="chk"><input type="checkbox" class="fOk" data-p="${m.participant}"><span>Sunt părintele sau tutorele lui/ei și sunt de acord ca PRO SMART WORK S.R.L. să îi prelucreze datele în acest pilot (drumurile, fără nume, și poziția în timpul drumurilor, vizibilă doar familiei), conform informării privind datele personale.</span></label>
         <button class="btn go fApprove" data-p="${m.participant}">Îmi dau acordul</button></div>`).join('') || ''}
-      ${F.members.map(m => { const p = pos[m.participant], isMe = m.participant === F.uid;
-        const st = !m.approved ? 'așteaptă acordul părintelui' : !m.sharing ? 'partajarea e oprită' : p ? (p.status === 'a ajuns' ? `a ajuns la ${esc(p.dest_name || 'destinație')}, ${famAgo(p.updated_at)}${p.cost_lei != null && p.driven_km ? `<br>${kmTxtPlain(p.driven_km)}, cost ~${n1(p.cost_lei)} lei` : ''}` : `pe drum spre ${esc(p.dest_name || '?')}, sosire ~${fmt(Math.round(p.eta_min))}${p.rem_km != null ? `, mai are ${kmTxtPlain(p.rem_km)}` : ''}${p.speed_kmh != null ? `, ${Math.round(p.speed_kmh)} km/h` : ''}${p.cost_lei != null ? `<br>⛽ cost până acum ~${n1(p.cost_lei)} lei, tot drumul ~${Math.round(p.cost_total_lei)} lei${p.driven_km != null ? ` · parcurși ${kmTxtPlain(p.driven_km)}` : ''}` : ''} · ${famAgo(p.updated_at)}`) : 'nu e pe drum acum';
-        return `<div class="next" style="cursor:default"><i class="lamp" style="margin:0;background:${p && m.sharing && m.approved ? (p.status === 'a ajuns' ? 'var(--gl)' : 'var(--rl)') : '#c4ccd4'}"></i><div><b>${esc(m.display_name)}${isMe ? ' (dumneavoastră)' : ''}${m.minor ? ', sub 18 ani' : ''}</b><span>${st}</span></div></div>`; }).join('')}
+      <div id="fList">${famListHTML(F, pos)}</div>
       ${pts.length ? `<div style="display:flex;gap:6px;overflow-x:auto;margin:10px 0 6px">${pts.map(p => `<button class="btn ${p.pid === FV.sel ? 'dark' : 'ghost'} fSel" data-p="${p.pid}" style="flex:none;width:auto;padding:7px 13px;margin:0;font-size:14px">${esc((p.name || '?').split(' ')[0])}</button>`).join('')}${pts.length > 1 ? `<button class="btn ${!FV.sel ? 'dark' : 'ghost'} fSel" data-p="all" style="flex:none;width:auto;padding:7px 13px;margin:0;font-size:14px">Toți</button>` : ''}</div>
-        ${selP ? `<div class="note" style="margin:0 0 6px"><b>${esc((selP.name || '').split(' ')[0])}</b> ${esc(whereTxt(selP.lat, selP.lon))}${selP.status !== 'a ajuns' && selP.speed != null ? ` · ${Math.round(selP.speed)} km/h` : ''}${selP.status !== 'a ajuns' && selP.rem != null ? ` · mai are ${kmTxtPlain(selP.rem)}` : ''} · ${famAgo(selP.at)}${selP.acc ? ` · precizie ~${Math.round(selP.acc)} m` : ''}</div>` : ''}
+        <div id="fInfo">${famInfoHTML(selP)}</div>
         <div class="mapwrap"><canvas class="rmap" id="famMap" style="height:340px"></canvas><div class="mapbtns"><button id="fZin" aria-label="Mărește">+</button><button id="fZout" aria-label="Micșorează">−</button>${selP ? '<button id="fNorth" aria-label="Orientarea hărții">🧭</button>' : ''}</div></div>` : ''}
-      <p class="muted" style="font-size:13px">Pozițiile se actualizează la 10 secunde în timpul unui drum; harta urmărește persoana aleasă, în sensul ei de mers. Serverul păstrează doar ultima poziție; dacă nu se mai actualizează 10 minute, nu mai e afișată și se șterge.</p></div>
+      <p class="muted" style="font-size:13px">Pozițiile se actualizează în fiecare secundă în timpul unui drum; harta urmărește persoana aleasă, în sensul ei de mers. Serverul păstrează doar ultima poziție; dacă nu se mai actualizează 10 minute, nu mai e afișată și se șterge.</p></div>
     ${me.approved ? `<div class="card" id="fMsgCard"><div class="kicker">Mesaje în familie</div><div id="fMsgs">${msgsHTML()}</div>
       <div class="qmsg">${QUICK.map((q, i) => `<button data-q="${i}">${q}</button>`).join('')}</div>
       <div class="msgin"><input id="fMsgIn" maxlength="500" placeholder="Scrieți un mesaj…" autocomplete="off"><button id="fMsgSend" aria-label="Trimite">➤</button></div>
@@ -1539,7 +1621,7 @@ function renderFam() {
       <button class="btn red" id="fLeave">Ieșiți din grup</button>${owner ? '<p class="muted" style="font-size:13px">Ați creat grupul: dacă ieșiți, grupul se închide pentru toți.</p>' : ''}</div>`;
   if ($('fMsgSend')) { const send = () => { const v = $('fMsgIn').value.trim(); if (v) { sendMsg(v, false); $('fMsgIn').value = ''; } };
     $('fMsgSend').onclick = send; $('fMsgIn').onkeydown = e => { if (e.key === 'Enter') send(); };
-    el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => sendMsg(quickText(+b.dataset.q), true));
+    el.querySelectorAll('[data-q]').forEach(b => b.onclick = async () => { b.disabled = true; sendMsg(await quickText(+b.dataset.q), true); b.disabled = false; });
     el.querySelectorAll('[data-del]').forEach(b => b.onclick = e => { e.preventDefault(); delMsg(+b.dataset.del); }); markRead(); const l = el.querySelector('.msgs'); if (l) l.scrollTop = l.scrollHeight; pullMsgs(); }
   if (pts.length) { setTimeout(() => drawFamMap($('famMap'), pts), 30);
     el.querySelectorAll('.fSel').forEach(b => b.onclick = () => { FV.picked = b.dataset.p; FV.sel = b.dataset.p === 'all' ? null : b.dataset.p; renderFam(); });
@@ -1600,6 +1682,20 @@ function localSnap(lat, lon, maxM, prevAng) {
   if (prevAng != null) { let df = Math.abs(((ang - prevAng + 3 * Math.PI) % (2 * Math.PI)) - Math.PI); if (df > Math.PI / 2) ang += Math.PI; }
   return { lat: best.lat, lon: best.lon, ang, d: best.d, name: best.name, kind: best.kind, local: true };
 }
+/* incinta cu nume în care se află un punct (campus, spital, școală, firmă, zonă de birouri) – cea mai mică care îl conține */
+function encAt(lat, lon) {
+  if (!TIDX) { tileIndex(); return null; }
+  const ts = needTiles(lat - 0.0005, lat + 0.0005, lon - 0.0007, lon + 0.0007); let best = null;
+  for (const t of ts) { const P = t.en || [], N = (t.nm && t.nm.en) || [];
+    P.forEach((p, i) => { if (!N[i]) return; let la0 = 90, la1 = -90, lo0 = 180, lo1 = -180; for (let k = 0; k < p.length; k += 2) { la0 = Math.min(la0, p[k]); la1 = Math.max(la1, p[k]); lo0 = Math.min(lo0, p[k + 1]); lo1 = Math.max(lo1, p[k + 1]); }
+      if (lat < la0 || lat > la1 || lon < lo0 || lon > lo1) return;
+      let inside = false; for (let k = 0, m = p.length - 2; k < p.length; m = k, k += 2) { const yi = p[k], xi = p[k + 1], yj = p[m], xj = p[m + 1]; if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside; }
+      const area = (la1 - la0) * (lo1 - lo0); if (inside && (!best || area < best.area)) best = { name: N[i], area }; }); }
+  return best ? best.name : null;
+}
+/* locurile mele (Acasă, Serviciu…): puncte exacte, alese de participant; doar pe telefon */
+const myPlaces = () => S.myPlaces || [];
+function myPlaceAt(lat, lon, maxKm) { let b = null, bd = maxKm || 0.08; for (const p of myPlaces()) { const d = E.haversine({ lat, lon }, p); if (d < bd) { bd = d; b = p; } } return b; }
 function drawBase(g, X, Y, la0, la1, lo0, lo1, dpr, widthKm, redraw) {
   if (widthKm > 16) return;
   const ts = needTiles(la0, la1, lo0, lo1, redraw); if (!ts.length) return;
@@ -1607,6 +1703,7 @@ function drawBase(g, X, Y, la0, la1, lo0, lo1, dpr, widthKm, redraw) {
   const fill = (k, col) => { g.fillStyle = col; for (const t of ts) for (const p of t[k] || []) { path(p, true); g.fill(); } };
   const line = (k, col, w, dash) => { g.strokeStyle = col; g.lineWidth = w * dpr; g.setLineDash(dash ? dash.map(x => x * dpr) : []); for (const t of ts) for (const p of t[k] || []) { path(p); g.stroke(); } g.setLineDash([]); };
   g.lineCap = 'round'; g.lineJoin = 'round';
+  if (widthKm < 3) fill('en', 'rgba(205,190,160,.18)');
   fill('green', '#d3e6cb'); fill('water', '#aed1ec'); line('river', '#aed1ec', widthKm < 6 ? 5 : 3); if (widthKm < 8) line('stream', '#aed1ec', 1.5);
   if (widthKm < 4) line('k', '#cfc8b6', 1.2, [4, 3]);
   if (widthKm < 5) line('s', '#ffffff', widthKm < 2 ? 2.2 : 1.4);
@@ -1619,8 +1716,8 @@ function drawBase(g, X, Y, la0, la1, lo0, lo1, dpr, widthKm, redraw) {
 const POI_ICON = { shop: '🛒', mall: '🏬', hospital: '🏥', clinic: '⚕️', townhall: '🏛️', school: '🏫', university: '🎓', fuel: '⛽', station: '🚉', airport: '✈️', landmark: '📍' };
 const MP = { lat: 44.43, lon: 26.1, km: 3, sel: null, cb: null, drag: null, filter: null };
 function placePoint(p) { return p.lat != null ? { lat: p.lat, lon: p.lon } : NET.nodes[p.node]; }
-function openMapPick(cb, center) {
-  MP.cb = cb; MP.sel = null; MP.km = 1.6;
+function openMapPick(cb, center, precise) {   // precise: punct exact („aici e adresa mea”), fără lipire pe obiectivul apropiat
+  MP.cb = cb; MP.sel = null; MP.precise = !!precise; MP.km = precise ? 0.5 : 1.6;
   const c = center || (S.live && S.live.gps && S.live.gps.lat ? { lat: S.live.gps.lat, lon: S.live.gps.lon } : null) || (S.home ? NET.nodes[S.home] : null) || { lat: 44.43, lon: 26.1 };
   MP.lat = c.lat; MP.lon = c.lon;
   $('mapPick').classList.add('on'); drawMapPick(); mpBar();
@@ -1650,20 +1747,22 @@ function drawMapPick() {
     if (placed.some(q => Math.hypot(q[0] - x, q[1] - y) < 30 * dpr)) continue; placed.push([x, y]);
     g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 14 * dpr, 0, 7); g.fill(); g.strokeStyle = '#0b4ea2'; g.lineWidth = 2 * dpr; g.stroke();
     g.font = `${15 * dpr}px sans-serif`; g.fillText(POI_ICON[p.cat] || '📍', x, y + 1); MP.vis.push({ p, x, y }); }
+  g.font = `${16 * dpr}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; for (const p of myPlaces()) { const x = X(p.lon), y = Y(p.lat); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, 13 * dpr, 0, 7); g.fill(); g.fillText('⭐', x, y + 1); g.fillStyle = '#1f262e'; g.font = `700 ${11 * dpr}px "Overpass"`; g.fillText(p.name, x, y + 22 * dpr); g.font = `${16 * dpr}px sans-serif`; }
   if (MP.me) { const x = X(MP.me.lon), y = Y(MP.me.lat); g.fillStyle = '#0b4ea2'; g.beginPath(); g.arc(x, y, 8 * dpr, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 3 * dpr; g.stroke(); }
   if (MP.sel) { const x = X(MP.sel.lon), y = Y(MP.sel.lat); g.fillStyle = '#c3242f'; g.beginPath(); g.arc(x, y - 18 * dpr, 11 * dpr, 0, 7); g.fill(); g.beginPath(); g.moveTo(x - 7 * dpr, y - 12 * dpr); g.lineTo(x, y); g.lineTo(x + 7 * dpr, y - 12 * dpr); g.fill(); }
   g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.fillStyle = 'rgba(31,38,46,.55)'; g.font = `600 ${10 * dpr}px "Overpass"`; g.fillText('© OpenStreetMap contributors', 8 * dpr, H - 8 * dpr);
 }
-function mpBar() { const s = MP.sel; $('mpBar').innerHTML = s ? `<div><b>${esc(s.name)}</b><span>${esc(s.sub || '')}</span></div><button class="btn go" id="mpOk" style="margin:0;width:auto;padding:12px 18px">Aleg acest loc</button>` : '<span class="muted">Atingeți un magazin, un spital sau orice punct de pe hartă.</span>';
+function mpBar() { const s = MP.sel; $('mpBar').innerHTML = s ? `<div><b>${esc(s.name)}</b><span>${esc(s.sub || '')}</span></div><button class="btn go" id="mpOk" style="margin:0;width:auto;padding:12px 18px">${MP.precise ? 'Aici e locul' : 'Aleg acest loc'}</button>` : '<span class="muted">Atingeți un magazin, un spital sau orice punct de pe hartă.</span>';
   if (s) $('mpOk').onclick = () => { const cb = MP.cb; closeMapPick(); cb && cb(s); }; }
 function closeMapPick() { $('mapPick').classList.remove('on'); }
 function mpTap(x, y) {
   const v = mpView(), dpr = v.dpr; let best = null, bd = 24 * dpr;
   for (const o of MP.vis || []) { const d = Math.hypot(o.x - x, o.y - y); if (d < bd) { bd = d; best = o.p; } }
+  if (MP.precise) best = null;
   if (best) MP.sel = { lat: best.pt.lat, lon: best.pt.lon, name: best.name + (best.near ? ', ' + best.near : ''), sub: (CAT[best.cat] || 'loc') + (best.near ? ', lângă ' + best.near : ''), node: best.node };
   else { const lat = v.latAt(y), lon = v.lonAt(x), n = nearestRoadNode(lat, lon) || (nearestNode(lat, lon) || {}).node; if (!n) { toast('Punctul e în afara zonei pilotului.'); return; }
     let st = null, sd = 0.25; if (ADR) for (const a of ADR) { const d = E.haversine({ lat, lon }, a); if (d < sd) { sd = d; st = a; } }
-    const near = nearestPlaceName(lat, lon); MP.sel = { lat, lon, node: n, name: st ? st.name + (st.near ? ', ' + st.near : '') : 'Punct ales pe hartă' + (near ? ', lângă ' + near : ''), sub: st ? 'aproape de punctul atins' : 'punctul atins pe hartă' }; }
+    const near = nearestPlaceName(lat, lon), en = encAt(lat, lon); MP.sel = { lat, lon, node: n, name: en ? en : st ? st.name + (st.near ? ', ' + st.near : '') : 'Punct ales pe hartă' + (near ? ', lângă ' + near : ''), sub: en ? 'în incintă' + (st ? ', lângă ' + st.name : '') : st ? 'aproape de punctul atins' : 'punctul atins pe hartă' }; }
   drawMapPick(); mpBar();
 }
 function bindMapPick() {
@@ -1671,13 +1770,13 @@ function bindMapPick() {
   cv.onpointerdown = e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); down = { x: e.clientX, y: e.clientY, lat: MP.lat, lon: MP.lon }; moved = false;
     if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), km: MP.km }; } };
   cv.onpointermove = e => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pinch && pts.size === 2) { const [a, b] = [...pts.values()]; MP.km = Math.max(0.6, Math.min(40, pinch.km * pinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)))); moved = true; drawMapPick(); return; }
+    if (pinch && pts.size === 2) { const [a, b] = [...pts.values()]; MP.km = Math.max(0.2, Math.min(40, pinch.km * pinch.d / Math.max(20, Math.hypot(a.x - b.x, a.y - b.y)))); moved = true; drawMapPick(); return; }
     if (!down) return; const dx = e.clientX - down.x, dy = e.clientY - down.y; if (Math.hypot(dx, dy) > 6) moved = true;
     if (moved) { const v = mpView(), dpr = v.dpr; MP.lon = down.lon - dx * dpr / v.sc; MP.lat = down.lat + dy * dpr / v.sy; drawMapPick(); } };
   cv.onpointerup = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
     if (down && !moved) { const r = cv.getBoundingClientRect(), dpr = devicePixelRatio || 1; mpTap((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr); } if (!pts.size) down = null; };
-  cv.onwheel = e => { e.preventDefault(); MP.km = Math.max(0.6, Math.min(40, MP.km * (e.deltaY > 0 ? 1.25 : 0.8))); drawMapPick(); };
-  $('mpIn').onclick = () => { MP.km = Math.max(0.6, MP.km / 1.6); drawMapPick(); }; $('mpOut').onclick = () => { MP.km = Math.min(40, MP.km * 1.6); drawMapPick(); };
+  cv.onwheel = e => { e.preventDefault(); MP.km = Math.max(0.2, Math.min(40, MP.km * (e.deltaY > 0 ? 1.25 : 0.8))); drawMapPick(); };
+  $('mpIn').onclick = () => { MP.km = Math.max(0.2, MP.km / 1.6); drawMapPick(); }; $('mpOut').onclick = () => { MP.km = Math.min(40, MP.km * 1.6); drawMapPick(); };
   $('mpClose').onclick = closeMapPick;
   $('mpFilters').innerHTML = [[null, 'Toate'], ['shop', '🛒 Magazine'], ['hospital', '🏥 Spitale'], ['clinic', '⚕️ Clinici'], ['townhall', '🏛️ Primării'], ['school', '🏫 Școli'], ['fuel', '⛽ Benzinării'], ['mall', '🏬 Mall-uri']]
     .map(([k, t]) => `<button data-f="${k || ''}" class="${(MP.filter || '') === (k || '') ? 'on' : ''}">${t}</button>`).join('');
