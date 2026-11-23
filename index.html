@@ -125,6 +125,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px
 .road .part{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #47505a}.road .part:last-child{border:none}
 .road .part svg{width:40px;height:40px;flex:none}.road .part b{display:block;font-size:15px}.road .part span{font-size:13.5px;color:#d5dce3}
 .msgs{max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin:8px 0}.bub{align-self:flex-start;max-width:85%;background:#eef2f6;border-radius:14px 14px 14px 4px;padding:7px 11px;display:flex;flex-direction:column;font-size:15px}.bub.me{align-self:flex-end;background:#dbe8fb;border-radius:14px 14px 4px 14px}.bub b{font-size:12px;color:#0b4ea2}.bub small{font-size:11px;color:#6b7785;margin-top:2px}.bub small a{color:#9b2c2c}
+.mych{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.mych button{border:1px solid #cfd8e2;background:#fff;border-radius:16px;padding:7px 12px;font:700 14px 'Overpass',sans-serif}.mych button.on{background:#0b4ea2;color:#fff;border-color:#0b4ea2}
 .qmsg{display:flex;gap:6px;overflow-x:auto;padding:4px 0}.qmsg button{flex:none;border:1px solid #cfd8e2;background:#fff;border-radius:18px;padding:8px 12px;font:600 14px 'Overpass',sans-serif}
 .msgin{display:flex;gap:6px;margin-top:6px}.msgin input{flex:1;padding:11px 12px;border:1px solid #cfd8e2;border-radius:12px;font:500 16px 'Overpass',sans-serif}.msgin button{width:48px;border:0;border-radius:12px;background:#0b4ea2;color:#fff;font-size:20px}
 nav button{position:relative}nav .dot{position:absolute;top:4px;right:22%;min-width:18px;height:18px;border-radius:9px;background:#c3242f;color:#fff;font:800 11px/18px 'Overpass',sans-serif;font-style:normal;text-align:center;padding:0 4px}
@@ -183,7 +184,7 @@ nav button{position:relative}nav .dot{position:absolute;top:4px;right:22%;min-wi
     spinner();
     var p = [new Promise(function (r) { setTimeout(r, 900); })]; // rotița rămâne vizibilă cel puțin o clipă
     try { if (window.caches) p.push(caches.keys().then(function (k) { return Promise.all(k.map(function (x) { return caches.delete(x); })); })); } catch (e) { }
-    try { if (navigator.serviceWorker) p.push(navigator.serviceWorker.getRegistrations().then(function (r) { return Promise.all(r.map(function (x) { return x.unregister(); })); })); } catch (e) { }
+    try { if (navigator.serviceWorker) p.push(navigator.serviceWorker.getRegistrations().then(function (r) { return Promise.all(r.map(function (x) { return x.update(); })); })); } catch (e) { }   // NU dezînregistrez: s-ar pierde abonamentul la avertizări
     Promise.all(p).then(function () { location.reload(); }, function () { location.reload(); });
   }
   window.__pltRepair = repair;
@@ -195,8 +196,10 @@ nav button{position:relative}nav .dot{position:absolute;top:4px;right:22%;min-wi
     (document.body || document.documentElement).appendChild(d);
     document.getElementById('errfix').onclick = repair;
   }
-  window.addEventListener('error', function (e) { show((e.message || 'eroare') + (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : '')); });
-  window.addEventListener('unhandledrejection', function (e) { show(e.reason && e.reason.message || e.reason || 'promisiune respinsă'); });
+  // fereastra „nu s-a încărcat complet” apare DOAR dacă aplicația nu a pornit; după pornire, erorile trecătoare
+  // (rețea, timp real, GPS, notificări) nu mai cer „actualizare” – se notează doar în consolă
+  window.addEventListener('error', function (e) { if (window.__pltReady) { console.warn('eroare ignorată', e.message); return; } if (e.filename && !/pleaca-la-timp|localhost|index\.html|engine\.js|forecast\.js|track\.js|config\.js|\/$/.test(e.filename)) return; show((e.message || 'eroare') + (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : '')); });
+  window.addEventListener('unhandledrejection', function (e) { console.warn('promisiune respinsă', e.reason); });
   window.__pltShowError = show;
 })();
 </script>
@@ -324,6 +327,10 @@ function bindPickers(root) {
     if (el._bound) return; el._bound = true;
     const hid = el.querySelector('input[type=hidden]'), q = el.querySelector('.pkq'), list = el.querySelector('.pkl');
     const pick = p => { const nm = p.kind === 'addr' && p.near ? p.name + ', ' + p.near : p.name; if (p.kind === 'addr' || p.kind === 'poi' || p.kind === 'mine') { setLabel(p.node, nm); if (p.lat != null && p.kind !== 'mine') setPoint(p.node, p); } hid.value = p.node; hid.dataset.name = nm; if (p.lat != null) hid.dataset.pt = JSON.stringify({ lat: +p.lat, lon: +p.lon }); else delete hid.dataset.pt; q.value = nm; list.innerHTML = ''; hid.dispatchEvent(new Event('change')); };
+    // locurile mele ca butoane, sub câmp: o atingere și destinația/plecarea e punctul exact
+    if (myPlaces().length && hid.id !== 'mpAddr' && !el.querySelector('.mych')) { const ch = document.createElement('div'); ch.className = 'mych';
+      ch.innerHTML = myPlaces().map((p, i) => `<button type="button" data-i="${i}">⭐ ${esc(p.name)}</button>`).join('');
+      el.appendChild(ch); ch.querySelectorAll('button').forEach(b => b.onclick = () => { pick(Object.assign({ kind: 'mine' }, myPlaces()[+b.dataset.i])); ch.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); }); }
     const render = () => {
       const t = norm(q.value); if (t.length < 2) { list.innerHTML = ''; return; }
       const words = t.split(' ');
@@ -437,11 +444,20 @@ async function enablePush() {
     if (await Notification.requestPermission() !== 'granted') { toast('Fără permisiune nu vă putem anunța. Puteți schimba asta din setările telefonului.'); return; }
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(PLT_CONFIG.vapidPublicKey) });
-    const j = sub.toJSON(); enqueue('push', { endpoint: j.endpoint, keys: j.keys }); S.pushOn = true; save(); toast('Gata! Vă anunțăm din timp. 🔔'); renderHome();
+    const j = sub.toJSON(); enqueue('push', { endpoint: j.endpoint, keys: j.keys }); S.pushOn = true; S.pushEp = j.endpoint; S.pushSent = Date.now(); save(); toast('Gata! Vă anunțăm din timp. 🔔'); renderHome();
   } catch (e) { toast('Nu am putut activa notificările pe acest dispozitiv.'); }
 }
+/* la pornire: dacă permisiunea e dată, verific abonamentul și îl refac/retrimit în tăcere (fără să mai cer „Porniți avertizările”) */
+async function syncPush() {
+  try { if (!pushSupported() || Notification.permission !== 'granted') return; const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription(); if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(PLT_CONFIG.vapidPublicKey) });
+    const j = sub.toJSON(); if (!S.pushOn || S.pushEp !== j.endpoint || Date.now() - (S.pushSent || 0) > 7 * 86400000) { enqueue('push', { endpoint: j.endpoint, keys: j.keys }); S.pushEp = j.endpoint; S.pushSent = Date.now(); }
+    if (!S.pushOn) { S.pushOn = true; save(); if ($('s-home').classList.contains('on')) renderHome(); } else save();
+  } catch (e) { }
+}
 function pushCard() {
-  if (S.pushOn && typeof Notification !== 'undefined' && Notification.permission === 'granted') return '';
+  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') return '';   // permisiunea există: abonamentul se reface singur
+  if (typeof Notification !== 'undefined' && Notification.permission === 'denied') return S.pushDeniedSeen ? '' : (S.pushDeniedSeen = true, save(), '<div class="card"><p class="muted">🔕 Notificările sunt blocate pentru această aplicație. Le puteți permite din setările telefonului (Aplicații → Chrome → Notificări).</p></div>');
   if (isIOS && !standalone) return '<div class="card"><div class="msg">🔔 Ca să vă putem anunța, adăugați aplicația pe ecranul principal</div><p class="muted">Partajează → Adaugă pe ecranul principal, apoi deschideți aplicația de pe iconița nouă.</p></div>';
   if (!pushSupported()) return '<div class="card"><p class="muted">Acest browser nu poate primi notificări. Avertizările apar când deschideți aplicația.</p></div>';
   return '<div class="card"><div class="msg">🔔 Porniți avertizările</div><p class="muted">Așa aflați de ambuteiaj cu o seară înainte și înainte de plecare, chiar dacă aplicația e închisă.</p><button class="btn go" id="bPush">Porniți avertizările</button></div>';
@@ -932,8 +948,12 @@ function onFix(pos) {
     // când mașina stă pe loc în zona localității, iar locul acela devine, de acum, destinația exactă a drumului
     if (still && E.haversine(here, NET.nodes[L.dest]) < 5) { learnDest(L, here); save(); arrive(true, L.stillSince); return; }
   } else {
-    const rArr = Math.min(0.5, Math.max(0.15, E.haversine(NET.nodes[L.dest], L.destPt) + 0.12));   // adresa poate fi la câteva sute de metri de drumul principal
-    if (still && dEnd < 1.2) { save(); arrive(true, L.stillSince); return; }   // parcat puțin mai departe de adresa aleasă
+    // Punct exact (ales de dumneavoastră: Locurile mele / punct exact al drumului): sosire la ≤ 50 m sau oprit ≥ 2 min la ≤ 150 m.
+    // Altfel (obiectiv din hartă, ex. un campus întreg): oprit ≥ 1 min în zona lui (150–500 m) sau ≥ 3 min la ≤ 500 m.
+    // Intrarea pe poarta unei incinte mari NU mai înseamnă „am ajuns”.
+    const rArr = L.precise ? 0.05 : Math.min(0.5, Math.max(0.15, E.haversine(NET.nodes[L.dest], L.destPt) + 0.12)), stillFor = L.stillSince != null ? t - L.stillSince : 0;
+    if (L.precise ? (stillFor >= 2 && dEnd < 0.15) : ((stillFor >= 1 && dEnd < rArr) || (stillFor >= 3 && dEnd < 0.5))) { save(); arrive(true, L.stillSince); return; }
+    if (!L.precise) { save(); drawTrip(); pullTraffic(); if (S.fam) famPushPosition(L, liveState(L)); return; }   // fără punct exact: sosirea se confirmă doar după oprire (nu la intrarea pe poartă)
   if (c.accuracy <= 80 && dEnd < rArr) { L.nearEnd = (L.nearEnd || 0) + 1; if (L.nearEnd >= 2) { save(); arrive(true); return; } } else L.nearEnd = 0; }
   save(); drawTrip(); pullTraffic(); if (S.fam) famPushPosition(L, liveState(L));
 }
@@ -1172,7 +1192,7 @@ function startTrip(o, d, name, ta, h, hd) {   // hd: obiceiul a cărui destinaț
   const order = alts.map((pth, i) => ({ i, t: M.walk(pth, date, dep, ctx).total })).sort((a, b) => a.t - b.t).map(x => alts[x.i]);
   const f = h ? forecast(h, date) : null, rec = f && (f.early ? f.early.t0 : f.usual);
   const usual = usualDur(o, d) || (f && f.typ ? Math.round(f.typ.med) : null);
-  S.live = { id: S.pid + '-' + Date.now(), name, orig: o, dest: d, ta, usual, usualMed: f && f.cur ? f.cur.med : null, lvl: f ? f.level : null, alts: order, sel: 0, path: order[0], date, dep, weather: weatherFor(date, dep), destPt: { lat: dpt.lat, lon: dpt.lon }, area: !known, hid: hd ? hd.id : null, pf: hd && hd.o === o ? personalK(hd, date, dep).f : 1, mm: {}, obs: [],
+  S.live = { id: S.pid + '-' + Date.now(), name, orig: o, dest: d, ta, usual, usualMed: f && f.cur ? f.cur.med : null, lvl: f ? f.level : null, alts: order, sel: 0, path: order[0], date, dep, weather: weatherFor(date, dep), destPt: { lat: dpt.lat, lon: dpt.lon }, area: !known, precise: !!((hd && hd.d === d && hd.destPt) || mineD), hid: hd ? hd.id : null, pf: hd && hd.o === o ? personalK(hd, date, dep).f : 1, mm: {}, obs: [],
     pred: { madeAt: new Date().toISOString(), median: s.med, q: s.q, tau: 0.95, deadline: ta, ta, recT0: rec, version: LR() ? LR().version : 'a-priori', followed: rec != null && dep <= rec + 2 } };
   save(); keepAwake(); renderTrip(); toast('Drum bun! Puneți telefonul în suport.');
 }
@@ -1543,6 +1563,12 @@ function drawFamMap(cv, pts) {
   for (const p of pts) { const h = FAMH[p.pid] || []; if (h.length < 2 || p.status === 'a ajuns') continue;   // urma ultimelor minute
     g.strokeStyle = p.me ? 'rgba(11,78,162,.55)' : 'rgba(195,36,47,.55)'; g.lineWidth = 4 * dpr; g.setLineDash([2 * dpr, 6 * dpr]); g.beginPath(); h.forEach((q, i) => i ? g.lineTo(X(q.lon), Y(q.lat)) : g.moveTo(X(q.lon), Y(q.lat))); g.stroke(); g.setLineDash([]); }
   g.restore();
+  for (const [a, b, d] of movingPairs(pts)) {   // linia dintre doi membri aflați pe drum, cu distanța
+    const p = rotPt(X(a.lon), Y(a.lat), cx, cy, rot), q = rotPt(X(b.lon), Y(b.lat), cx, cy, rot);
+    g.strokeStyle = 'rgba(11,78,162,.75)'; g.lineWidth = 2.5 * dpr; g.setLineDash([8 * dpr, 6 * dpr]); g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke(); g.setLineDash([]);
+    const mx = Math.min(W - 50 * dpr, Math.max(50 * dpr, (p.x + q.x) / 2)), my = Math.min(H - 20 * dpr, Math.max(20 * dpr, (p.y + q.y) / 2)), t = kmTxtPlain(d);
+    g.font = `800 ${12 * dpr}px "Overpass"`; g.textAlign = 'center'; g.textBaseline = 'middle'; const tw = g.measureText(t).width + 14 * dpr;
+    g.fillStyle = '#0b4ea2'; g.beginPath(); g.roundRect ? g.roundRect(mx - tw / 2, my - 11 * dpr, tw, 22 * dpr, 11 * dpr) : g.rect(mx - tw / 2, my - 11 * dpr, tw, 22 * dpr); g.fill(); g.fillStyle = '#fff'; g.fillText(t, mx, my + 1); }
   roadLabels(g, inView, X, Y, rot, cx, cy, dpr, W, H, pts.flatMap(p => { const q = rotPt(X(p.lon), Y(p.lat), cx, cy, rot); return [q, { x: q.x + 60 * dpr, y: q.y }]; }));
   for (const p of pts) { const q = rotPt(X(p.lon), Y(p.lat), cx, cy, rot), col = p.me ? '#0b4ea2' : p.status === 'a ajuns' ? '#147a42' : '#c3242f';
     const accPx = p.acc ? Math.min(70 * dpr, p.acc / 1000 * W / km) : 0; if (accPx > 8 * dpr) { g.fillStyle = 'rgba(195,36,47,.10)'; g.beginPath(); g.arc(q.x, q.y, accPx, 0, 7); g.fill(); }
@@ -1558,6 +1584,9 @@ function drawFamMap(cv, pts) {
 function famListHTML(F, pos) { return F.members.map(m => { const p = pos[m.participant], isMe = m.participant === F.uid;
         const st = !m.approved ? 'așteaptă acordul părintelui' : !m.sharing ? 'partajarea e oprită' : p ? (p.status === 'a ajuns' ? `a ajuns la ${esc(p.dest_name || 'destinație')}, ${famAgo(p.updated_at)}${p.cost_lei != null && p.driven_km ? `<br>${kmTxtPlain(p.driven_km)}, cost ~${n1(p.cost_lei)} lei` : ''}` : `pe drum spre ${esc(p.dest_name || '?')}, sosire ~${fmt(Math.round(p.eta_min))}${p.rem_km != null ? `, mai are ${kmTxtPlain(p.rem_km)}` : ''}${p.speed_kmh != null ? `, ${Math.round(p.speed_kmh)} km/h` : ''}${p.cost_lei != null ? `<br>⛽ cost până acum ~${n1(p.cost_lei)} lei, tot drumul ~${Math.round(p.cost_total_lei)} lei${p.driven_km != null ? ` · parcurși ${kmTxtPlain(p.driven_km)}` : ''}` : ''} · ${famAgo(p.updated_at)}`) : 'nu e pe drum acum';
         return `<div class="next" style="cursor:default"><i class="lamp" style="margin:0;background:${p && m.sharing && m.approved ? (p.status === 'a ajuns' ? 'var(--gl)' : 'var(--rl)') : '#c4ccd4'}"></i><div><b>${esc(m.display_name)}${isMe ? ' (dumneavoastră)' : ''}${m.minor ? ', sub 18 ani' : ''}</b><span>${st}</span></div></div>`; }).join(''); }
+/* distanța dintre membrii aflați în același timp pe drum (în linie dreaptă) */
+const movingPairs = pts => { const m = pts.filter(p => p.status !== 'a ajuns'), out = []; for (let i = 0; i < m.length; i++) for (let j = i + 1; j < m.length; j++) out.push([m[i], m[j], E.haversine(m[i], m[j])]); return out; };
+function famDistHTML(pts) { const pr = movingPairs(pts); return pr.length ? `<div class="note" style="margin:0 0 6px">${pr.map(([a, b, d]) => `↔ <b>${esc((a.name || '?').split(' ')[0])}</b> – <b>${esc((b.name || '?').split(' ')[0])}</b>: ${kmTxtPlain(d)} în linie dreaptă`).join('<br>')}</div>` : ''; }
 function famInfoHTML(selP) { return selP ? `<div class="note" style="margin:0 0 6px"><b>${esc((selP.name || '').split(' ')[0])}</b> ${esc(whereTxt(selP.lat, selP.lon))}${selP.status !== 'a ajuns' && selP.speed != null ? ` · ${Math.round(selP.speed)} km/h` : ''}${selP.status !== 'a ajuns' && selP.rem != null ? ` · mai are ${kmTxtPlain(selP.rem)}` : ''} · ${famAgo(selP.at)}${selP.acc ? ` · precizie ~${Math.round(selP.acc)} m` : ''}</div>` : ''; }
 /* actualizare la secundă, fără a reconstrui ecranul (păstrează textul scris în câmpul de mesaj) */
 let FAMLIVE = 0;
@@ -1567,7 +1596,7 @@ function famLive() {
   const pos = Object.fromEntries((F.pos || []).map(p => [p.participant, p])); famTrack(F.pos || []);
   const pts = F.members.map(m => { const p = pos[m.participant]; return p ? { pid: m.participant, lat: p.lat, lon: p.lon, acc: p.acc, name: m.display_name, status: p.status, me: m.participant === F.uid, ang: famAng(m.participant), speed: p.speed_kmh, at: p.updated_at, rem: p.rem_km } : null; }).filter(Boolean);
   const selP = pts.find(p => p.pid === FV.sel);
-  if ($('fList')) $('fList').innerHTML = famListHTML(F, pos); if ($('fInfo')) $('fInfo').innerHTML = famInfoHTML(selP);
+  if ($('fList')) $('fList').innerHTML = famListHTML(F, pos); if ($('fInfo')) $('fInfo').innerHTML = famInfoHTML(selP); if ($('fDist')) $('fDist').innerHTML = famDistHTML(pts);
   drawFamMap($('famMap'), pts);
 }
 function renderFam() {
@@ -1608,7 +1637,7 @@ function renderFam() {
         <button class="btn go fApprove" data-p="${m.participant}">Îmi dau acordul</button></div>`).join('') || ''}
       <div id="fList">${famListHTML(F, pos)}</div>
       ${pts.length ? `<div style="display:flex;gap:6px;overflow-x:auto;margin:10px 0 6px">${pts.map(p => `<button class="btn ${p.pid === FV.sel ? 'dark' : 'ghost'} fSel" data-p="${p.pid}" style="flex:none;width:auto;padding:7px 13px;margin:0;font-size:14px">${esc((p.name || '?').split(' ')[0])}</button>`).join('')}${pts.length > 1 ? `<button class="btn ${!FV.sel ? 'dark' : 'ghost'} fSel" data-p="all" style="flex:none;width:auto;padding:7px 13px;margin:0;font-size:14px">Toți</button>` : ''}</div>
-        <div id="fInfo">${famInfoHTML(selP)}</div>
+        <div id="fInfo">${famInfoHTML(selP)}</div><div id="fDist">${famDistHTML(pts)}</div>
         <div class="mapwrap"><canvas class="rmap" id="famMap" style="height:340px"></canvas><div class="mapbtns"><button id="fZin" aria-label="Mărește">+</button><button id="fZout" aria-label="Micșorează">−</button>${selP ? '<button id="fNorth" aria-label="Orientarea hărții">🧭</button>' : ''}</div></div>` : ''}
       <p class="muted" style="font-size:13px">Pozițiile se actualizează în fiecare secundă în timpul unui drum; harta urmărește persoana aleasă, în sensul ei de mers. Serverul păstrează doar ultima poziție; dacă nu se mai actualizează 10 minute, nu mai e afișată și se șterge.</p></div>
     ${me.approved ? `<div class="card" id="fMsgCard"><div class="kicker">Mesaje în familie</div><div id="fMsgs">${msgsHTML()}</div>
@@ -1822,6 +1851,7 @@ if (isIOS && !standalone) setTimeout(showInstall, 1500);
   pullTraffic(true); setInterval(() => pullTraffic(), 300000);
   if (S.consent) pullFamily(); setInterval(() => { if (!S.consent) return; if ($('s-fam').classList.contains('on')) pullFamily().then(() => { if ($('s-fam').classList.contains('on') && !document.activeElement.closest('#s-fam input')) renderFam(); }); else if (Date.now() - ((S.fam && S.fam.at) || 0) > 120000) pullFamily(); }, 10000);
 setInterval(() => { if (!S.consent || !S.fam || document.hidden) return; if (S.famMsgOff && Date.now() - S.famMsgOff > 3600000) S.famMsgOff = 0; if ($('s-fam').classList.contains('on') || Date.now() - (S.famMsgAt || 0) > 30000) { S.famMsgAt = Date.now(); pullMsgs(); } }, 10000);
+  window.__pltReady = true; syncPush();
   checkAlerts(); setInterval(checkAlerts, 30000); setInterval(() => { if (S.live && $('s-trip').classList.contains('on')) drawTrip(); if ($('s-map').classList.contains('on')) { LMT = 0; drawLiveMap(); } }, 5000); setInterval(() => { if ($('s-map').classList.contains('on')) $('mapPanel').innerHTML = mapPanel(); }, 60000);
 })();
 </script>
