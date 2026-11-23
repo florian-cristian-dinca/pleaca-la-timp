@@ -125,6 +125,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px
 .road .part{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #47505a}.road .part:last-child{border:none}
 .road .part svg{width:40px;height:40px;flex:none}.road .part b{display:block;font-size:15px}.road .part span{font-size:13.5px;color:#d5dce3}
 .msgs{max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin:8px 0}.bub{align-self:flex-start;max-width:85%;background:#eef2f6;border-radius:14px 14px 14px 4px;padding:7px 11px;display:flex;flex-direction:column;font-size:15px}.bub.me{align-self:flex-end;background:#dbe8fb;border-radius:14px 14px 4px 14px}.bub b{font-size:12px;color:#0b4ea2}.bub small{font-size:11px;color:#6b7785;margin-top:2px}.bub small a{color:#9b2c2c}
+.destsel{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}.destsel small{font:700 13px 'Overpass',sans-serif;color:#5b6672;margin-right:2px}.destsel button{border:1px solid #cfd8e2;background:#fff;border-radius:16px;padding:8px 12px;font:700 14px 'Overpass',sans-serif}.destsel button.on{background:#0b4ea2;color:#fff;border-color:#0b4ea2}
 .mych{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.mych button{border:1px solid #cfd8e2;background:#fff;border-radius:16px;padding:7px 12px;font:700 14px 'Overpass',sans-serif}.mych button.on{background:#0b4ea2;color:#fff;border-color:#0b4ea2}
 .qmsg{display:flex;gap:6px;overflow-x:auto;padding:4px 0}.qmsg button{flex:none;border:1px solid #cfd8e2;background:#fff;border-radius:18px;padding:8px 12px;font:600 14px 'Overpass',sans-serif}
 .msgin{display:flex;gap:6px;margin-top:6px}.msgin input{flex:1;padding:11px 12px;border:1px solid #cfd8e2;border-radius:12px;font:500 16px 'Overpass',sans-serif}.msgin button{width:48px;border:0;border-radius:12px;background:#0b4ea2;color:#fff;font-size:20px}
@@ -663,6 +664,19 @@ function alertText(date, at, level) {
   if (S.evening && !today && level !== 'g') { const prev = E.dateFromIndex(E.dayIndex(date) - 1), eve = prev === todayStr() ? (parseT(S.eveningAt) > now ? 'diseară' : null) : WD[wday(prev)] + ' seara'; if (eve) t += ` și ${eve}, la <b>${S.eveningAt}</b>`; }
   return t + '.';
 }
+/* destinația unui drum obișnuit, aleasă direct de pe card dintre Locurile mele (punct exact) */
+function destChips(h) {
+  const ms = myPlaces(); if (!ms.length) return '';
+  const cur = ms.findIndex(p => h.destPt && E.haversine(p, h.destPt) < 0.03);
+  return `<div class="destsel"><small>Destinația:</small>${ms.map((p, i) => `<button type="button" class="${i === cur ? 'on' : ''}" data-hdest="${esc(String(h.id))}" data-pi="${i}">⭐ ${esc(p.name)}</button>`).join('')}</div>`;
+}
+function setHabitDest(hid, i) {
+  const h = S.habits.find(x => String(x.id) === String(hid)), p = myPlaces()[i]; if (!h || !p) return;
+  if (h.destPt && E.haversine(p, h.destPt) < 0.03) { toast(`„${h.name}” merge deja la ${p.name}.`); return; }
+  h.d = p.node; h.destPt = { lat: p.lat, lon: p.lon }; setLabel(p.node, p.name); PERS = {};
+  save(); enqueue('habits'); rebuild(); renderHome(); toast(`„${h.name}” are acum destinația ${p.name} (punct exact).`);
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-hdest]'); if (b) { e.preventDefault(); e.stopPropagation(); setHabitDest(b.dataset.hdest, +b.dataset.pi); } }, true);
 function card(h, date, idx, compact) {
   const f = forecast(h, date); if (f) f_ta = f.ta; if (!f) return `<div class="card">Nu găsesc un drum între ${esc(pname(h.o))} și ${esc(pname(h.d))}.</div>`;
   const today = date === todayStr(), now = nowMin(), lv = LV[f.level];
@@ -693,6 +707,7 @@ function card(h, date, idx, compact) {
     <div class="sign"><div class="sh"><span>${esc(h.name)}, ${dayT}</span><span class="semal">${lv[0]}<span class="sema" aria-hidden="true"><i class="r ${f.level === 'r' ? 'on' : ''}"></i><i class="y ${f.level === 'y' ? 'on' : ''}"></i><i class="g ${f.level === 'g' ? 'on' : ''}"></i></span></span></div>
       <div class="lead">${lead}</div><div class="tm">${fmt(bt)}</div>
       <div class="sub">Sosire în jur de <b>${fmt(bt + sl.med)}</b>, cu ~${mins(sl.idle)} pe loc. Trebuie să ajungeți la ${h.ta}.</div></div>
+    ${destChips(h)}
     ${why ? `<div class="why" style="margin-top:12px">${why}</div>` : ''}
     ${f.wx ? `<div class="alertline" style="background:${f.wx.cat === 'ploaie' ? 'var(--soft)' : 'var(--ybg)'}"><span style="font-size:20px">${f.wx.icon}</span><span><b>Vreme ${f.wx.cat === 'ploaie' ? 'umedă' : 'dificilă'}:</b> ${esc(f.wx.txt)}. Am inclus-o în estimare; drumul poate dura mai mult.</span></div>` : ''}
     <div class="opts">${opts.map(o => `<div class="opt ${o.best ? 'best' : ''}"><div class="t">${fmt(o.t)}</div><div><b>${o.best ? '✓ ' : ''}${o.b}</b><span>${o.s}</span></div></div>`).join('')}</div>
