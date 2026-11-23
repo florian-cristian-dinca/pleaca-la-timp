@@ -1646,6 +1646,9 @@ function renderFam() {
       <p class="muted" style="font-size:12px;margin:6px 0 0">Le văd doar membrii grupului; se șterg automat după 7 zile. La volan folosiți doar butoanele rapide, cu mașina oprită.</p></div>` : ''}
     <div class="card"><div class="kicker">Codul grupului</div><div style="font-size:30px;font-weight:900;letter-spacing:.08em;margin:4px 0">${esc(F.code || '—')}</div>
       <p class="muted">Trimiteți codul membrilor familiei. Fiecare îl introduce în aplicație, la Familie.</p><button class="btn ghost" id="fShare">Trimiteți codul</button></div>
+    <div class="card"><div class="kicker">Numele dumneavoastră în grup</div>
+      <div class="msgin"><input id="fMyName" maxlength="30" value="${esc(me.display_name || '')}" autocomplete="off"><button id="fMyNameOk" aria-label="Salvează numele" style="width:auto;padding:0 14px;font:800 15px 'Overpass',sans-serif">Salvează</button></div>
+      <p class="muted" style="font-size:12px;margin:6px 0 0">Așa vă văd ceilalți membri, în listă, pe hartă și la mesaje.</p></div>
     <div class="card"><label class="chk"><input type="checkbox" id="fShareOn" ${me.sharing ? 'checked' : ''}><span>Familia îmi vede poziția în timpul drumurilor</span></label>
       <button class="btn red" id="fLeave">Ieșiți din grup</button>${owner ? '<p class="muted" style="font-size:13px">Ați creat grupul: dacă ieșiți, grupul se închide pentru toți.</p>' : ''}</div>`;
   if ($('fMsgSend')) { const send = () => { const v = $('fMsgIn').value.trim(); if (v) { sendMsg(v, false); $('fMsgIn').value = ''; } };
@@ -1662,6 +1665,9 @@ function renderFam() {
     try { await famCall('approve_minor', { p_participant: b.dataset.p }); await pullFamily(); renderFam(); toast('Acordul a fost înregistrat.'); } catch (e) { toast(famErr(e)); } });
   $('fShare').onclick = () => { const t = `Intră în grupul familiei din aplicația „Pleacă la timp”: Familie → „Am primit un cod”, codul ${F.code}. ${location.origin + location.pathname}`;
     if (navigator.share) navigator.share({ text: t }).catch(() => { }); else { navigator.clipboard && navigator.clipboard.writeText(t); toast('Am copiat mesajul cu codul.'); } };
+  $('fMyNameOk').onclick = async () => { const n = $('fMyName').value.trim().slice(0, 30); if (!n) { toast('Scrieți un nume.'); return; } if (n === S.fam.me.display_name) { toast('Numele e deja acesta.'); return; }
+    try { const s = await session(); const { error } = await s.c.from('family_members').update({ display_name: n }).eq('participant', s.uid); if (error) throw error;
+      await pullFamily(); renderFam(); toast(`Numele a fost schimbat în „${n}”.`); } catch (e) { toast('Nu am putut schimba numele. Verificați conexiunea și încercați din nou.'); } };
   $('fShareOn').onchange = async () => { try { const s = await session(); const on = $('fShareOn').checked; await s.c.from('family_members').update({ sharing: on }).eq('participant', s.uid); if (!on) await s.c.from('live_positions').delete().eq('participant', s.uid); await pullFamily(); renderFam(); toast(on ? 'Familia vă vede poziția în timpul drumurilor.' : 'Am oprit partajarea poziției.'); } catch (e) { toast(famErr(e)); } };
   $('fLeave').onclick = async () => { if (!confirmTwice($('fLeave'), 'Apăsați din nou pentru a ieși din grup.')) return;
     try { const s = await session(); await s.c.from('live_positions').delete().eq('participant', s.uid); if (owner) await s.c.from('families').delete().eq('created_by', s.uid); else await s.c.from('family_members').delete().eq('participant', s.uid); S.fam = null; save(); renderFam(); toast('Ați ieșit din grupul familiei.'); } catch (e) { toast(famErr(e)); } };
