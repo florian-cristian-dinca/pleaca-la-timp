@@ -125,6 +125,7 @@ textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px
 .road .part{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #47505a}.road .part:last-child{border:none}
 .road .part svg{width:40px;height:40px;flex:none}.road .part b{display:block;font-size:15px}.road .part span{font-size:13.5px;color:#d5dce3}
 .msgs{max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin:8px 0}.bub{align-self:flex-start;max-width:85%;background:#eef2f6;border-radius:14px 14px 14px 4px;padding:7px 11px;display:flex;flex-direction:column;font-size:15px}.bub.me{align-self:flex-end;background:#dbe8fb;border-radius:14px 14px 4px 14px}.bub b{font-size:12px;color:#0b4ea2}.bub small{font-size:11px;color:#6b7785;margin-top:2px}.bub small a{color:#9b2c2c}
+.dsheet{border:1px solid #cfd8e2;border-radius:14px;padding:8px 10px 2px;margin:4px 0 10px;background:#f6f8fb}
 .destsel{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}.destsel small{font:700 13px 'Overpass',sans-serif;color:#5b6672;margin-right:2px}.destsel button{border:1px solid #cfd8e2;background:#fff;border-radius:16px;padding:8px 12px;font:700 14px 'Overpass',sans-serif}.destsel button.on{background:#0b4ea2;color:#fff;border-color:#0b4ea2}
 .mych{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.mych button{border:1px solid #cfd8e2;background:#fff;border-radius:16px;padding:7px 12px;font:700 14px 'Overpass',sans-serif}.mych button.on{background:#0b4ea2;color:#fff;border-color:#0b4ea2}
 .qmsg{display:flex;gap:6px;overflow-x:auto;padding:4px 0}.qmsg button{flex:none;border:1px solid #cfd8e2;background:#fff;border-radius:18px;padding:8px 12px;font:600 14px 'Overpass',sans-serif}
@@ -1146,7 +1147,7 @@ function renderTrip() {
       <button class="btn ghost" id="bOther">Am plecat · alt drum</button>
       <div id="otherBox" style="display:none;margin-top:8px">${picker('oO', null, 'De unde plecați', 'Caut poziția dumneavoastră…')}${picker('oD', null, 'Unde mergeți?', 'Localitate, cartier, spital, mall, benzinărie…', true)}<button class="btn dark" id="bOtherGo">Am plecat</button></div></div>
       ${lastTripHTML()}${weekHTML()}<div class="card"><div class="kicker">Drumurile mele</div>${histHTML()}</div>`;
-    $('s-trip').querySelectorAll('[data-h]').forEach(b => b.onclick = () => depart(S.habits[+b.dataset.h]));
+    $('s-trip').querySelectorAll('[data-h]').forEach(b => b.onclick = () => { const i = +b.dataset.h; if (!myPlaces().length) return depart(S.habits[i]); destSheet(b, i); });
     $('bOther').onclick = () => { $('otherBox').style.display = 'block'; $('bOther').style.display = 'none'; bindPickers($('otherBox')); const pk = $('oO').closest('.pk'); if (pk._geoFill) pk._geoFill(); };
     $('bOtherGo').onclick = () => departOther($('oD').value, $('oO').value);
     renderSync(); return;
@@ -1213,6 +1214,18 @@ function startTrip(o, d, name, ta, h, hd) {   // hd: obiceiul a cărui destinaț
 }
 /* drum obișnuit: pornește de unde sunteți. Dacă nu sunteți în locul obișnuit de plecare (peste 1 km), e un drum
    spre aceeași destinație, dar fără ora obișnuită de sosire (nu are sens „rezervă” sau „întârziere” față de ea). */
+/* „Am plecat · Spre casă”: mai întâi aleg destinația dintre Locurile mele (punct exact); alegerea rămâne pentru data viitoare */
+function destSheet(btn, i) {
+  const h = S.habits[i], ms = myPlaces(), old = document.getElementById('dsheet'); if (old) { old.remove(); if (old.dataset.i === String(i)) return; }
+  const cur = ms.findIndex(p => h.destPt && E.haversine(p, h.destPt) < 0.03);
+  const box = document.createElement('div'); box.id = 'dsheet'; box.dataset.i = i; box.className = 'dsheet';
+  box.innerHTML = `<div class="kicker" style="margin:4px 0 6px">${esc(h.name)} · unde mergeți?</div>` + ms.map((p, k) => `<button class="btn ${k === cur ? 'dark' : 'ghost'}" data-dp="${k}">⭐ ${esc(p.name)}${k === cur ? ' (ca de obicei)' : ''}</button>`).join('')
+    + (cur < 0 ? `<button class="btn ghost" data-dp="-1">📍 ${esc(placeName(h.d))} (ca de obicei)</button>` : '');
+  btn.after(box);
+  box.querySelectorAll('[data-dp]').forEach(b => b.onclick = () => { const k = +b.dataset.dp;
+    if (k >= 0 && k !== cur) { const p = ms[k]; h.d = p.node; h.destPt = { lat: p.lat, lon: p.lon }; setLabel(p.node, p.name); PERS = {}; save(); enqueue('habits'); rebuild(); }
+    box.remove(); depart(h); });
+}
 function depart(h) {
   const go = (o, here) => { const ta = parseT(h.ta), now = nowMin(), useTa = here && ta != null && ta > now && ta - now <= 240;
     startTrip(o, h.d, h.name, useTa ? ta : null, useTa ? h : null, h); if (S.live) { S.live.habitO = h.o; S.live.originChecked = here !== null; save(); }
